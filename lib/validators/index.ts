@@ -100,11 +100,11 @@ export const productSchema = z.object({
   presentation: z.string().min(1, 'Apresentação é obrigatória'),
   short_description: z.string().min(10, 'Descrição curta muito curta'),
   long_description: z.string().optional(),
-  characteristics_json: z.record(z.string(), z.unknown()).optional().default({}),
+  characteristics_json: z.record(z.string(), z.unknown()).optional(),
   price_current: z.number().positive('Preço deve ser positivo'),
   estimated_deadline_days: z.number().int().positive('Prazo deve ser positivo'),
-  active: z.boolean().default(true),
-  featured: z.boolean().default(false),
+  active: z.boolean().optional(),
+  featured: z.boolean().optional(),
 })
 
 export type ProductFormData = z.infer<typeof productSchema>

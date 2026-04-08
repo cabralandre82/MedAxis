@@ -1,5 +1,4 @@
 import { ShieldX } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { ButtonLink } from '@/components/ui/button-link'
 
 export default function UnauthorizedPage() {

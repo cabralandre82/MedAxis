@@ -2,7 +2,6 @@ import { Metadata } from 'next'
 import { createClient } from '@/lib/db/server'
 import { getCurrentUser } from '@/lib/auth/session'
 import { OrdersTable, type OrderRow } from '@/components/orders/orders-table'
-import { Button } from '@/components/ui/button'
 import { ButtonLink } from '@/components/ui/button-link'
 import { Plus } from 'lucide-react'
 

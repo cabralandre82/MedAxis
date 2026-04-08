@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/db/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { ButtonLink } from '@/components/ui/button-link'
 import { Badge } from '@/components/ui/badge'
 import { ShoppingBag, FileWarning } from 'lucide-react'

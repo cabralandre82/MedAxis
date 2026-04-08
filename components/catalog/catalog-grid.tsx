@@ -1,7 +1,6 @@
 import Image from 'next/image'
 import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { ButtonLink } from '@/components/ui/button-link'
 import { Clock, Package, Star } from 'lucide-react'
 

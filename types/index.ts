@@ -5,7 +5,7 @@ export type UserRole =
   | 'DOCTOR'
   | 'PHARMACY_ADMIN'
 
-export type EntityStatus = 'PENDING' | 'ACTIVE' | 'BLOCKED'
+export type EntityStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'BLOCKED'
 
 export type OrderStatus =
   | 'DRAFT'
@@ -179,10 +179,9 @@ export interface ProductImage {
 export interface ProductPriceHistory {
   id: string
   product_id: string
-  old_price: number
-  new_price: number
-  changed_by_user_id: string
-  reason: string
+  price: number
+  changed_by_user_id: string | null
+  reason: string | null
   created_at: string
 }
 

@@ -5,8 +5,8 @@ import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Button } from '@/components/ui/button'
 import { ButtonLink } from '@/components/ui/button-link'
+import { PharmacyOrderActions } from '@/components/orders/pharmacy-order-actions'
 import {
   ChevronLeft,
   Building2,
@@ -21,7 +21,7 @@ import {
   XCircle,
   AlertCircle,
 } from 'lucide-react'
-import type { ProfileWithRoles } from '@/types'
+import type { ProfileWithRoles, OrderStatus } from '@/types'
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Rascunho',
@@ -59,6 +59,7 @@ interface OrderDetailProps {
 
 export function OrderDetail({ order, currentUser }: OrderDetailProps) {
   const isAdmin = currentUser.roles.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
+  const isPharmacy = currentUser.roles.includes('PHARMACY_ADMIN')
 
   const statusHistory =
     (
@@ -157,10 +158,16 @@ export function OrderDetail({ order, currentUser }: OrderDetailProps) {
             Criado em {formatDateTime(String(order.created_at))}
           </p>
         </div>
-        <div>
+        <div className="flex items-center gap-3">
           <span className="inline-block rounded-full bg-blue-100 px-3 py-1.5 text-sm font-medium text-blue-800">
             {ORDER_STATUS_LABELS[String(order.order_status)] ?? String(order.order_status)}
           </span>
+          {isPharmacy && (
+            <PharmacyOrderActions
+              orderId={String(order.id)}
+              currentStatus={String(order.order_status) as OrderStatus}
+            />
+          )}
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import {
   Building2,
   UserCheck,
   Pill,
+  Package,
   CreditCard,
   ArrowLeftRight,
   BarChart3,
@@ -65,7 +66,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/products',
     label: 'Produtos',
-    icon: ShoppingBag,
+    icon: Package,
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
   },
   {

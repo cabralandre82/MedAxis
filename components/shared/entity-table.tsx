@@ -16,12 +16,16 @@ import { Search, ExternalLink } from 'lucide-react'
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-green-100 text-green-800',
   PENDING: 'bg-yellow-100 text-yellow-800',
+  INACTIVE: 'bg-gray-100 text-gray-600',
+  SUSPENDED: 'bg-red-100 text-red-800',
   BLOCKED: 'bg-red-100 text-red-800',
 }
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Ativo',
   PENDING: 'Pendente',
+  INACTIVE: 'Inativo',
+  SUSPENDED: 'Suspenso',
   BLOCKED: 'Bloqueado',
 }
 

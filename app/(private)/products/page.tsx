@@ -1,7 +1,6 @@
 import { Metadata } from 'next'
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
-import { Button } from '@/components/ui/button'
 import { ButtonLink } from '@/components/ui/button-link'
 import Link from 'next/link'
 import { Plus, Package, ExternalLink } from 'lucide-react'
