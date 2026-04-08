@@ -17,6 +17,7 @@ import {
   BarChart3,
   Settings,
   ScrollText,
+  Users,
 } from 'lucide-react'
 
 interface NavItem {
@@ -91,6 +92,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/audit',
     label: 'Auditoria',
     icon: ScrollText,
+    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
+  },
+  {
+    href: '/users',
+    label: 'Usuários',
+    icon: Users,
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
   },
   {
