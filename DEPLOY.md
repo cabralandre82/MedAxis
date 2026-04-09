@@ -1,82 +1,138 @@
 # MedAxis — Guia de Deploy
 
-## Pré-requisitos
+---
 
-- Conta no [Supabase](https://supabase.com) com projeto criado
-- Conta no [Vercel](https://vercel.com)
-- Repositório no GitHub: https://github.com/cabralandre82/MedAxis
-- Node.js 20+
+## Infraestrutura atual (produção)
+
+| Componente | Serviço    | URL / Referência                                      |
+| ---------- | ---------- | ----------------------------------------------------- |
+| Frontend   | Vercel     | https://med-axis-three.vercel.app                     |
+| Banco      | Supabase   | https://app.supabase.com/project/jomdntqlgrupvhrqoyai |
+| Repo       | GitHub     | https://github.com/cabralandre82/MedAxis              |
+| Região     | Vercel GRU | São Paulo (gru1)                                      |
 
 ---
 
-## 1. Subir código para o GitHub
+## Variáveis de ambiente (Vercel)
+
+Configure em **Vercel → Settings → Environment Variables**:
+
+| Variável                        | Valor                                          |
+| ------------------------------- | ---------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | `https://jomdntqlgrupvhrqoyai.supabase.co`     |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | (anon key do Supabase)                         |
+| `SUPABASE_SERVICE_ROLE_KEY`     | (service role key — nunca exposta no frontend) |
+| `NEXT_PUBLIC_APP_URL`           | `https://med-axis-three.vercel.app`            |
+| `NEXT_PUBLIC_APP_NAME`          | `MedAxis`                                      |
+
+---
+
+## Configuração do Supabase Auth
+
+1. Acesse **Authentication → URL Configuration**
+2. **Site URL**: `https://med-axis-three.vercel.app`
+3. **Redirect URLs**: adicione os dois:
+   - `https://med-axis-three.vercel.app/auth/callback`
+   - `http://localhost:3000/auth/callback` (desenvolvimento)
+
+---
+
+## Deploy do zero (novo ambiente)
+
+### Pré-requisitos
+
+- Node.js 20+
+- Supabase CLI (`npm i -g supabase`)
+- Conta na Vercel com repositório GitHub conectado
+
+### 1. Aplicar migrations no banco
 
 ```bash
 cd b2b-med-platform
-git remote add origin https://github.com/cabralandre82/MedAxis.git
-git branch -M main
-git push -u origin main
+supabase link --project-ref jomdntqlgrupvhrqoyai
+supabase db push --password "SENHA_DO_BANCO"
+```
+
+As migrations estão em `supabase/migrations/`:
+
+- `001_initial_schema.sql` — todas as tabelas
+- `002_functions_triggers.sql` — funções, triggers, automações
+- `003_rls_policies.sql` — Row Level Security por papel
+
+### 2. Criar buckets de storage
+
+Executar o script de setup (cria buckets e usuários iniciais):
+
+```bash
+export NEXT_PUBLIC_SUPABASE_URL="https://jomdntqlgrupvhrqoyai.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="sua-service-role-key"
+npx tsx scripts/setup-production.ts
+```
+
+O script cria:
+
+- Bucket `product-images` (público)
+- Bucket `order-documents` (privado)
+- Usuários seed com papéis e vínculos de organização
+
+### 3. Executar seed de desenvolvimento (opcional)
+
+```bash
+supabase db push --include-seed --password "SENHA_DO_BANCO"
+```
+
+O seed está em `supabase/seed.sql` e inclui categorias, farmácias, clínicas, médicos e produtos.
+
+### 4. Deploy na Vercel
+
+**Opção A — Via GitHub (recomendado):**
+
+1. Acesse https://vercel.com
+2. Importe o repositório `cabralandre82/MedAxis`
+3. Configure as variáveis de ambiente (seção acima)
+4. Clique em **Deploy**
+
+Todo push na branch `main` dispara um novo deploy automaticamente.
+
+**Opção B — Via CLI:**
+
+```bash
+npm i -g vercel
+vercel login
+vercel --prod
 ```
 
 ---
 
-## 2. Configurar Supabase
+## Re-deploy manual
 
-Ver `docs/setup-supabase.md` para instruções detalhadas.
+Para forçar um novo deploy sem alterar código:
 
-Resumo:
-
-1. Acesse o [Supabase Dashboard](https://app.supabase.com)
-2. Abra o projeto `jomdntqlgrupvhrqoyai`
-3. Vá em **SQL Editor**
-4. Execute cada arquivo de `supabase/migrations/` em ordem numérica
-5. Execute `supabase/seed/seed.sql` para dados de desenvolvimento
-6. Crie os Storage Buckets: `product-images` e `order-documents`
+1. Acesse https://vercel.com/dashboard
+2. Selecione o projeto MedAxis
+3. Vá em **Deployments**
+4. Clique nos três pontos do último deploy → **Redeploy**
 
 ---
 
-## 3. Deploy na Vercel
+## Configuração pós-deploy
 
-1. Acesse [vercel.com](https://vercel.com) e faça login
-2. Clique em **Add New Project**
-3. Importe o repositório `cabralandre82/MedAxis`
-4. Configure as variáveis de ambiente:
+Após o primeiro deploy em produção:
 
-```
-NEXT_PUBLIC_SUPABASE_URL=https://jomdntqlgrupvhrqoyai.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<sua_anon_key>
-SUPABASE_SERVICE_ROLE_KEY=<sua_service_role_key>
-NEXT_PUBLIC_APP_URL=https://seu-dominio.vercel.app
-NEXT_PUBLIC_APP_NAME=MedAxis
-```
-
-5. Clique em **Deploy**
+1. Atualizar **Site URL** e **Redirect URLs** no Supabase Auth
+2. Executar `scripts/setup-production.ts` para criar o primeiro super admin
+3. Verificar se o `NEXT_PUBLIC_APP_URL` no Vercel aponta para a URL correta
+4. Testar login com o super admin criado
+5. Cadastrar farmácias, produtos e clínicas iniciais
 
 ---
 
-## 4. Configurar URL de callback do Supabase Auth
+## Rollback
 
-Após o primeiro deploy, copie a URL da Vercel (ex: `https://medaxis.vercel.app`) e:
+Para reverter um deploy:
 
-1. Acesse o Supabase Dashboard → **Authentication → URL Configuration**
-2. Defina:
-   - **Site URL**: `https://medaxis.vercel.app`
-   - **Redirect URLs**: `https://medaxis.vercel.app/auth/callback`
+1. Acesse **Vercel → Deployments**
+2. Localize a última versão estável
+3. Clique nos três pontos → **Promote to Production**
 
----
-
-## 5. Domínio personalizado (opcional)
-
-Na Vercel, vá em **Settings → Domains** e adicione seu domínio.
-Atualize o Site URL no Supabase com o novo domínio.
-
----
-
-## Configurações de produção importantes
-
-- Habilite **Email confirmations** no Supabase Auth
-- Desabilite **Allow new users to sign up** se quiser cadastro apenas por convite
-- Configure **SMTP** no Supabase para emails transacionais
-- Revise as políticas RLS antes do go-live
-
-Ver `docs/go-live-checklist.md` para a lista completa.
+Para reverter uma migration de banco, consulte `docs/rollback-plan.md`.

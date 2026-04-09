@@ -1,50 +1,132 @@
 # Setup do Supabase
 
-## 1. Acessar o projeto
+> **Projeto:** `jomdntqlgrupvhrqoyai`
+> **Dashboard:** https://app.supabase.com/project/jomdntqlgrupvhrqoyai
 
-- URL: https://app.supabase.com/project/jomdntqlgrupvhrqoyai
-- Dashboard: https://supabase.com/dashboard
+---
 
-## 2. Rodar as migrations
+## Status atual (produção)
 
-1. Acesse **SQL Editor** no painel do Supabase
-2. Execute os arquivos em `supabase/migrations/` na ordem:
-   - `001_initial_schema.sql`
-   - `002_rls_policies.sql`
-   - `003_functions_triggers.sql`
-3. Após cada arquivo, verifique se não há erros
+| Etapa                       | Status       |
+| --------------------------- | ------------ |
+| Migrations aplicadas        | ✅ Concluído |
+| Buckets de storage criados  | ✅ Concluído |
+| Seed de categorias/produtos | ✅ Concluído |
+| Usuários iniciais criados   | ✅ Concluído |
+| Auth URLs configuradas      | ✅ Concluído |
 
-## 3. Criar buckets de storage
+---
 
-1. Vá em **Storage** no painel
-2. Crie os buckets:
-   - `product-images` — público
-   - `order-documents` — privado
+## 1. Aplicar as migrations
 
-## 4. Configurar Auth
+Usar o Supabase CLI (método recomendado):
 
-1. Vá em **Authentication → Providers**
-2. Email/senha já está habilitado por padrão
-3. Para Google OAuth (opcional):
-   - Habilite o provider Google
-   - Insira Client ID e Client Secret do Google Cloud Console
-   - Configure o callback URL
+```bash
+supabase link --project-ref jomdntqlgrupvhrqoyai
+supabase db push --password "SENHA_DO_BANCO"
+```
 
-## 5. Configurar URLs
+As migrations são aplicadas na ordem:
 
-1. Vá em **Authentication → URL Configuration**
-2. Site URL: `http://localhost:3000` (dev) ou sua URL de produção
-3. Redirect URLs: adicione `http://localhost:3000/auth/callback`
+1. `supabase/migrations/001_initial_schema.sql` — 24 tabelas
+2. `supabase/migrations/002_functions_triggers.sql` — triggers e automações
+3. `supabase/migrations/003_rls_policies.sql` — Row Level Security
 
-## 6. Rodar o seed (desenvolvimento)
+Se preferir via SQL Editor no painel, execute os arquivos nessa mesma ordem.
 
-1. Execute `supabase/seed/seed.sql` no SQL Editor
-2. Isso cria usuários de teste, produtos, pedidos, etc.
-3. Veja `docs/seed-users.md` para as credenciais de acesso
+---
 
-## 7. Verificar a configuração
+## 2. Criar buckets de storage
 
-Após tudo pronto, acesse `http://localhost:3000` e tente:
+Use o script de setup (recomendado):
 
-- Login com `superadmin@medaxis.com.br` / `MedAxis@2026`
-- Verificar se o dashboard carrega
+```bash
+export NEXT_PUBLIC_SUPABASE_URL="https://jomdntqlgrupvhrqoyai.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="sua-service-role-key"
+npx tsx scripts/setup-production.ts
+```
+
+Ou crie manualmente no painel em **Storage**:
+
+| Bucket            | Visibilidade | Uso                             |
+| ----------------- | ------------ | ------------------------------- |
+| `product-images`  | Público      | Imagens de produtos             |
+| `order-documents` | Privado      | Receitas e documentos de pedido |
+
+---
+
+## 3. Seed de desenvolvimento
+
+Para popular o banco com dados de teste:
+
+```bash
+supabase db push --include-seed --password "SENHA_DO_BANCO"
+```
+
+O `supabase/seed.sql` cria:
+
+- 5 categorias de produtos
+- 2 farmácias
+- 2 clínicas
+- 2 médicos
+- 5 produtos (com preços reais)
+
+Para os usuários de teste (com papéis e vínculos), execute adicionalmente:
+
+```bash
+npx tsx scripts/setup-production.ts
+```
+
+---
+
+## 4. Configurar URLs de autenticação
+
+Acesse **Authentication → URL Configuration**:
+
+| Campo         | Desenvolvimento                       | Produção                                          |
+| ------------- | ------------------------------------- | ------------------------------------------------- |
+| Site URL      | `http://localhost:3000`               | `https://med-axis-three.vercel.app`               |
+| Redirect URLs | `http://localhost:3000/auth/callback` | `https://med-axis-three.vercel.app/auth/callback` |
+
+---
+
+## 5. Configurar autenticação por email
+
+Por padrão, o Supabase exige confirmação de email. Para o MVP, os usuários são criados via Admin API com `email_confirm: true`, portanto nenhum email de confirmação é enviado ao criar usuários pelo script de setup.
+
+Para recuperação de senha funcionar em produção, configure um servidor SMTP em **Settings → Auth → SMTP Settings**.
+
+---
+
+## 6. Google OAuth (inativo no MVP)
+
+O provider Google está preparado mas desativado. Para ativar:
+
+1. Vá em **Authentication → Providers → Google**
+2. Habilite e insira `Client ID` e `Client Secret` do Google Cloud Console
+3. Configure o callback URL: `https://jomdntqlgrupvhrqoyai.supabase.co/auth/v1/callback`
+4. Remova o atributo `disabled` do botão "Entrar com Google" em `app/(auth)/login/login-form.tsx`
+
+---
+
+## 7. Row Level Security
+
+Todas as tabelas têm RLS habilitada via `003_rls_policies.sql`. As políticas garantem:
+
+- Usuários só acessam dados da própria organização (clínica ou farmácia)
+- Admins de plataforma veem todos os dados
+- Service Role Key bypassa RLS (uso exclusivo em Server Actions e scripts)
+
+---
+
+## 8. Verificar a configuração
+
+Após o setup, acesse a plataforma e faça login:
+
+```
+URL:   https://med-axis-three.vercel.app
+Email: superadmin@medaxis.com.br
+Senha: MedAxis@2026!
+```
+
+Confirme que o dashboard carrega e que o catálogo exibe os produtos seed.
