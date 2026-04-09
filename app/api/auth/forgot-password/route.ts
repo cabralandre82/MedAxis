@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/db/admin'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://clinipharma.com.br'
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,15 +12,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email inválido.' }, { status: 400 })
     }
 
+    // Detecta a URL base a partir do request para funcionar em qualquer ambiente
+    const origin = req.headers.get('origin') || 'https://clinipharma.com.br'
+
     const supabase = createAdminClient()
 
     const { data, error } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email,
       options: {
-        redirectTo: `${APP_URL}/auth/callback?type=recovery`,
+        redirectTo: `${origin}/auth/callback?type=recovery`,
       },
     })
+
+    if (error) {
+      console.error('[forgot-password] generateLink error:', error.message)
+    }
 
     if (error || !data?.properties?.action_link) {
       // Retornamos sucesso mesmo quando o email não existe — evita user enumeration
@@ -30,7 +36,8 @@ export async function POST(req: NextRequest) {
 
     const actionLink = data.properties.action_link
 
-    await resend.emails.send({
+    console.log('[forgot-password] sending email to', email, 'via Resend')
+    const sendResult = await resend.emails.send({
       from: 'Clinipharma <noreply@clinipharma.com.br>',
       to: email,
       subject: 'Redefinição de senha — Clinipharma',
@@ -62,9 +69,10 @@ export async function POST(req: NextRequest) {
       `,
     })
 
+    console.log('[forgot-password] Resend result:', JSON.stringify(sendResult))
     return NextResponse.json({ success: true })
   } catch (err) {
-    console.error('[forgot-password]', err)
+    console.error('[forgot-password] unexpected error:', err)
     return NextResponse.json({ error: 'Erro interno. Tente novamente.' }, { status: 500 })
   }
 }
