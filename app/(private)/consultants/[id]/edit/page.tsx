@@ -7,7 +7,7 @@ import type { SalesConsultant } from '@/types'
 export const metadata = { title: 'Editar Consultor — MedAxis' }
 
 export default async function EditConsultantPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  await requireRolePage(['SUPER_ADMIN'])
   const { id } = await params
   const supabase = await createClient()
 

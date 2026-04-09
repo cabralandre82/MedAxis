@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
+import { getCurrentUser } from '@/lib/auth/session'
 import { ButtonLink } from '@/components/ui/button-link'
 import { formatCNPJ, formatCurrency } from '@/lib/utils'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
@@ -31,6 +32,8 @@ export default async function ConsultantDetailPage({
 }) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
   const { id } = await params
+  const currentUser = await getCurrentUser()
+  const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
   const supabase = await createClient()
 
   const { data: consultant } = await supabase
@@ -86,9 +89,11 @@ export default async function ConsultantDetailPage({
           >
             {c.status === 'ACTIVE' ? 'Ativo' : c.status === 'INACTIVE' ? 'Inativo' : 'Suspenso'}
           </span>
-          <ButtonLink href={`/consultants/${id}/edit`} variant="outline" size="sm">
-            Editar
-          </ButtonLink>
+          {isSuperAdmin && (
+            <ButtonLink href={`/consultants/${id}/edit`} variant="outline" size="sm">
+              Editar
+            </ButtonLink>
+          )}
         </div>
       </div>
 

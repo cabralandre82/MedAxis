@@ -12,7 +12,7 @@ export async function createConsultant(
   data: SalesConsultantFormData
 ): Promise<{ id?: string; error?: string }> {
   try {
-    const actor = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const actor = await requireRole(['SUPER_ADMIN'])
     const parsed = salesConsultantSchema.safeParse(data)
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
 
@@ -56,7 +56,7 @@ export async function updateConsultant(
   data: SalesConsultantFormData
 ): Promise<{ error?: string }> {
   try {
-    const actor = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const actor = await requireRole(['SUPER_ADMIN'])
     const parsed = salesConsultantSchema.safeParse(data)
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
 
@@ -93,7 +93,7 @@ export async function updateConsultantStatus(
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'
 ): Promise<{ error?: string }> {
   try {
-    const actor = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const actor = await requireRole(['SUPER_ADMIN'])
     const adminClient = createAdminClient()
 
     const { error } = await adminClient
@@ -128,7 +128,7 @@ export async function linkConsultantUser(
   userId: string
 ): Promise<{ error?: string }> {
   try {
-    await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    await requireRole(['SUPER_ADMIN'])
     const adminClient = createAdminClient()
 
     const { error } = await adminClient
@@ -153,7 +153,7 @@ export async function assignConsultantToClinic(
   consultantId: string | null
 ): Promise<{ error?: string }> {
   try {
-    const actor = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const actor = await requireRole(['SUPER_ADMIN'])
     const adminClient = createAdminClient()
 
     const { error } = await adminClient
@@ -190,7 +190,7 @@ export async function registerConsultantTransfer(
   notes?: string
 ): Promise<{ id?: string; error?: string }> {
   try {
-    const actor = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const actor = await requireRole(['SUPER_ADMIN'])
     if (!commissionIds.length) return { error: 'Nenhuma comissão selecionada' }
 
     const adminClient = createAdminClient()

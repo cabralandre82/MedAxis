@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
+import { getCurrentUser } from '@/lib/auth/session'
 import { ButtonLink } from '@/components/ui/button-link'
 import { formatCNPJ } from '@/lib/utils'
 import { UserPlus } from 'lucide-react'
@@ -20,6 +21,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default async function ConsultantsPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const currentUser = await getCurrentUser()
+  const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
 
   const supabase = await createClient()
   const { data: consultants } = await supabase
@@ -54,18 +57,22 @@ export default async function ConsultantsPage() {
             Gerencie consultores e acompanhe comissões por clínica vinculada
           </p>
         </div>
-        <ButtonLink href="/consultants/new">
-          <UserPlus className="mr-2 h-4 w-4" />
-          Novo consultor
-        </ButtonLink>
+        {isSuperAdmin && (
+          <ButtonLink href="/consultants/new">
+            <UserPlus className="mr-2 h-4 w-4" />
+            Novo consultor
+          </ButtonLink>
+        )}
       </div>
 
       {!consultants?.length ? (
         <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center">
           <p className="text-slate-500">Nenhum consultor cadastrado ainda.</p>
-          <ButtonLink href="/consultants/new" variant="outline" className="mt-4">
-            Cadastrar primeiro consultor
-          </ButtonLink>
+          {isSuperAdmin && (
+            <ButtonLink href="/consultants/new" variant="outline" className="mt-4">
+              Cadastrar primeiro consultor
+            </ButtonLink>
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

@@ -4,7 +4,7 @@ import { ConsultantForm } from '@/components/consultants/consultant-form'
 export const metadata = { title: 'Novo Consultor — MedAxis' }
 
 export default async function NewConsultantPage() {
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  await requireRolePage(['SUPER_ADMIN'])
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

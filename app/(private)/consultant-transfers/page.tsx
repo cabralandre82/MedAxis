@@ -7,7 +7,8 @@ import type { SalesConsultant, ConsultantCommission } from '@/types'
 export const metadata = { title: 'Repasses a Consultores — MedAxis' }
 
 export default async function ConsultantTransfersPage() {
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const currentUser = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const isSuperAdmin = currentUser.roles.includes('SUPER_ADMIN')
   const supabase = await createClient()
 
   // Consultores com comissões pendentes
@@ -125,12 +126,16 @@ export default async function ConsultantTransfersPage() {
                         {formatCurrency(total)}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <ConsultantTransferDialog
-                          consultantId={c.id}
-                          consultantName={c.full_name}
-                          commissions={comms}
-                          totalAmount={total}
-                        />
+                        {isSuperAdmin ? (
+                          <ConsultantTransferDialog
+                            consultantId={c.id}
+                            consultantName={c.full_name}
+                            commissions={comms}
+                            totalAmount={total}
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-400">Sem permissão</span>
+                        )}
                       </td>
                     </tr>
                   )

@@ -17,8 +17,8 @@ interface PageProps {
 
 export default async function ClinicDetailPage({ params }: PageProps) {
   const { id } = await params
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
-
+  const currentUser = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const isSuperAdmin = currentUser.roles.includes('SUPER_ADMIN')
   const supabase = await createServerClient()
   const { data: clinic } = await supabase
     .from('clinics')
@@ -159,11 +159,13 @@ export default async function ClinicDetailPage({ params }: PageProps) {
         <div className="space-y-3 rounded-lg border bg-white p-6">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Consultor de vendas</h2>
-            <AssignConsultantDialog
-              clinicId={id}
-              currentConsultantId={typedClinic.consultant_id}
-              consultants={(allConsultants ?? []) as unknown as SalesConsultant[]}
-            />
+            {isSuperAdmin && (
+              <AssignConsultantDialog
+                clinicId={id}
+                currentConsultantId={typedClinic.consultant_id}
+                consultants={(allConsultants ?? []) as unknown as SalesConsultant[]}
+              />
+            )}
           </div>
           {typedClinic.sales_consultants ? (
             <div className="flex items-center justify-between rounded-lg bg-blue-50 px-4 py-3">
