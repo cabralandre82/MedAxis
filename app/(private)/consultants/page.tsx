@@ -6,7 +6,7 @@ import { ButtonLink } from '@/components/ui/button-link'
 import { formatCNPJ } from '@/lib/utils'
 import { UserPlus } from 'lucide-react'
 
-export const metadata = { title: 'Consultores de Vendas — MedAxis' }
+export const metadata = { title: 'Consultores de Vendas — Clinipharma' }
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-green-100 text-green-800',

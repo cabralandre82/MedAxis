@@ -1,4 +1,4 @@
-# MedAxis — Product Requirements Document (PRD)
+# Clinipharma — Product Requirements Document (PRD)
 
 ## Objetivo
 

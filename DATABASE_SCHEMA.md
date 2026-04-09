@@ -1,4 +1,4 @@
-# MedAxis — Schema do Banco de Dados
+# Clinipharma — Schema do Banco de Dados
 
 ## Visão geral dos schemas
 

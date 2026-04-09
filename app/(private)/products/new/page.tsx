@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/db/server'
 import { ProductForm } from '@/components/products/product-form'
 import type { ProductCategory, Pharmacy } from '@/types'
 
-export const metadata = { title: 'Novo Produto | MedAxis' }
+export const metadata = { title: 'Novo Produto | Clinipharma' }
 
 export default async function NewProductPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])

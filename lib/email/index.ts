@@ -2,8 +2,8 @@ import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-const FROM = process.env.EMAIL_FROM ?? 'MedAxis <noreply@medaxis.com.br>'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://med-axis-three.vercel.app'
+const FROM = process.env.EMAIL_FROM ?? 'Clinipharma <noreply@clinipharma.com.br>'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://clinipharma-three.vercel.app'
 
 export { FROM, APP_URL }
 

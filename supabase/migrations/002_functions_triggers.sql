@@ -1,5 +1,5 @@
 -- ============================================================
--- MedAxis — Migration 002: Functions & Triggers
+-- Clinipharma — Migration 002: Functions & Triggers
 -- ============================================================
 
 -- ========================
@@ -79,7 +79,7 @@ DECLARE
 BEGIN
   v_year := to_char(now(), 'YYYY');
   v_seq  := nextval('public.order_code_seq');
-  v_code := 'MED-' || v_year || '-' || lpad(v_seq::text, 6, '0');
+  v_code := 'CP-' || v_year || '-' || lpad(v_seq::text, 6, '0');
   NEW.code := v_code;
   RETURN NEW;
 END;
@@ -141,6 +141,6 @@ CREATE OR REPLACE TRIGGER trg_orders_status_history
 INSERT INTO public.app_settings (key, value_json, description)
 VALUES
   ('default_commission_percentage', '15', 'Percentual de comissão padrão da plataforma (%)'),
-  ('platform_name', '"MedAxis"', 'Nome da plataforma'),
-  ('platform_support_email', '"suporte@medaxis.com.br"', 'Email de suporte')
+  ('platform_name', '"Clinipharma"', 'Nome da plataforma'),
+  ('platform_support_email', '"suporte@clinipharma.com.br"', 'Email de suporte')
 ON CONFLICT (key) DO NOTHING;

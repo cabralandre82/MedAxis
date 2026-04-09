@@ -100,7 +100,7 @@
 - Seed executado: 5 categorias, 2 farmácias, 2 clínicas, 2 médicos, 5 produtos
 - Storage buckets criados: `product-images` (público) e `order-documents` (privado)
 - 5 usuários criados com papéis e vínculos de organização
-- Deploy realizado na Vercel — https://med-axis-three.vercel.app
+- Deploy realizado na Vercel — https://clinipharma-three.vercel.app
 - Supabase Auth configurado com Site URL e Redirect URLs de produção
 
 ### Corrigido

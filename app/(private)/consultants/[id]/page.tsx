@@ -7,7 +7,7 @@ import { ButtonLink } from '@/components/ui/button-link'
 import { formatCNPJ, formatCurrency } from '@/lib/utils'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
 
-export const metadata = { title: 'Consultor — MedAxis' }
+export const metadata = { title: 'Consultor — Clinipharma' }
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-green-100 text-green-800',

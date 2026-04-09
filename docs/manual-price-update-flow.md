@@ -6,7 +6,7 @@ Quando uma farmácia informa que o preço de um produto mudou.
 
 ## Passo a passo
 
-1. Acesse **MedAxis → Produtos**
+1. Acesse **Clinipharma → Produtos**
 2. Localize o produto cujo preço precisa ser atualizado
 3. Clique em **Editar** ou abra o detalhe do produto
 4. Localize o campo **Preço atual**

@@ -1,4 +1,4 @@
-# Usuários Seed — MedAxis
+# Usuários Seed — Clinipharma
 
 Usuários criados pelo script `scripts/setup-production.ts` via Supabase Admin API.
 
@@ -8,13 +8,13 @@ Usuários criados pelo script `scripts/setup-production.ts` via Supabase Admin A
 
 ## Credenciais
 
-| Email                        | Senha           | Papel          | Organização               |
-| ---------------------------- | --------------- | -------------- | ------------------------- |
-| `superadmin@medaxis.com.br`  | `MedAxis@2026!` | SUPER_ADMIN    | Plataforma (acesso total) |
-| `admin@medaxis.com.br`       | `MedAxis@2026!` | PLATFORM_ADMIN | Operação diária           |
-| `admin@clinicasaude.com.br`  | `MedAxis@2026!` | CLINIC_ADMIN   | Clínica Saúde Total       |
-| `dr.silva@medaxis.com.br`    | `MedAxis@2026!` | DOCTOR         | Clínica Saúde Total       |
-| `admin@farmaciaforte.com.br` | `MedAxis@2026!` | PHARMACY_ADMIN | Farmácia Forte            |
+| Email                           | Senha               | Papel          | Organização               |
+| ------------------------------- | ------------------- | -------------- | ------------------------- |
+| `superadmin@clinipharma.com.br` | `Clinipharma@2026!` | SUPER_ADMIN    | Plataforma (acesso total) |
+| `admin@clinipharma.com.br`      | `Clinipharma@2026!` | PLATFORM_ADMIN | Operação diária           |
+| `admin@clinicasaude.com.br`     | `Clinipharma@2026!` | CLINIC_ADMIN   | Clínica Saúde Total       |
+| `dr.silva@clinipharma.com.br`   | `Clinipharma@2026!` | DOCTOR         | Clínica Saúde Total       |
+| `admin@farmaciaforte.com.br`    | `Clinipharma@2026!` | PHARMACY_ADMIN | Farmácia Forte            |
 
 ---
 

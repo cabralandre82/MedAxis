@@ -1,4 +1,4 @@
-# MedAxis — Regras de Negócio
+# Clinipharma — Regras de Negócio
 
 ## RN-01: Catálogo fechado
 
@@ -90,7 +90,7 @@ Server Actions e Route Handlers devem sempre validar:
 
 ## RN-14: Código humano do pedido
 
-Cada pedido recebe um código legível único no formato `MED-YYYY-NNNNNN` (ex: `MED-2026-000001`). Esse código é gerado automaticamente via trigger no banco.
+Cada pedido recebe um código legível único no formato `CP-YYYY-NNNNNN` (ex: `CP-2026-000001`). Esse código é gerado automaticamente via trigger no banco.
 
 ## RN-15: Farmácia não altera produto no MVP
 

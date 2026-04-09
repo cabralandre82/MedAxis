@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
-const SUPER_ADMIN_EMAIL = 'superadmin@medaxis.com.br'
-const SUPER_ADMIN_PASSWORD = 'MedAxis@2026'
+const SUPER_ADMIN_EMAIL = 'superadmin@clinipharma.com.br'
+const SUPER_ADMIN_PASSWORD = 'Clinipharma@2026'
 
 test.describe('Authentication', () => {
   test('TC-01: Login with valid credentials redirects to dashboard', async ({ page }) => {

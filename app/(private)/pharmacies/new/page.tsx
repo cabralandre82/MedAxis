@@ -1,7 +1,7 @@
 import { requireRolePage } from '@/lib/rbac'
 import { PharmacyForm } from '@/components/pharmacies/pharmacy-form'
 
-export const metadata = { title: 'Nova Farmácia | MedAxis' }
+export const metadata = { title: 'Nova Farmácia | Clinipharma' }
 
 export default async function NewPharmacyPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])

@@ -4,7 +4,7 @@ import { requireRolePage } from '@/lib/rbac'
 import { ConsultantForm } from '@/components/consultants/consultant-form'
 import type { SalesConsultant } from '@/types'
 
-export const metadata = { title: 'Editar Consultor — MedAxis' }
+export const metadata = { title: 'Editar Consultor — Clinipharma' }
 
 export default async function EditConsultantPage({ params }: { params: Promise<{ id: string }> }) {
   await requireRolePage(['SUPER_ADMIN'])

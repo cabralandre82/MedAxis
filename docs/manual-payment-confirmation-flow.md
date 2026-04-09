@@ -6,7 +6,7 @@ Quando a clínica ou médico informa que realizou o pagamento e o admin precisa 
 
 ## Passo a passo
 
-1. Acesse **MedAxis → Pagamentos**
+1. Acesse **Clinipharma → Pagamentos**
 2. Localize o pagamento com status `PENDING` ou `UNDER_REVIEW`
 3. Clique no pagamento para abrir o detalhe
 4. Verifique o comprovante (se o cliente enviou)

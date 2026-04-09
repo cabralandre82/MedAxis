@@ -1,4 +1,4 @@
-# MedAxis — Guia de Deploy
+# Clinipharma — Guia de Deploy
 
 ---
 
@@ -6,9 +6,9 @@
 
 | Componente | Serviço    | URL / Referência                                      |
 | ---------- | ---------- | ----------------------------------------------------- |
-| Frontend   | Vercel     | https://med-axis-three.vercel.app                     |
+| Frontend   | Vercel     | https://clinipharma-three.vercel.app                  |
 | Banco      | Supabase   | https://app.supabase.com/project/jomdntqlgrupvhrqoyai |
-| Repo       | GitHub     | https://github.com/cabralandre82/MedAxis              |
+| Repo       | GitHub     | https://github.com/cabralandre82/Clinipharma          |
 | Região     | Vercel GRU | São Paulo (gru1)                                      |
 
 ---
@@ -22,17 +22,17 @@ Configure em **Vercel → Settings → Environment Variables**:
 | `NEXT_PUBLIC_SUPABASE_URL`      | `https://jomdntqlgrupvhrqoyai.supabase.co`     |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | (anon key do Supabase)                         |
 | `SUPABASE_SERVICE_ROLE_KEY`     | (service role key — nunca exposta no frontend) |
-| `NEXT_PUBLIC_APP_URL`           | `https://med-axis-three.vercel.app`            |
-| `NEXT_PUBLIC_APP_NAME`          | `MedAxis`                                      |
+| `NEXT_PUBLIC_APP_URL`           | `https://clinipharma-three.vercel.app`         |
+| `NEXT_PUBLIC_APP_NAME`          | `Clinipharma`                                  |
 
 ---
 
 ## Configuração do Supabase Auth
 
 1. Acesse **Authentication → URL Configuration**
-2. **Site URL**: `https://med-axis-three.vercel.app`
+2. **Site URL**: `https://clinipharma-three.vercel.app`
 3. **Redirect URLs**: adicione os dois:
-   - `https://med-axis-three.vercel.app/auth/callback`
+   - `https://clinipharma-three.vercel.app/auth/callback`
    - `http://localhost:3000/auth/callback` (desenvolvimento)
 
 ---
@@ -88,7 +88,7 @@ O seed está em `supabase/seed.sql` e inclui categorias, farmácias, clínicas, 
 **Opção A — Via GitHub (recomendado):**
 
 1. Acesse https://vercel.com
-2. Importe o repositório `cabralandre82/MedAxis`
+2. Importe o repositório `cabralandre82/Clinipharma`
 3. Configure as variáveis de ambiente (seção acima)
 4. Clique em **Deploy**
 
@@ -109,7 +109,7 @@ vercel --prod
 Para forçar um novo deploy sem alterar código:
 
 1. Acesse https://vercel.com/dashboard
-2. Selecione o projeto MedAxis
+2. Selecione o projeto Clinipharma
 3. Vá em **Deployments**
 4. Clique nos três pontos do último deploy → **Redeploy**
 

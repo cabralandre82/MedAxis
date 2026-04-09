@@ -152,7 +152,7 @@ export function Sidebar({ userRoles }: SidebarProps) {
               <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-7 3a1 1 0 0 1 1 1v3h3a1 1 0 0 1 0 2h-3v3a1 1 0 0 1-2 0v-3H8a1 1 0 0 1 0-2h3V7a1 1 0 0 1 1-1z" />
             </svg>
           </div>
-          <span className="text-lg font-bold tracking-tight text-white">MedAxis</span>
+          <span className="text-lg font-bold tracking-tight text-white">Clinipharma</span>
         </div>
       </div>
 
@@ -184,7 +184,7 @@ export function Sidebar({ userRoles }: SidebarProps) {
 
       {/* Footer */}
       <div className="border-t border-white/10 p-3">
-        <p className="text-center text-xs text-blue-200/50">MedAxis v0.2.0</p>
+        <p className="text-center text-xs text-blue-200/50">Clinipharma v0.2.0</p>
       </div>
     </aside>
   )

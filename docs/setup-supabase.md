@@ -83,10 +83,10 @@ npx tsx scripts/setup-production.ts
 
 Acesse **Authentication → URL Configuration**:
 
-| Campo         | Desenvolvimento                       | Produção                                          |
-| ------------- | ------------------------------------- | ------------------------------------------------- |
-| Site URL      | `http://localhost:3000`               | `https://med-axis-three.vercel.app`               |
-| Redirect URLs | `http://localhost:3000/auth/callback` | `https://med-axis-three.vercel.app/auth/callback` |
+| Campo         | Desenvolvimento                       | Produção                                             |
+| ------------- | ------------------------------------- | ---------------------------------------------------- |
+| Site URL      | `http://localhost:3000`               | `https://clinipharma-three.vercel.app`               |
+| Redirect URLs | `http://localhost:3000/auth/callback` | `https://clinipharma-three.vercel.app/auth/callback` |
 
 ---
 
@@ -124,9 +124,9 @@ Todas as tabelas têm RLS habilitada via `003_rls_policies.sql`. As políticas g
 Após o setup, acesse a plataforma e faça login:
 
 ```
-URL:   https://med-axis-three.vercel.app
-Email: superadmin@medaxis.com.br
-Senha: MedAxis@2026!
+URL:   https://clinipharma-three.vercel.app
+Email: superadmin@clinipharma.com.br
+Senha: Clinipharma@2026!
 ```
 
 Confirme que o dashboard carrega e que o catálogo exibe os produtos seed.

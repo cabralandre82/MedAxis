@@ -1,5 +1,5 @@
 -- ============================================================
--- MedAxis — Seed de Desenvolvimento
+-- Clinipharma — Seed de Desenvolvimento
 -- ============================================================
 
 -- PRODUCT CATEGORIES
@@ -18,8 +18,8 @@ INSERT INTO public.clinics (id, corporate_name, trade_name, cnpj, email, phone, 
 INSERT INTO public.clinics (id, corporate_name, trade_name, cnpj, email, phone, address_line_1, city, state, zip_code, status) VALUES ('c1000000-0000-0000-0000-000000000002', 'Centro de Oncologia Rio Ltda', 'OncoRio', '55.666.777/0001-88', 'contato@oncorio.com.br', '(21) 4444-5555', 'Rua Voluntários da Pátria, 500', 'Rio de Janeiro', 'RJ', '22270-000', 'ACTIVE') ON CONFLICT (id) DO NOTHING;
 
 -- DOCTORS
-INSERT INTO public.doctors (id, full_name, crm, crm_state, specialty, email, phone, status) VALUES ('d1000000-0000-0000-0000-000000000001', 'Dr. João Silva', '123456', 'SP', 'Endocrinologia', 'joao.silva@medaxis.com.br', '(11) 99999-0001', 'ACTIVE') ON CONFLICT (id) DO NOTHING;
-INSERT INTO public.doctors (id, full_name, crm, crm_state, specialty, email, phone, status) VALUES ('d1000000-0000-0000-0000-000000000002', 'Dra. Maria Santos', '654321', 'RJ', 'Oncologia', 'maria.santos@medaxis.com.br', '(21) 99999-0002', 'ACTIVE') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.doctors (id, full_name, crm, crm_state, specialty, email, phone, status) VALUES ('d1000000-0000-0000-0000-000000000001', 'Dr. João Silva', '123456', 'SP', 'Endocrinologia', 'joao.silva@clinipharma.com.br', '(11) 99999-0001', 'ACTIVE') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.doctors (id, full_name, crm, crm_state, specialty, email, phone, status) VALUES ('d1000000-0000-0000-0000-000000000002', 'Dra. Maria Santos', '654321', 'RJ', 'Oncologia', 'maria.santos@clinipharma.com.br', '(21) 99999-0002', 'ACTIVE') ON CONFLICT (id) DO NOTHING;
 
 -- DOCTOR-CLINIC LINKS
 INSERT INTO public.doctor_clinic_links (doctor_id, clinic_id, is_primary) VALUES ('d1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', true) ON CONFLICT (doctor_id, clinic_id) DO NOTHING;
@@ -34,6 +34,6 @@ INSERT INTO public.products (id, category_id, pharmacy_id, sku, name, slug, conc
 
 -- APP SETTINGS
 INSERT INTO public.app_settings (key, value_json, description) VALUES ('default_commission_percentage', '15', 'Comissão padrão da plataforma (%)') ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json;
-INSERT INTO public.app_settings (key, value_json, description) VALUES ('platform_name', '"MedAxis"', 'Nome da plataforma') ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json;
-INSERT INTO public.app_settings (key, value_json, description) VALUES ('support_email', '"suporte@medaxis.com.br"', 'Email de suporte') ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json;
+INSERT INTO public.app_settings (key, value_json, description) VALUES ('platform_name', '"Clinipharma"', 'Nome da plataforma') ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json;
+INSERT INTO public.app_settings (key, value_json, description) VALUES ('support_email', '"suporte@clinipharma.com.br"', 'Email de suporte') ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json;
 INSERT INTO public.app_settings (key, value_json, description) VALUES ('min_order_documents', '1', 'Número mínimo de documentos por pedido') ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json;

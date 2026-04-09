@@ -1,4 +1,4 @@
-# MedAxis — Checklist de Go-Live
+# Clinipharma — Checklist de Go-Live
 
 ---
 
@@ -13,7 +13,7 @@
 ## Autenticação
 
 - [x] Email/senha funcionando
-- [x] Site URL configurada no Supabase Auth (`https://med-axis-three.vercel.app`)
+- [x] Site URL configurada no Supabase Auth (`https://clinipharma-three.vercel.app`)
 - [x] Redirect URLs configuradas no Supabase Auth
 - [ ] SMTP personalizado configurado (Sendgrid, Resend, etc.) — _pendente para produção real_
 - [ ] Email de recuperação de senha testado em produção
@@ -24,14 +24,14 @@
 - [x] `NEXT_PUBLIC_SUPABASE_ANON_KEY` configurada
 - [x] `SUPABASE_SERVICE_ROLE_KEY` configurada
 - [x] `NEXT_PUBLIC_APP_URL` com URL de produção
-- [x] `NEXT_PUBLIC_APP_NAME` = MedAxis
+- [x] `NEXT_PUBLIC_APP_NAME` = Clinipharma
 
 ## Build e Deploy
 
 - [x] `npm run build` passa sem erros
 - [x] `npm run lint` passa sem warnings críticos
 - [x] Deploy na Vercel bem-sucedido
-- [x] URL de produção acessível (https://med-axis-three.vercel.app)
+- [x] URL de produção acessível (https://clinipharma-three.vercel.app)
 - [x] Repositório GitHub conectado (auto-deploy no push para `main`)
 
 ## Funcionalidades críticas

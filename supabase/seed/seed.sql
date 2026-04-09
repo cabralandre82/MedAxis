@@ -1,5 +1,5 @@
 -- ============================================================
--- MedAxis — Seed de Desenvolvimento
+-- Clinipharma — Seed de Desenvolvimento
 -- ============================================================
 -- ATENÇÃO: Execute APENAS em ambiente de desenvolvimento!
 -- Cria usuários via Supabase Auth Admin API — não diretamente aqui.
@@ -93,7 +93,7 @@ VALUES
     '123456',
     'SP',
     'Endocrinologia',
-    'dr.silva@medaxis.com.br',
+    'dr.silva@clinipharma.com.br',
     '(11) 99999-8888',
     'ACTIVE'
   ),
@@ -103,7 +103,7 @@ VALUES
     '654321',
     'RJ',
     'Dermatologia',
-    'dra.santos@medaxis.com.br',
+    'dra.santos@clinipharma.com.br',
     '(21) 99999-7777',
     'ACTIVE'
   )
@@ -219,20 +219,20 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.app_settings (key, value_json, description)
 VALUES
   ('default_commission_percentage', '15', 'Percentual de comissão padrão da plataforma (%)'),
-  ('platform_name', '"MedAxis"', 'Nome da plataforma'),
-  ('platform_support_email', '"suporte@medaxis.com.br"', 'Email de suporte')
+  ('platform_name', '"Clinipharma"', 'Nome da plataforma'),
+  ('platform_support_email', '"suporte@clinipharma.com.br"', 'Email de suporte')
 ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json;
 
 -- ============================================================
 -- NOTA: Para criar os pedidos de seed, os usuários de auth
 -- precisam estar criados primeiro. Use o painel do Supabase
 -- Authentication > Users para criar:
---   - superadmin@medaxis.com.br (senha: MedAxis@2026)
---   - admin@medaxis.com.br
+--   - superadmin@clinipharma.com.br (senha: Clinipharma@2026)
+--   - admin@clinipharma.com.br
 --   - admin@clinicasaude.com.br
 --   - admin@clinicavida.com.br
---   - dr.silva@medaxis.com.br
---   - dra.santos@medaxis.com.br
+--   - dr.silva@clinipharma.com.br
+--   - dra.santos@clinipharma.com.br
 --   - admin@farmaciaforte.com.br
 --   - admin@farmaciaverde.com.br
 --

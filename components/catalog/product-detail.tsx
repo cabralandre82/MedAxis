@@ -155,7 +155,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
               <div>
                 <p className="mb-1 text-xs tracking-wide text-blue-200 uppercase">Preço unitário</p>
                 <p className="text-3xl font-bold">{formatCurrency(product.price_current)}</p>
-                <p className="mt-1 text-xs text-blue-200">Valor fixo · Plataforma MedAxis</p>
+                <p className="mt-1 text-xs text-blue-200">Valor fixo · Plataforma Clinipharma</p>
               </div>
               <div className="text-right">
                 <div className="rounded-xl bg-white/15 p-2.5">

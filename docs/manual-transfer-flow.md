@@ -23,7 +23,7 @@ O repasse só pode ser registrado quando:
 
 ### 2. Registrar repasse
 
-1. Acesse **MedAxis → Repasses**
+1. Acesse **Clinipharma → Repasses**
 2. Localize o repasse com status `PENDING`
 3. Realize a transferência bancária para a farmácia (fora do sistema)
 4. Volte ao sistema e clique no repasse

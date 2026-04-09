@@ -28,7 +28,7 @@ export function formatRelativeTime(date: string | Date): string {
 
 export function generateOrderCode(year: number, sequence: number): string {
   const seq = String(sequence).padStart(6, '0')
-  return `MED-${year}-${seq}`
+  return `CP-${year}-${seq}`
 }
 
 export function formatCNPJ(cnpj: string): string {

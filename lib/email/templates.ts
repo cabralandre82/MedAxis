@@ -19,7 +19,7 @@ function layout(title: string, body: string): string {
         <!-- Header -->
         <tr>
           <td style="background:${BRAND_COLOR};padding:24px 32px;">
-            <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">MedAxis</span>
+            <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">Clinipharma</span>
             <span style="color:#93c5fd;font-size:12px;margin-left:8px;">Plataforma B2B</span>
           </td>
         </tr>
@@ -33,7 +33,7 @@ function layout(title: string, body: string): string {
         <tr>
           <td style="padding:20px 32px;border-top:1px solid ${BORDER};background:#f8fafc;">
             <p style="margin:0;font-size:12px;color:#94a3b8;">
-              Este é um email automático da plataforma MedAxis. Não responda a este email.<br />
+              Este é um email automático da plataforma Clinipharma. Não responda a este email.<br />
               <a href="${APP_URL}" style="color:${BRAND_COLOR};">Acessar plataforma</a>
             </p>
           </td>
@@ -215,7 +215,7 @@ export function consultantTransferEmail(data: ConsultantTransferEmailData): {
   const body = `
     ${heading('Repasse de comissão')}
     ${badge('Pago', '#16a34a')}
-    ${paragraph(`Olá, <strong>${data.consultantName}</strong>! Um repasse de comissões foi registrado pela plataforma MedAxis.`)}
+    ${paragraph(`Olá, <strong>${data.consultantName}</strong>! Um repasse de comissões foi registrado pela plataforma Clinipharma.`)}
     ${infoTable([
       ['Valor total', data.totalAmount],
       ['Referência', data.reference],

@@ -7,7 +7,7 @@ import { EntityStatusBadge } from '@/components/shared/status-badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import type { Pharmacy, EntityStatus } from '@/types'
 
-export const metadata = { title: 'Detalhe da Farmácia | MedAxis' }
+export const metadata = { title: 'Detalhe da Farmácia | Clinipharma' }
 
 interface PageProps {
   params: Promise<{ id: string }>

@@ -5,7 +5,7 @@ import { UserForm } from '@/components/users/user-form'
 import type { Clinic, Pharmacy, SalesConsultant } from '@/types'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Novo Usuário | MedAxis' }
+export const metadata: Metadata = { title: 'Novo Usuário | Clinipharma' }
 
 export default async function NewUserPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])

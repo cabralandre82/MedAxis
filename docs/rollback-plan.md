@@ -1,4 +1,4 @@
-# MedAxis — Plano de Rollback
+# Clinipharma — Plano de Rollback
 
 ## Em caso de falha no deploy
 

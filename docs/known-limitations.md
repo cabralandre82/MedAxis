@@ -1,4 +1,4 @@
-# MedAxis — Limitações Conhecidas do MVP
+# Clinipharma — Limitações Conhecidas do MVP
 
 ## Financeiro
 

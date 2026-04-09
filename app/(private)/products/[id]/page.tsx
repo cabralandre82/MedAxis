@@ -65,7 +65,7 @@ function MarginBreakdown({
   )
 }
 
-export const metadata = { title: 'Detalhe do Produto | MedAxis' }
+export const metadata = { title: 'Detalhe do Produto | Clinipharma' }
 
 interface PageProps {
   params: Promise<{ id: string }>

@@ -5,7 +5,7 @@ import { createServerClient } from '@/lib/db/server'
 import { DoctorForm } from '@/components/doctors/doctor-form'
 import type { Doctor } from '@/types'
 
-export const metadata = { title: 'Editar Médico | MedAxis' }
+export const metadata = { title: 'Editar Médico | Clinipharma' }
 
 interface PageProps {
   params: Promise<{ id: string }>

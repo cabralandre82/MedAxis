@@ -1,5 +1,5 @@
 -- ============================================================
--- MedAxis — Migration 001: Initial Schema
+-- Clinipharma — Migration 001: Initial Schema
 -- ============================================================
 -- Run this in the Supabase SQL Editor.
 -- Order matters: run 001 → 002 → 003

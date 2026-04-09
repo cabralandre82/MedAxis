@@ -5,7 +5,7 @@ import { UsersTable } from '@/components/users/users-table'
 import { Plus } from 'lucide-react'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Usuários | MedAxis' }
+export const metadata: Metadata = { title: 'Usuários | Clinipharma' }
 
 export default async function UsersPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])

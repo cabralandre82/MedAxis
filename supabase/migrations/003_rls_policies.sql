@@ -1,5 +1,5 @@
 -- ============================================================
--- MedAxis — Migration 003: Row Level Security Policies
+-- Clinipharma — Migration 003: Row Level Security Policies
 -- ============================================================
 
 -- ========================

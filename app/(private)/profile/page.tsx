@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { ProfileForm } from '@/components/profile/profile-form'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Meu Perfil | MedAxis' }
+export const metadata: Metadata = { title: 'Meu Perfil | Clinipharma' }
 
 export default async function ProfilePage() {
   const user = await getCurrentUser()

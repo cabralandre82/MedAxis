@@ -4,8 +4,8 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: {
-    default: 'MedAxis',
-    template: '%s | MedAxis',
+    default: 'Clinipharma',
+    template: '%s | Clinipharma',
   },
   description: 'Plataforma B2B de intermediação médica entre clínicas, médicos e farmácias.',
   robots: 'noindex, nofollow',

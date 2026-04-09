@@ -1,4 +1,4 @@
-# MedAxis — Fluxos do Usuário
+# Clinipharma — Fluxos do Usuário
 
 ## UF-01: Fluxo principal de pedido
 

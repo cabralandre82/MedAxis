@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4z" />
               </svg>
             </div>
-            <span className="text-2xl font-bold tracking-tight text-white">MedAxis</span>
+            <span className="text-2xl font-bold tracking-tight text-white">Clinipharma</span>
           </div>
           <p className="text-sm text-blue-100">Plataforma B2B de intermediação médica</p>
         </div>

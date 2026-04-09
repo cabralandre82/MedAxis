@@ -1,7 +1,7 @@
 import { requireRolePage } from '@/lib/rbac'
 import { ClinicForm } from '@/components/clinics/clinic-form'
 
-export const metadata = { title: 'Nova Clínica | MedAxis' }
+export const metadata = { title: 'Nova Clínica | Clinipharma' }
 
 export default async function NewClinicPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])

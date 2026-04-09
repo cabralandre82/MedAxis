@@ -1,10 +1,10 @@
-# MedAxis — Visão Geral do Produto
+# Clinipharma — Visão Geral do Produto
 
 ## O problema que resolvemos
 
 Farmácias de manipulação e distribuidoras especializadas vendem para clínicas e médicos, mas esse processo hoje é manual, fragmentado e sem rastreabilidade. Pedidos chegam por WhatsApp, preços mudam sem registro, pagamentos não têm auditoria e repasses são feitos manualmente sem histórico.
 
-MedAxis resolve isso com uma plataforma intermediária B2B que:
+Clinipharma resolve isso com uma plataforma intermediária B2B que:
 
 - Centraliza o catálogo de produtos das farmácias
 - Permite que médicos e clínicas façam pedidos com documentação formal

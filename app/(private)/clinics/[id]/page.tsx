@@ -9,7 +9,7 @@ import { ClinicStatusActions } from '@/components/clinics/clinic-status-actions'
 import { AssignConsultantDialog } from '@/components/consultants/assign-consultant-dialog'
 import type { Clinic, EntityStatus, SalesConsultant } from '@/types'
 
-export const metadata = { title: 'Detalhe da Clínica | MedAxis' }
+export const metadata = { title: 'Detalhe da Clínica | Clinipharma' }
 
 interface PageProps {
   params: Promise<{ id: string }>

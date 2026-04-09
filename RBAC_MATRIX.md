@@ -1,4 +1,4 @@
-# MedAxis — Matriz de Permissões (RBAC)
+# Clinipharma — Matriz de Permissões (RBAC)
 
 ## Papéis
 

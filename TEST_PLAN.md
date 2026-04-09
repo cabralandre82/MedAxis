@@ -1,4 +1,4 @@
-# MedAxis — Plano de Testes
+# Clinipharma — Plano de Testes
 
 ## Testes Unitários (Vitest)
 
@@ -26,7 +26,7 @@
 
 - `formatCurrency(value)` — `1000` → `R$ 1.000,00`
 - `formatDate(date)` — formatação correta
-- `generateOrderCode(year, sequence)` — `MED-2026-000001`
+- `generateOrderCode(year, sequence)` — `CP-2026-000001`
 
 ## Testes E2E (Playwright)
 

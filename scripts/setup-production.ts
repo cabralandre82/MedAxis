@@ -1,5 +1,5 @@
 /**
- * MedAxis — Script de Setup de Produção
+ * Clinipharma — Script de Setup de Produção
  *
  * Cria:
  * 1. Storage buckets (product-images, order-documents)
@@ -28,40 +28,40 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 const USERS = [
   {
-    email: 'superadmin@medaxis.com.br',
-    password: 'MedAxis@2026',
+    email: 'superadmin@clinipharma.com.br',
+    password: 'Clinipharma@2026',
     full_name: 'Super Administrador',
     role: 'SUPER_ADMIN' as const,
     clinic_id: null,
     pharmacy_id: null,
   },
   {
-    email: 'admin@medaxis.com.br',
-    password: 'MedAxis@2026',
+    email: 'admin@clinipharma.com.br',
+    password: 'Clinipharma@2026',
     full_name: 'Administrador Plataforma',
     role: 'PLATFORM_ADMIN' as const,
     clinic_id: null,
     pharmacy_id: null,
   },
   {
-    email: 'clinica@medaxis.com.br',
-    password: 'MedAxis@2026',
+    email: 'clinica@clinipharma.com.br',
+    password: 'Clinipharma@2026',
     full_name: 'Admin Clínica Exemplo',
     role: 'CLINIC_ADMIN' as const,
     clinic_id: 'c1000000-0000-0000-0000-000000000001',
     pharmacy_id: null,
   },
   {
-    email: 'medico@medaxis.com.br',
-    password: 'MedAxis@2026',
+    email: 'medico@clinipharma.com.br',
+    password: 'Clinipharma@2026',
     full_name: 'Dr. João Silva',
     role: 'DOCTOR' as const,
     clinic_id: 'c1000000-0000-0000-0000-000000000001',
     pharmacy_id: null,
   },
   {
-    email: 'farmacia@medaxis.com.br',
-    password: 'MedAxis@2026',
+    email: 'farmacia@clinipharma.com.br',
+    password: 'Clinipharma@2026',
     full_name: 'Admin FarmaMag SP',
     role: 'PHARMACY_ADMIN' as const,
     clinic_id: null,
@@ -228,7 +228,7 @@ async function verify() {
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('🚀 MedAxis — Setup de Produção')
+  console.log('🚀 Clinipharma — Setup de Produção')
   console.log('================================')
 
   await setupStorageBuckets()

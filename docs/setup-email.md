@@ -1,6 +1,6 @@
-# MedAxis — Configuração de Email Transacional (Resend)
+# Clinipharma — Configuração de Email Transacional (Resend)
 
-O MedAxis usa o [Resend](https://resend.com) para dois propósitos:
+O Clinipharma usa o [Resend](https://resend.com) para dois propósitos:
 
 1. **Emails automáticos da aplicação** — novos pedidos, pagamento confirmado, repasse registrado, status atualizado
 2. **Emails de autenticação do Supabase** — recuperação de senha, confirmação de cadastro
@@ -13,7 +13,7 @@ O MedAxis usa o [Resend](https://resend.com) para dois propósitos:
 
 1. Acesse [resend.com](https://resend.com) e crie uma conta gratuita
 2. No menu lateral, vá em **API Keys → Create API Key**
-3. Dê o nome `medaxis-production`, selecione permissão **Sending access**
+3. Dê o nome `clinipharma-production`, selecione permissão **Sending access**
 4. Copie a chave gerada (começa com `re_...`) — ela só aparece uma vez
 
 ### 1.2 Verificar domínio (obrigatório para produção)
@@ -21,19 +21,19 @@ O MedAxis usa o [Resend](https://resend.com) para dois propósitos:
 > Sem domínio verificado, o Resend envia apenas para o seu próprio email (modo sandbox).
 
 1. No Resend, vá em **Domains → Add Domain**
-2. Insira seu domínio (ex: `medaxis.com.br`)
+2. Insira seu domínio (ex: `clinipharma.com.br`)
 3. Adicione os registros DNS informados (SPF, DKIM, DMARC) no seu registrador (Registro.br, GoDaddy, Cloudflare, etc.)
 4. Aguarde a verificação (normalmente < 5 minutos com Cloudflare, até 48h em outros)
 
 ### 1.3 Adicionar variáveis no Vercel
 
-1. Acesse [vercel.com/dashboard](https://vercel.com/dashboard) → seu projeto MedAxis → **Settings → Environment Variables**
+1. Acesse [vercel.com/dashboard](https://vercel.com/dashboard) → seu projeto Clinipharma → **Settings → Environment Variables**
 2. Adicione as duas variáveis abaixo para os ambientes **Production** e **Preview**:
 
-| Variável         | Valor                                 |
-| ---------------- | ------------------------------------- |
-| `RESEND_API_KEY` | `re_sua_chave_aqui`                   |
-| `EMAIL_FROM`     | `MedAxis <noreply@seudominio.com.br>` |
+| Variável         | Valor                                     |
+| ---------------- | ----------------------------------------- |
+| `RESEND_API_KEY` | `re_sua_chave_aqui`                       |
+| `EMAIL_FROM`     | `Clinipharma <noreply@seudominio.com.br>` |
 
 3. Faça um novo deploy (ou aguarde o próximo push automático)
 
@@ -56,7 +56,7 @@ No Resend:
 
 ### 2.2 Configurar no Supabase
 
-1. Acesse [app.supabase.com](https://app.supabase.com) → projeto MedAxis (`jomdntqlgrupvhrqoyai`)
+1. Acesse [app.supabase.com](https://app.supabase.com) → projeto Clinipharma (`jomdntqlgrupvhrqoyai`)
 2. Vá em **Authentication → Settings → Email** (ou **SMTP Settings**)
 3. Desabilite **Enable Supabase SMTP** e ative **Custom SMTP**
 4. Preencha:
@@ -67,7 +67,7 @@ No Resend:
 | Port         | `465`                           |
 | Username     | `resend`                        |
 | Password     | sua chave de API SMTP do Resend |
-| Sender name  | `MedAxis`                       |
+| Sender name  | `Clinipharma`                   |
 | Sender email | `noreply@seudominio.com.br`     |
 
 5. Clique em **Save** e depois em **Test SMTP** para confirmar
@@ -92,7 +92,7 @@ No Resend:
 
 ```env
 RESEND_API_KEY=re_sua_chave_aqui
-EMAIL_FROM=MedAxis <noreply@seudominio.com.br>
+EMAIL_FROM=Clinipharma <noreply@seudominio.com.br>
 ```
 
 > Se `RESEND_API_KEY` não estiver configurada, os emails são silenciosamente ignorados com um `console.warn`. A plataforma funciona normalmente sem emails.

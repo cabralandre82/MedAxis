@@ -5,7 +5,7 @@ import { createServerClient } from '@/lib/db/server'
 import { ProductForm } from '@/components/products/product-form'
 import type { ProductWithRelations, ProductCategory, Pharmacy } from '@/types'
 
-export const metadata = { title: 'Editar Produto | MedAxis' }
+export const metadata = { title: 'Editar Produto | Clinipharma' }
 
 interface PageProps {
   params: Promise<{ id: string }>

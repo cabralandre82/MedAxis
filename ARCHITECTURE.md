@@ -1,4 +1,4 @@
-# MedAxis — Arquitetura Técnica
+# Clinipharma — Arquitetura Técnica
 
 ## Visão geral
 

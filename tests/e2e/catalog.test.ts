@@ -5,7 +5,7 @@ test.describe('Catalog', () => {
     // Login as clinic admin
     await page.goto('/login')
     await page.fill('input[type="email"]', 'admin@clinicasaude.com.br')
-    await page.fill('input[type="password"]', 'MedAxis@2026')
+    await page.fill('input[type="password"]', 'Clinipharma@2026')
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard')
   })

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { ResetPasswordDialog } from '@/components/users/reset-password-dialog'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Detalhe do Usuário | MedAxis' }
+export const metadata: Metadata = { title: 'Detalhe do Usuário | Clinipharma' }
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',

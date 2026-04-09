@@ -4,7 +4,7 @@ import { formatCurrency, formatDateTime } from '@/lib/utils'
 import { ConsultantTransferDialog } from '@/components/consultants/consultant-transfer-dialog'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
 
-export const metadata = { title: 'Repasses a Consultores — MedAxis' }
+export const metadata = { title: 'Repasses a Consultores — Clinipharma' }
 
 export default async function ConsultantTransfersPage() {
   const currentUser = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
