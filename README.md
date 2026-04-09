@@ -46,37 +46,40 @@ Não existe paciente final no fluxo. Tudo é B2B. A entrega é sempre para a cl�
 
 ## Módulos implementados
 
-| Módulo             | Descrição                                                     |
-| ------------------ | ------------------------------------------------------------- |
-| Autenticação       | Login email/senha, recuperação de senha, middleware RBAC      |
-| Gestão de Usuários | Criar, vincular, redefinir senha, papéis por organização      |
-| Catálogo           | Listagem, filtros, detalhe de produto por slug                |
-| Pedidos            | Criação, congelamento de preço, upload docs, timeline         |
-| Pagamentos         | Confirmação manual pelo admin                                 |
-| Comissões          | Cálculo automático no momento da confirmação                  |
-| Repasses           | Registro manual de transferência para farmácia                |
-| Clínicas           | CRUD completo, status, membros                                |
-| Médicos            | CRUD, vínculo com clínicas                                    |
-| Farmácias          | CRUD, dados bancários, produtos, repasses                     |
-| Produtos           | CRUD, histórico de preço, ativar/desativar                    |
-| Área da Farmácia   | Atualização de status operacional do pedido                   |
-| Auditoria          | Log automático de todas as ações críticas                     |
-| Relatórios         | KPIs financeiros e operacionais                               |
-| Configurações      | Comissão padrão e parâmetros globais (SUPER_ADMIN)            |
-| Perfil             | Edição de dados pessoais por qualquer usuário                 |
-| Dashboard          | Visão específica por papel (admin, clínica, médico, farmácia) |
+| Módulo                 | Descrição                                                                |
+| ---------------------- | ------------------------------------------------------------------------ |
+| Autenticação           | Login email/senha, recuperação de senha, middleware RBAC                 |
+| Gestão de Usuários     | Criar, vincular, redefinir senha, papéis por organização                 |
+| Catálogo               | Listagem, filtros, detalhe de produto por slug                           |
+| Pedidos                | Criação, congelamento de preço, upload docs, timeline                    |
+| Pagamentos             | Confirmação manual pelo admin                                            |
+| Comissões              | Cálculo automático no momento da confirmação                             |
+| Repasses               | Registro manual de transferência para farmácia                           |
+| Clínicas               | CRUD completo, status, membros                                           |
+| Médicos                | CRUD, vínculo com clínicas                                               |
+| Farmácias              | CRUD, dados bancários, produtos, repasses                                |
+| Produtos               | CRUD, histórico de preço, ativar/desativar                               |
+| Área da Farmácia       | Atualização de status operacional do pedido                              |
+| Auditoria              | Log automático de todas as ações críticas                                |
+| Relatórios             | KPIs financeiros e operacionais                                          |
+| Configurações          | Comissão padrão e parâmetros globais (SUPER_ADMIN)                       |
+| Perfil                 | Edição de dados pessoais por qualquer usuário                            |
+| Dashboard              | Visão específica por papel (admin, clínica, médico, farmácia, consultor) |
+| Consultores de Vendas  | Cadastro, vinculação a clínicas, comissões automáticas por pedido        |
+| Repasses a Consultores | Registro de pagamento em batch por consultor                             |
 
 ---
 
 ## Papéis de acesso
 
-| Papel            | Acesso                                                             |
-| ---------------- | ------------------------------------------------------------------ |
-| `SUPER_ADMIN`    | Acesso total, incluindo configurações globais e gestão de usuários |
-| `PLATFORM_ADMIN` | Acesso operacional completo exceto configurações                   |
-| `CLINIC_ADMIN`   | Pedidos e dados da própria clínica                                 |
-| `DOCTOR`         | Criação de pedidos e catálogo                                      |
-| `PHARMACY_ADMIN` | Pedidos atribuídos à farmácia e seus repasses                      |
+| Papel              | Acesso                                                                   |
+| ------------------ | ------------------------------------------------------------------------ |
+| `SUPER_ADMIN`      | Acesso total, configurações globais, gestão de consultores               |
+| `PLATFORM_ADMIN`   | Acesso operacional completo exceto configurações e gestão de consultores |
+| `CLINIC_ADMIN`     | Pedidos e dados da própria clínica                                       |
+| `DOCTOR`           | Criação de pedidos e catálogo                                            |
+| `PHARMACY_ADMIN`   | Pedidos atribuídos à farmácia e seus repasses                            |
+| `SALES_CONSULTANT` | Dashboard próprio: clínicas vinculadas e extrato de comissões            |
 
 ---
 
@@ -147,4 +150,4 @@ npx tsx scripts/setup-production.ts   # Setup inicial de produção
 
 ## Versão
 
-`0.2.0` — MVP em produção (Vercel + Supabase)
+`0.3.0` — Módulo de consultores de vendas

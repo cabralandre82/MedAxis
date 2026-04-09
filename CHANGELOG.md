@@ -2,6 +2,34 @@
 
 ---
 
+## [0.3.0] — 2026-04-09
+
+### Adicionado
+
+- **Módulo de Consultores de Vendas**
+  - Tabelas: `sales_consultants`, `consultant_commissions`, `consultant_transfers` (migration 004)
+  - `clinics.consultant_id` — FK vinculando cada clínica ao seu consultor
+  - CRUD completo: `/consultants`, `/consultants/new`, `/consultants/[id]`, `/consultants/[id]/edit`
+  - Página `/consultant-transfers` — comissões pendentes + registro de repasse em batch
+  - `AssignConsultantDialog` — vincula/troca consultor diretamente no detalhe da clínica
+  - `ConsultantTransferDialog` — registra repasse batch com referência e observações
+  - Dashboard do consultor (`SALES_CONSULTANT`) — KPIs, clínicas vinculadas, histórico de comissões
+  - `services/consultants.ts` — createConsultant, updateConsultant, updateStatus, assignToClinic, registerTransfer
+  - Auto-criação de `consultant_commission` na confirmação de pagamento (`services/payments.ts`)
+  - Role `SALES_CONSULTANT` adicionado ao sistema de papéis
+  - Suporte ao role `SALES_CONSULTANT` na criação de usuários com vínculo de `consultant_id`
+  - Sidebar: itens "Consultores" e "Repasses Consultores" para admins
+
+### Alterado
+
+- **RBAC: Consultores restrito ao SUPER_ADMIN**
+  - `PLATFORM_ADMIN` pode somente visualizar listagem e detalhes de consultores
+  - Criação, edição, vinculação e repasse a consultores: exclusivo `SUPER_ADMIN`
+  - Proteção em duas camadas: UI (botões ocultos) + backend (Server Actions rejeitam)
+- `RBAC_MATRIX.md` — atualizado com coluna `SALES_CONSULTANT` e novos módulos
+
+---
+
 ## [0.2.0] — 2026-04-09
 
 ### Adicionado
