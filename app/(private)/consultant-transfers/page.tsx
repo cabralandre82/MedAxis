@@ -1,15 +1,26 @@
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDateTime, parsePage, paginationRange } from '@/lib/utils'
 import { ConsultantTransferDialog } from '@/components/consultants/consultant-transfer-dialog'
+import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
 
 export const metadata = { title: 'Repasses a Consultores — Clinipharma' }
 
-export default async function ConsultantTransfersPage() {
+const PAGE_SIZE = 20
+
+interface Props {
+  searchParams: Promise<{ page?: string }>
+}
+
+export default async function ConsultantTransfersPage({ searchParams }: Props) {
   const currentUser = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
   const isSuperAdmin = currentUser.roles.includes('SUPER_ADMIN')
+  const { page: pageRaw } = await searchParams
   const supabase = await createClient()
+
+  const page = parsePage(pageRaw)
+  const { from, to } = paginationRange(page, PAGE_SIZE)
 
   // Consultores com comissões pendentes
   const { data: pendingRaw } = await supabase
@@ -50,12 +61,12 @@ export default async function ConsultantTransfersPage() {
     commByConsultant[c.consultant_id].push(c)
   }
 
-  // Transfer history (last 30)
-  const { data: historyRaw } = await supabase
+  // Transfer history with pagination
+  const { data: historyRaw, count: historyCount } = await supabase
     .from('consultant_transfers')
-    .select('*, sales_consultants(full_name)')
+    .select('*, sales_consultants(full_name)', { count: 'exact' })
     .order('created_at', { ascending: false })
-    .limit(30)
+    .range(from, to)
 
   const history = (historyRaw ?? []) as unknown as Array<{
     id: string
@@ -148,7 +159,9 @@ export default async function ConsultantTransfersPage() {
 
       {/* Histórico */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold text-slate-800">Histórico de repasses</h2>
+        <h2 className="text-base font-semibold text-slate-800">
+          Histórico de repasses{historyCount ? ` (${historyCount})` : ''}
+        </h2>
         {!history.length ? (
           <p className="text-sm text-slate-500">Nenhum repasse registrado ainda.</p>
         ) : (
@@ -207,6 +220,7 @@ export default async function ConsultantTransfersPage() {
             </table>
           </div>
         )}
+        <PaginationWrapper total={historyCount ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
       </section>
     </div>
   )

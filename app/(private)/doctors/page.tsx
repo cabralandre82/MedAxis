@@ -3,18 +3,31 @@ import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
 import { EntityTable } from '@/components/shared/entity-table'
 import { ButtonLink } from '@/components/ui/button-link'
+import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
+import { parsePage, paginationRange } from '@/lib/utils'
 import { Plus } from 'lucide-react'
 
-export const metadata: Metadata = { title: 'Médicos' }
+export const metadata: Metadata = { title: 'Médicos | Clinipharma' }
 
-export default async function DoctorsPage() {
+const PAGE_SIZE = 20
+
+interface Props {
+  searchParams: Promise<{ page?: string }>
+}
+
+export default async function DoctorsPage({ searchParams }: Props) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const { page: pageRaw } = await searchParams
   const supabase = await createClient()
 
-  const { data: doctors } = await supabase
+  const page = parsePage(pageRaw)
+  const { from, to } = paginationRange(page, PAGE_SIZE)
+
+  const { data: doctors, count } = await supabase
     .from('doctors')
-    .select('id, full_name, crm, crm_state, specialty, email, phone, status')
+    .select('id, full_name, crm, crm_state, specialty, email, phone, status', { count: 'exact' })
     .order('full_name')
+    .range(from, to)
 
   const columns = [
     { key: 'full_name', label: 'Nome' },
@@ -30,7 +43,7 @@ export default async function DoctorsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Médicos</h1>
-          <p className="mt-0.5 text-sm text-gray-500">{doctors?.length ?? 0} médico(s)</p>
+          <p className="mt-0.5 text-sm text-gray-500">{count ?? 0} médico(s) no total</p>
         </div>
         <ButtonLink href="/doctors/new">
           <Plus className="mr-2 h-4 w-4" />
@@ -38,6 +51,7 @@ export default async function DoctorsPage() {
         </ButtonLink>
       </div>
       <EntityTable data={doctors ?? []} columns={columns} detailPath="/doctors" />
+      <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
     </div>
   )
 }

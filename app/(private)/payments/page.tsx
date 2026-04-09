@@ -1,8 +1,9 @@
 import { Metadata } from 'next'
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, parsePage, paginationRange } from '@/lib/utils'
 import { PaymentConfirmDialog } from '@/components/shared/payment-confirm-dialog'
+import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import {
   Table,
   TableBody,
@@ -12,47 +13,54 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-export const metadata: Metadata = { title: 'Pagamentos' }
+export const metadata: Metadata = { title: 'Pagamentos | Clinipharma' }
 
-export default async function PaymentsPage() {
+const PAGE_SIZE = 20
+
+interface Props {
+  searchParams: Promise<{ page?: string }>
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  PENDING: 'bg-yellow-100 text-yellow-800',
+  UNDER_REVIEW: 'bg-blue-100 text-blue-800',
+  CONFIRMED: 'bg-green-100 text-green-800',
+  FAILED: 'bg-red-100 text-red-800',
+  REFUNDED: 'bg-gray-100 text-gray-700',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendente',
+  UNDER_REVIEW: 'Em análise',
+  CONFIRMED: 'Confirmado',
+  FAILED: 'Falhou',
+  REFUNDED: 'Estornado',
+}
+
+export default async function PaymentsPage({ searchParams }: Props) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const { page: pageRaw } = await searchParams
   const supabase = await createClient()
 
-  const { data: payments } = await supabase
+  const page = parsePage(pageRaw)
+  const { from, to } = paginationRange(page, PAGE_SIZE)
+
+  const { data: payments, count } = await supabase
     .from('payments')
     .select(
-      `
-      id, gross_amount, status, payment_method, reference_code,
-      confirmed_at, notes, created_at,
-      orders (code, clinics (trade_name), doctors (full_name))
-    `
+      `id, gross_amount, status, payment_method, reference_code,
+       confirmed_at, notes, created_at,
+       orders (code, clinics (trade_name), doctors (full_name))`,
+      { count: 'exact' }
     )
     .order('created_at', { ascending: false })
-    .limit(100)
-
-  const STATUS_STYLES: Record<string, string> = {
-    PENDING: 'bg-yellow-100 text-yellow-800',
-    UNDER_REVIEW: 'bg-blue-100 text-blue-800',
-    CONFIRMED: 'bg-green-100 text-green-800',
-    FAILED: 'bg-red-100 text-red-800',
-    REFUNDED: 'bg-gray-100 text-gray-700',
-  }
-
-  const STATUS_LABELS: Record<string, string> = {
-    PENDING: 'Pendente',
-    UNDER_REVIEW: 'Em análise',
-    CONFIRMED: 'Confirmado',
-    FAILED: 'Falhou',
-    REFUNDED: 'Estornado',
-  }
+    .range(from, to)
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Pagamentos</h1>
-        <p className="mt-0.5 text-sm text-gray-500">
-          {payments?.filter((p) => p.status === 'PENDING').length ?? 0} pendente(s) de confirmação
-        </p>
+        <p className="mt-0.5 text-sm text-gray-500">{count ?? 0} pagamento(s) no total</p>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -132,6 +140,8 @@ export default async function PaymentsPage() {
           </Table>
         </div>
       </div>
+
+      <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
     </div>
   )
 }

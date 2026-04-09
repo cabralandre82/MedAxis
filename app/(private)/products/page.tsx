@@ -2,9 +2,10 @@ import { Metadata } from 'next'
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
 import { ButtonLink } from '@/components/ui/button-link'
+import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
+import { parsePage, paginationRange, formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, Package, ExternalLink } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -14,30 +15,39 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-export const metadata: Metadata = { title: 'Produtos' }
+export const metadata: Metadata = { title: 'Produtos | Clinipharma' }
 
-export default async function ProductsPage() {
+const PAGE_SIZE = 20
+
+interface Props {
+  searchParams: Promise<{ page?: string }>
+}
+
+export default async function ProductsPage({ searchParams }: Props) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const { page: pageRaw } = await searchParams
   const supabase = await createClient()
 
-  const { data: products } = await supabase
+  const page = parsePage(pageRaw)
+  const { from, to } = paginationRange(page, PAGE_SIZE)
+
+  const { data: products, count } = await supabase
     .from('products')
     .select(
-      `
-      id, name, sku, concentration, presentation, price_current,
-      estimated_deadline_days, active, featured,
-      product_categories (name),
-      pharmacies (trade_name)
-    `
+      `id, name, sku, concentration, presentation, price_current,
+       estimated_deadline_days, active, featured,
+       product_categories (name), pharmacies (trade_name)`,
+      { count: 'exact' }
     )
     .order('name')
+    .range(from, to)
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
-          <p className="mt-0.5 text-sm text-gray-500">{products?.length ?? 0} produto(s)</p>
+          <p className="mt-0.5 text-sm text-gray-500">{count ?? 0} produto(s) no total</p>
         </div>
         <ButtonLink href="/products/new">
           <Plus className="mr-2 h-4 w-4" />
@@ -128,6 +138,8 @@ export default async function ProductsPage() {
           </Table>
         </div>
       </div>
+
+      <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
     </div>
   )
 }

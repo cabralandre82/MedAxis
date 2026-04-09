@@ -1,8 +1,9 @@
 import { Metadata } from 'next'
 import { createClient } from '@/lib/db/server'
 import { getCurrentUser } from '@/lib/auth/session'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, parsePage, paginationRange } from '@/lib/utils'
 import { TransferCompleteDialog } from '@/components/shared/transfer-complete-dialog'
+import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import {
   Table,
   TableBody,
@@ -12,33 +13,39 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-export const metadata: Metadata = { title: 'Repasses' }
+export const metadata: Metadata = { title: 'Repasses | Clinipharma' }
 
-export default async function TransfersPage() {
+const PAGE_SIZE = 20
+
+interface Props {
+  searchParams: Promise<{ page?: string }>
+}
+
+export default async function TransfersPage({ searchParams }: Props) {
+  const { page: pageRaw } = await searchParams
   const user = await getCurrentUser()
   const supabase = await createClient()
   const isAdmin = user?.roles.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
 
-  const { data: transfers } = await supabase
+  const page = parsePage(pageRaw)
+  const { from, to } = paginationRange(page, PAGE_SIZE)
+
+  const { data: transfers, count } = await supabase
     .from('transfers')
     .select(
-      `
-      id, gross_amount, commission_amount, net_amount, status,
-      transfer_reference, processed_at, created_at,
-      pharmacies (trade_name),
-      orders (code)
-    `
+      `id, gross_amount, commission_amount, net_amount, status,
+       transfer_reference, processed_at, created_at,
+       pharmacies (trade_name), orders (code)`,
+      { count: 'exact' }
     )
     .order('created_at', { ascending: false })
-    .limit(100)
+    .range(from, to)
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Repasses</h1>
-        <p className="mt-0.5 text-sm text-gray-500">
-          {transfers?.filter((t) => t.status === 'PENDING').length ?? 0} repasse(s) pendente(s)
-        </p>
+        <p className="mt-0.5 text-sm text-gray-500">{count ?? 0} repasse(s) no total</p>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -119,6 +126,8 @@ export default async function TransfersPage() {
           </Table>
         </div>
       </div>
+
+      <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
     </div>
   )
 }

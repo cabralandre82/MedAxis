@@ -68,3 +68,14 @@ export function getInitials(name: string): string {
     .map((n) => n[0].toUpperCase())
     .join('')
 }
+
+export function parsePage(raw: string | undefined, defaultPage = 1): number {
+  const n = parseInt(raw ?? '', 10)
+  return Number.isFinite(n) && n >= 1 ? n : defaultPage
+}
+
+export function paginationRange(page: number, pageSize: number): { from: number; to: number } {
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+  return { from, to }
+}

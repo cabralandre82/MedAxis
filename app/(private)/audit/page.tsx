@@ -1,7 +1,8 @@
 import { Metadata } from 'next'
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
-import { formatDateTime } from '@/lib/utils'
+import { formatDateTime, parsePage, paginationRange } from '@/lib/utils'
+import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import {
   Table,
   TableBody,
@@ -11,41 +12,48 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-export const metadata: Metadata = { title: 'Auditoria' }
+export const metadata: Metadata = { title: 'Auditoria | Clinipharma' }
 
-export default async function AuditPage() {
+const PAGE_SIZE = 50
+
+interface Props {
+  searchParams: Promise<{ page?: string }>
+}
+
+const ACTION_COLORS: Record<string, string> = {
+  CREATE: 'bg-green-100 text-green-800',
+  UPDATE: 'bg-blue-100 text-blue-800',
+  DELETE: 'bg-red-100 text-red-800',
+  STATUS_CHANGE: 'bg-purple-100 text-purple-800',
+  PRICE_CHANGE: 'bg-amber-100 text-amber-800',
+  PAYMENT_CONFIRMED: 'bg-teal-100 text-teal-800',
+  TRANSFER_REGISTERED: 'bg-cyan-100 text-cyan-800',
+  LOGIN: 'bg-gray-100 text-gray-700',
+}
+
+export default async function AuditPage({ searchParams }: Props) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const { page: pageRaw } = await searchParams
   const supabase = await createClient()
 
-  const { data: logs } = await supabase
+  const page = parsePage(pageRaw)
+  const { from, to } = paginationRange(page, PAGE_SIZE)
+
+  const { data: logs, count } = await supabase
     .from('audit_logs')
     .select(
-      `
-      id, entity_type, entity_id, action, actor_role, created_at,
-      profiles!actor_user_id (full_name)
-    `
+      `id, entity_type, entity_id, action, actor_role, created_at,
+       profiles!actor_user_id (full_name)`,
+      { count: 'exact' }
     )
     .order('created_at', { ascending: false })
-    .limit(200)
-
-  const ACTION_COLORS: Record<string, string> = {
-    CREATE: 'bg-green-100 text-green-800',
-    UPDATE: 'bg-blue-100 text-blue-800',
-    DELETE: 'bg-red-100 text-red-800',
-    STATUS_CHANGE: 'bg-purple-100 text-purple-800',
-    PRICE_CHANGE: 'bg-amber-100 text-amber-800',
-    PAYMENT_CONFIRMED: 'bg-teal-100 text-teal-800',
-    TRANSFER_REGISTERED: 'bg-cyan-100 text-cyan-800',
-    LOGIN: 'bg-gray-100 text-gray-700',
-  }
+    .range(from, to)
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Auditoria</h1>
-        <p className="mt-0.5 text-sm text-gray-500">
-          Últimas {logs?.length ?? 0} ações registradas
-        </p>
+        <p className="mt-0.5 text-sm text-gray-500">{count ?? 0} ações registradas no total</p>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -105,6 +113,8 @@ export default async function AuditPage() {
           </Table>
         </div>
       </div>
+
+      <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
     </div>
   )
 }

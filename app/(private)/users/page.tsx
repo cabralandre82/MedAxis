@@ -2,20 +2,33 @@ import { requireRolePage } from '@/lib/rbac'
 import { createServerClient } from '@/lib/db/server'
 import { ButtonLink } from '@/components/ui/button-link'
 import { UsersTable } from '@/components/users/users-table'
+import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
+import { parsePage, paginationRange } from '@/lib/utils'
 import { Plus } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Usuários | Clinipharma' }
 
-export default async function UsersPage() {
+const PAGE_SIZE = 20
+
+interface Props {
+  searchParams: Promise<{ page?: string }>
+}
+
+export default async function UsersPage({ searchParams }: Props) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  const { page: pageRaw } = await searchParams
 
   const supabase = await createServerClient()
 
-  const { data: usersRaw } = await supabase
+  const page = parsePage(pageRaw)
+  const { from, to } = paginationRange(page, PAGE_SIZE)
+
+  const { data: usersRaw, count } = await supabase
     .from('profiles')
-    .select('id, full_name, email, phone, created_at, user_roles(role)')
+    .select('id, full_name, email, phone, created_at, user_roles(role)', { count: 'exact' })
     .order('full_name')
+    .range(from, to)
 
   const users = (usersRaw ?? []) as unknown as Array<{
     id: string
@@ -31,7 +44,7 @@ export default async function UsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Usuários</h1>
-          <p className="mt-0.5 text-sm text-gray-500">{users.length} usuário(s) cadastrado(s)</p>
+          <p className="mt-0.5 text-sm text-gray-500">{count ?? 0} usuário(s) no total</p>
         </div>
         <ButtonLink href="/users/new">
           <Plus className="mr-2 h-4 w-4" />
@@ -39,6 +52,7 @@ export default async function UsersPage() {
         </ButtonLink>
       </div>
       <UsersTable users={users} />
+      <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
     </div>
   )
 }
