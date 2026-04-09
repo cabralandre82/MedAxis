@@ -15,8 +15,9 @@
 - [x] Email/senha funcionando
 - [x] Site URL atualizada no Supabase Auth para `https://clinipharma.com.br`
 - [x] Redirect URL `https://clinipharma.com.br/**` adicionada no Supabase Auth
-- [ ] SMTP do Resend configurado no Supabase Auth — _ver `docs/setup-email.md` Parte 2_
-- [ ] Email de recuperação de senha testado end-to-end
+- [x] Recuperação de senha via Resend (rota própria `POST /api/auth/forgot-password` + `admin.generateLink`)
+- [x] Email de recuperação de senha testado e funcionando end-to-end
+- [x] Página `/reset-password` criada e funcional
 
 ## Variáveis de Ambiente (Vercel)
 
@@ -76,12 +77,12 @@
 - [x] `EMAIL_FROM` configurada no Vercel
 - [x] Registros DNS do Resend adicionados no Cloudflare
 - [x] Domínio `clinipharma.com.br` com status **Verified** no Resend
-- [ ] SMTP do Resend configurado no Supabase Auth (para emails de recuperação de senha) — _ver `docs/setup-email.md` Parte 2_
-- [ ] Email de recuperação de senha testado end-to-end
+- [x] Recuperação de senha envia email via Resend (fluxo próprio, sem depender de SMTP do Supabase)
+- [x] Email de recuperação de senha testado e funcionando end-to-end
 
 ## Onboarding comercial (pós-deploy)
 
-- [x] Usuário super admin criado em produção
+- [x] Usuário super admin criado em produção (`cabralandre@yahoo.com.br` — André, SUPER_ADMIN)
 - [ ] Farmácias reais cadastradas e ativas
 - [ ] Catálogo real de produtos cadastrado — com `price_current`, `pharmacy_cost` e prazo por SKU
 - [ ] Taxa de comissão dos consultores configurada em **Configurações → Taxa de comissão dos consultores**

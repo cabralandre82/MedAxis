@@ -8,7 +8,7 @@
 
 ## Autenticação
 
-- **SMTP personalizado não configurado no Supabase Auth**: emails de recuperação de senha usam o servidor padrão do Supabase (limite de 3/hora no plano gratuito). Para remover a limitação, configurar Resend SMTP no Supabase Auth conforme `docs/setup-email.md` Parte 2.
+- **Recuperação de senha via rota própria**: usa `admin.generateLink()` + Resend diretamente. O SMTP do Supabase Auth não está configurado (tentativa falhou silenciosamente; Auth Hook HTTPS também não disparava). A solução atual é robusta e funciona em produção.
 - **Google OAuth preparado mas não ativado**: precisa de configuração manual no Google Cloud Console
 - **Sem autenticação por convite**: novos usuários são cadastrados manualmente pelo admin
 

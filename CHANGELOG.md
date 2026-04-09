@@ -2,6 +2,25 @@
 
 ---
 
+## [0.8.0] — 2026-04-09
+
+### Added
+
+- **Fluxo completo de recuperação de senha end-to-end:**
+  - Rota `POST /api/auth/forgot-password` — gera `token_hash` via `supabase.auth.admin.generateLink()` e envia email HTML diretamente pelo Resend, sem depender de SMTP ou Auth Hooks
+  - Callback `/auth/callback` agora trata dois fluxos: `token_hash` + `verifyOtp` (recovery) e `code` + `exchangeCodeForSession` (PKCE/OAuth)
+  - Nova página `/reset-password` — formulário com validação de senha (mín. 8 chars) e confirmação; após salvar redireciona para o dashboard
+  - Edge Function `send-auth-email` deployada no Supabase (reserva para Auth Hook, não utilizada ativamente)
+- **Usuário SUPER_ADMIN real cadastrado:** `cabralandre@yahoo.com.br` (André) com acesso completo à plataforma
+
+### Fixed
+
+- Middleware: adicionado `/api/auth/forgot-password` e `/reset-password` às rotas públicas — sem isso o middleware redirecionava o POST para `/login` causando erro 405
+- `tsconfig.json`: exclui `supabase/functions/` do TypeScript do Next.js para evitar conflito com tipos Deno
+- `NEXT_PUBLIC_APP_URL` substituído por detecção dinâmica do `origin` no header da requisição — funciona corretamente em qualquer ambiente (local, preview, produção)
+
+---
+
 ## [0.7.0] — 2026-04-09
 
 ### Added
