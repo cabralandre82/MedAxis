@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/db/client'
 import { forgotPasswordSchema } from '@/lib/validators'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,12 +28,13 @@ export function ForgotPasswordForm() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
-        redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email }),
       })
 
-      if (error) {
+      if (!res.ok) {
         toast.error('Erro ao enviar email. Tente novamente.')
         return
       }
