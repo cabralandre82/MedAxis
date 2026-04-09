@@ -10,9 +10,9 @@ O banco é organizado em 5 schemas lógicos:
 | `public.auth_ext`  | `profiles`, `user_roles`                                                                         |
 | `public.orgs`      | `clinics`, `clinic_members`, `doctors`, `doctor_clinic_links`, `pharmacies`, `pharmacy_members`  |
 | `public.catalog`   | `product_categories`, `products`, `product_images`, `product_price_history`, `pharmacy_products` |
-| `public.orders`    | `orders`, `order_documents`, `order_status_history`, `order_operational_updates`                 |
+| `public.orders`    | `orders`, `order_items`, `order_documents`, `order_status_history`, `order_operational_updates`  |
 | `public.financial` | `payments`, `commissions`, `transfers`                                                           |
-| `public.system`    | `audit_logs`, `app_settings`                                                                     |
+| `public.system`    | `audit_logs`, `app_settings`, `notifications`                                                    |
 | `public.sales`     | `sales_consultants`, `consultant_commissions`, `consultant_transfers`                            |
 
 > Na prática, todas as tabelas ficam no schema `public` do Supabase. Os agrupamentos acima são lógicos.
@@ -217,31 +217,44 @@ UNIQUE(pharmacy_id, product_id)
 
 ## Tabela: orders
 
-```sql
-id                            uuid PRIMARY KEY DEFAULT gen_random_uuid()
-code                          text NOT NULL UNIQUE
-clinic_id                     uuid NOT NULL REFERENCES clinics(id)
-doctor_id                     uuid NOT NULL REFERENCES doctors(id)
-pharmacy_id                   uuid NOT NULL REFERENCES pharmacies(id)
-product_id                    uuid NOT NULL REFERENCES products(id)
-quantity                      int NOT NULL DEFAULT 1 CHECK (quantity > 0)
-unit_price                    numeric(12,2) NOT NULL   -- congelado no INSERT
-total_price                   numeric(12,2) NOT NULL   -- congelado no INSERT
-pharmacy_cost_per_unit        numeric(12,2)            -- congelado no INSERT (products.pharmacy_cost)
-platform_commission_per_unit  numeric(12,2)            -- congelado no INSERT (price_current − pharmacy_cost)
-payment_status                text NOT NULL DEFAULT 'PENDING'
-transfer_status               text NOT NULL DEFAULT 'NOT_READY'
-order_status                  text NOT NULL DEFAULT 'DRAFT'
-notes                         text
-created_by_user_id            uuid NOT NULL REFERENCES profiles(id)
-created_at                    timestamptz DEFAULT now()
-updated_at                    timestamptz DEFAULT now()
-```
+> Desde v0.6.0: `orders` é o **cabeçalho** do pedido. Os campos de produto/quantidade/preço por item migraram para `order_items`.
 
-> Todos os campos financeiros são populados pelo trigger `freeze_order_price` no `BEFORE INSERT`. Alterações posteriores no produto não afetam o pedido.
+```sql
+id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+code                text NOT NULL UNIQUE             -- gerado por trigger: CP-YYYY-NNNNNN
+clinic_id           uuid NOT NULL REFERENCES clinics(id)
+doctor_id           uuid NOT NULL REFERENCES doctors(id)
+pharmacy_id         uuid NOT NULL REFERENCES pharmacies(id)
+total_price         numeric(12,2) NOT NULL DEFAULT 0 -- recalculado por trigger após insert/update em order_items
+payment_status      text NOT NULL DEFAULT 'PENDING'
+transfer_status     text NOT NULL DEFAULT 'NOT_READY'
+order_status        text NOT NULL DEFAULT 'DRAFT'
+notes               text
+created_by_user_id  uuid NOT NULL REFERENCES profiles(id)
+created_at          timestamptz DEFAULT now()
+updated_at          timestamptz DEFAULT now()
+```
 
 **Valores válidos de order_status:**
 `DRAFT, AWAITING_DOCUMENTS, READY_FOR_REVIEW, AWAITING_PAYMENT, PAYMENT_UNDER_REVIEW, PAYMENT_CONFIRMED, COMMISSION_CALCULATED, TRANSFER_PENDING, TRANSFER_COMPLETED, RELEASED_FOR_EXECUTION, RECEIVED_BY_PHARMACY, IN_EXECUTION, READY, SHIPPED, DELIVERED, COMPLETED, CANCELED, WITH_ISSUE`
+
+## Tabela: order_items
+
+> Criada na migration `008_order_items.sql`. Cada linha representa um produto de um pedido com valores congelados.
+
+```sql
+id                            uuid PRIMARY KEY DEFAULT gen_random_uuid()
+order_id                      uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE
+product_id                    uuid NOT NULL REFERENCES products(id)
+quantity                      int NOT NULL DEFAULT 1 CHECK (quantity > 0)
+unit_price                    numeric(12,2) NOT NULL   -- congelado no INSERT por trigger
+total_price                   numeric(12,2) NOT NULL   -- unit_price * quantity, congelado no INSERT
+pharmacy_cost_per_unit        numeric(12,2)            -- products.pharmacy_cost no momento da criação
+platform_commission_per_unit  numeric(12,2)            -- unit_price − pharmacy_cost no momento da criação
+created_at                    timestamptz NOT NULL DEFAULT now()
+```
+
+> Triggers: `trg_order_items_freeze_price` (BEFORE INSERT) congela os valores; `trg_order_items_recalc_total` (AFTER INSERT/UPDATE/DELETE) recalcula `orders.total_price`.
 
 ## Tabela: order_documents
 
@@ -426,3 +439,27 @@ updated_at          timestamptz DEFAULT now()
 | `consultant_commission_rate` | numeric | Percentual global de comissão para todos os consultores (ex: `5`) |
 | `platform_name`              | string  | Nome exibido na plataforma                                        |
 | `platform_support_email`     | string  | Email de suporte exibido ao usuário                               |
+
+---
+
+## Tabela: notifications
+
+> Criada na migration `009_notifications.sql`. Notificações in-app por usuário com suporte a realtime Supabase.
+
+```sql
+id          uuid PRIMARY KEY DEFAULT gen_random_uuid()
+user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
+type        text NOT NULL   -- ORDER_CREATED, ORDER_STATUS, PAYMENT_CONFIRMED, TRANSFER_REGISTERED, CONSULTANT_TRANSFER, DOCUMENT_UPLOADED, GENERIC
+title       text NOT NULL
+body        text
+link        text            -- URL relativa para navegação ao clicar
+read_at     timestamptz     -- null = não lida
+created_at  timestamptz NOT NULL DEFAULT now()
+```
+
+**RLS:** cada usuário acessa apenas suas próprias notificações. `service_role` tem acesso total para inserção nos server actions.
+
+**Índices:**
+
+- `idx_notifications_user` em `(user_id, created_at DESC)` — listagem do sino
+- `idx_notifications_unread` em `(user_id) WHERE read_at IS NULL` — contagem de não lidas

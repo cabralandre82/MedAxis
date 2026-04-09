@@ -47,27 +47,30 @@ Não existe paciente final no fluxo. Tudo é B2B. A entrega é sempre para a cl�
 
 ## Módulos implementados
 
-| Módulo                 | Descrição                                                                |
-| ---------------------- | ------------------------------------------------------------------------ |
-| Autenticação           | Login email/senha, recuperação de senha, middleware RBAC                 |
-| Gestão de Usuários     | Criar, vincular, redefinir senha, papéis por organização                 |
-| Catálogo               | Listagem, filtros, detalhe de produto por slug                           |
-| Pedidos                | Criação, congelamento de preço, upload docs, timeline                    |
-| Pagamentos             | Confirmação manual pelo admin                                            |
-| Comissões              | Cálculo automático no momento da confirmação                             |
-| Repasses               | Registro manual de transferência para farmácia                           |
-| Clínicas               | CRUD completo, status, membros                                           |
-| Médicos                | CRUD, vínculo com clínicas                                               |
-| Farmácias              | CRUD, dados bancários, produtos, repasses                                |
-| Produtos               | CRUD, histórico de preço, ativar/desativar                               |
-| Área da Farmácia       | Atualização de status operacional do pedido                              |
-| Auditoria              | Log automático de todas as ações críticas                                |
-| Relatórios             | KPIs financeiros e operacionais                                          |
-| Configurações          | Taxa de comissão dos consultores e parâmetros globais (SUPER_ADMIN)      |
-| Perfil                 | Edição de dados pessoais por qualquer usuário                            |
-| Dashboard              | Visão específica por papel (admin, clínica, médico, farmácia, consultor) |
-| Consultores de Vendas  | Cadastro, vinculação a clínicas, comissões automáticas por pedido        |
-| Repasses a Consultores | Registro de pagamento em batch por consultor                             |
+| Módulo                 | Descrição                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| Autenticação           | Login email/senha, recuperação de senha, middleware RBAC                              |
+| Gestão de Usuários     | Criar, vincular, redefinir senha, papéis por organização                              |
+| Catálogo               | Listagem paginada, filtros por categoria/farmácia, ordenação, busca, detalhe por slug |
+| Pedidos                | Carrinho multi-produto, congelamento de preço por item, upload docs, timeline         |
+| Pagamentos             | Confirmação manual pelo admin, exportação CSV/Excel                                   |
+| Comissões              | Cálculo automático na confirmação; modelo por produto com `pharmacy_cost`             |
+| Repasses               | Registro manual para farmácias e consultores, exportação CSV/Excel                    |
+| Clínicas               | CRUD completo, status, membros                                                        |
+| Médicos                | CRUD, vínculo com clínicas                                                            |
+| Farmácias              | CRUD, dados bancários, produtos, repasses                                             |
+| Produtos               | CRUD, histórico de preço e `pharmacy_cost`, análise de margem                         |
+| Área da Farmácia       | Atualização de status operacional do pedido                                           |
+| Documentos             | Tipos obrigatórios com checklist, upload adicional no detalhe do pedido               |
+| Notificações           | Sino in-app em tempo real (realtime Supabase), marcar como lida                       |
+| Busca global           | ⌘K — pedidos, clínicas, médicos, produtos em tempo real                               |
+| Auditoria              | Log automático de todas as ações críticas, paginado                                   |
+| Relatórios             | KPIs, gráfico de tendência mensal, alertas de pendências, exportação                  |
+| Configurações          | Taxa de comissão dos consultores e parâmetros globais (SUPER_ADMIN)                   |
+| Perfil                 | Edição de dados pessoais por qualquer usuário                                         |
+| Dashboard              | Visão específica por papel (admin, clínica, médico, farmácia, consultor)              |
+| Consultores de Vendas  | Cadastro, vinculação a clínicas, comissões automáticas por pedido                     |
+| Repasses a Consultores | Registro de pagamento em batch por consultor, exportação CSV/Excel                    |
 
 ---
 
@@ -152,4 +155,4 @@ npx tsx scripts/setup-production.ts   # Setup inicial de produção
 
 ## Versão
 
-`0.5.0` — Renomeação para Clinipharma + email transacional com Resend
+`0.7.0` — Paginação, notificações in-app, busca global, exportação CSV/Excel, documentos por tipo, relatórios enriquecidos + Cloudflare e Resend verificados em produção

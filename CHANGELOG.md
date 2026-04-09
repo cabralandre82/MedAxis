@@ -2,6 +2,29 @@
 
 ---
 
+## [0.7.0] — 2026-04-09
+
+### Added
+
+- **Paginação server-side** em todas as listagens (20 itens/página, Auditoria 50). Componente `Pagination` com elipsis, first/last e navegação por URL (`?page=N`).
+- **Catálogo melhorado:** filtro de categoria corrigido (usa `category_id`), ordenação configurável (destaque, A–Z, menor/maior preço, mais recente), paginação de 12/página.
+- **Notificações in-app:** tabela `notifications` com RLS e realtime. Sino no header com badge de contagem, dropdown, marcar como lida/todas, navegação ao link. Integrado em: criação de pedido, confirmação de pagamento, status do pedido e conclusão de repasse.
+- **Exportação CSV/Excel:** `ExportButton` com dropdown CSV/xlsx em Pedidos (admins), Pagamentos, Repasses e Repasses a Consultores. Rota `/api/export?type=&format=` protegida por RBAC.
+- **Dashboard de relatórios enriquecido:** KPIs com ícones e cores, gráfico de barras CSS (últimos 6 meses), breakdown de status com barra de progresso, cards de entidades, alertas de pendências financeiras no topo.
+- **Busca global `⌘K`** no header: pesquisa pedidos, clínicas, médicos e produtos em tempo real com debounce 300ms, navegação por teclado (↑↓ Enter Esc), ícones por tipo.
+- **Gestão de documentos por tipo:** `DocumentManager` com checklist de tipos obrigatórios (receita médica, identidade, relatório médico, autorização, outro), indicadores visual presente/ausente, upload adicional diretamente no detalhe do pedido.
+- Rota `POST /api/documents/upload` — upload seguro para Supabase Storage com RBAC (max 10 MB, PDF/JPG/PNG).
+- Cloudflare DNS configurado e propagado. Domínio `clinipharma.com.br` ativo com HTTPS.
+- Resend verificado e emails transacionais ativos em produção.
+
+### Changed
+
+- Todas as listagens agora usam `.range()` + `count: 'exact'` para total real no servidor.
+- `CatalogFilters` reseta `?page` ao trocar qualquer filtro para evitar página fora do range.
+- `lib/utils` ganhou `parsePage` e `paginationRange` helpers.
+
+---
+
 ## [0.6.0] — 2026-04-09
 
 ### Added

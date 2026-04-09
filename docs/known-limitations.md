@@ -5,11 +5,10 @@
 - **Sem gateway de pagamento automático**: confirmação de pagamento é manual pelo admin
 - **Sem emissão fiscal**: NF-e/NFS-e não integrada
 - **Sem split de pagamento automático**: repasse é registrado manualmente
-- **pharmacy_cost sem histórico**: alterações em `pharmacy_cost` não são rastreadas (diferente de `price_current` que tem `product_price_history`). Pedidos já criados estão protegidos pelo congelamento, mas não há log do valor anterior para auditoria
 
 ## Autenticação
 
-- **SMTP personalizado não configurado**: o Supabase gratuito tem limite de 3 emails/hora. Para produção, conectar Resend, SendGrid ou Postmark
+- **SMTP personalizado não configurado no Supabase Auth**: emails de recuperação de senha usam o servidor padrão do Supabase (limite de 3/hora no plano gratuito). Para remover a limitação, configurar Resend SMTP no Supabase Auth conforme `docs/setup-email.md` Parte 2.
 - **Google OAuth preparado mas não ativado**: precisa de configuração manual no Google Cloud Console
 - **Sem autenticação por convite**: novos usuários são cadastrados manualmente pelo admin
 
@@ -20,13 +19,13 @@
 
 ## Pedidos
 
-- **Sem múltiplos produtos por pedido**: 1 pedido = 1 produto. Para múltiplos produtos, múltiplos pedidos
+- **Todos os produtos do pedido devem ser da mesma farmácia**: o carrinho bloqueia a mistura de farmácias para garantir um único repasse por pedido
 - **Sem estimativa de frete**: prazo é o estimado pela farmácia no cadastro do produto
 
 ## Notificações
 
-- **Sem notificações push ou SMS**: toda comunicação é feita dentro da plataforma
-- **Sem emails transacionais automáticos**: no MVP, updates são visualizados na plataforma
+- **Sem notificações push ou SMS**: apenas notificações in-app e emails transacionais
+- **Sem preferências de notificação por usuário**: todas as notificações são enviadas para os papéis relevantes
 
 ## Mobile
 
@@ -35,13 +34,16 @@
 
 ## Relatórios
 
-- **Relatórios básicos apenas**: sem BI avançado, sem exportação para Excel no MVP
+- **Sem BI avançado**: gráficos são CSS puro (barras) sem biblioteca de charts interativa
+- **Exportação limitada ao período atual**: não há filtro de período na exportação CSV/Excel
 
 ## Integrações futuras planejadas
 
 - Gateway de pagamento (Stripe, PagSeguro, Asaas)
-- Emissão fiscal
+- Emissão fiscal (NF-e/NFS-e)
 - Assinatura eletrônica de documentos
-- Notificações via email/SMS/WhatsApp
+- Notificações push / SMS / WhatsApp
 - App mobile
-- Integração com sistemas de ERP de farmácias
+- Integração com ERP de farmácias
+- Gráficos interativos (Recharts ou Chart.js)
+- Filtro de período em relatórios e exportações

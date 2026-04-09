@@ -13,7 +13,6 @@
 ## Autenticação
 
 - [x] Email/senha funcionando
-- [x] Email/senha funcionando
 - [x] Site URL atualizada no Supabase Auth para `https://clinipharma.com.br`
 - [x] Redirect URL `https://clinipharma.com.br/**` adicionada no Supabase Auth
 - [ ] SMTP do Resend configurado no Supabase Auth — _ver `docs/setup-email.md` Parte 2_
@@ -40,23 +39,27 @@
 - [x] Git remote local atualizado para `cabralandre82/clinipharma`
 - [x] Domínio `clinipharma.com.br` adicionado na Vercel
 - [x] Nameservers do Cloudflare configurados no Registro.br
-- [ ] Cloudflare ativo (propagação em andamento)
-- [ ] Domínio `clinipharma.com.br` com check verde na Vercel
-- [ ] HTTPS ativo em `https://clinipharma.com.br`
+- [x] Cloudflare ativo e propagado
+- [x] Domínio `clinipharma.com.br` com check verde na Vercel
+- [x] HTTPS ativo em `https://clinipharma.com.br`
 
 ## Funcionalidades críticas
 
 - [x] Login com email/senha funciona
 - [x] Dashboard carrega corretamente por papel
-- [x] Catálogo exibe produtos seed
-- [x] Criação de pedido com seleção de produto, clínica e médico
-- [x] Upload de documentos vinculados ao pedido
+- [x] Catálogo exibe produtos seed com paginação, filtros e ordenação
+- [x] Criação de pedido com múltiplos produtos (carrinho)
+- [x] Upload de documentos por tipo com checklist obrigatório
 - [x] Confirmação manual de pagamento pelo admin
 - [x] Cálculo de comissão automático na confirmação
-- [x] Registro manual de repasse para farmácia
+- [x] Registro manual de repasse para farmácia e consultores
 - [x] Timeline do pedido com histórico de status
 - [x] Farmácia avança status operacional do pedido
-- [x] Logs de auditoria sendo gerados
+- [x] Logs de auditoria sendo gerados (paginados)
+- [x] Notificações in-app em tempo real (sino no header)
+- [x] Busca global (⌘K) em pedidos, clínicas, médicos e produtos
+- [x] Exportação CSV/Excel em pedidos, pagamentos, repasses e comissões
+- [x] Dashboard de relatórios com KPIs, gráfico e alertas
 
 ## Segurança
 
@@ -71,9 +74,9 @@
 - [x] Resend integrado no código (`lib/email/`) com 5 templates
 - [x] `RESEND_API_KEY` configurada em `.env.local` e no Vercel
 - [x] `EMAIL_FROM` configurada no Vercel
-- [x] Registros DNS do Resend adicionados no Cloudflare (verificação pendente propagação)
-- [ ] Domínio `clinipharma.com.br` com status **Verified** no Resend
-- [ ] SMTP do Resend configurado no Supabase Auth — _ver `docs/setup-email.md` Parte 2_
+- [x] Registros DNS do Resend adicionados no Cloudflare
+- [x] Domínio `clinipharma.com.br` com status **Verified** no Resend
+- [ ] SMTP do Resend configurado no Supabase Auth (para emails de recuperação de senha) — _ver `docs/setup-email.md` Parte 2_
 - [ ] Email de recuperação de senha testado end-to-end
 
 ## Onboarding comercial (pós-deploy)
