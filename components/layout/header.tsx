@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { LogOut, User, ChevronDown } from 'lucide-react'
 import { NotificationBell } from '@/components/layout/notification-bell'
+import { GlobalSearch } from '@/components/layout/global-search'
 import type { ProfileWithRoles } from '@/types'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -54,6 +55,7 @@ export function Header({ user, title }: HeaderProps) {
       <div>{title && <h1 className="text-lg font-semibold text-gray-900">{title}</h1>}</div>
 
       <div className="flex items-center gap-3">
+        <GlobalSearch />
         <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors outline-none hover:bg-gray-50">
