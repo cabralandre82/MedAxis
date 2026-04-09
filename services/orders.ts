@@ -6,6 +6,9 @@ import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireAuth } from '@/lib/auth/session'
 import { orderSchema } from '@/lib/validators'
 import type { OrderFormData } from '@/lib/validators'
+import { sendEmail } from '@/lib/email'
+import { newOrderEmail, orderStatusUpdatedEmail } from '@/lib/email/templates'
+import { formatCurrency } from '@/lib/utils'
 
 interface CreateOrderInput extends OrderFormData {
   documents?: File[]
@@ -136,6 +139,49 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       },
     })
 
+    // Notify pharmacy about new order
+    try {
+      const { data: pharmacy } = await adminClient
+        .from('pharmacies')
+        .select('email, trade_name')
+        .eq('id', product.pharmacy_id)
+        .single()
+
+      const { data: clinic } = await adminClient
+        .from('clinics')
+        .select('trade_name')
+        .eq('id', data.clinic_id)
+        .single()
+
+      const { data: doctor } = await adminClient
+        .from('doctors')
+        .select('full_name')
+        .eq('id', data.doctor_id)
+        .single()
+
+      const { data: productInfo } = await adminClient
+        .from('products')
+        .select('name, estimated_deadline_days')
+        .eq('id', data.product_id)
+        .single()
+
+      if (pharmacy?.email) {
+        const tmpl = newOrderEmail({
+          orderCode: order.code,
+          orderId: order.id,
+          productName: productInfo?.name ?? '—',
+          quantity: data.quantity,
+          totalPrice: formatCurrency(product.price_current * data.quantity),
+          clinicName: clinic?.trade_name ?? '—',
+          doctorName: doctor?.full_name ?? '—',
+          deadline: `${productInfo?.estimated_deadline_days ?? '—'} dias`,
+        })
+        await sendEmail({ to: pharmacy.email, ...tmpl })
+      }
+    } catch {
+      // email failure must not affect order creation
+    }
+
     return { orderId: order.id }
   } catch (err) {
     console.error('createOrder error:', err)
@@ -199,6 +245,40 @@ export async function updateOrderStatus(
       oldValues: { status: order.order_status },
       newValues: { status: newStatus, reason },
     })
+
+    // Notify clinic about status updates relevant to them
+    const NOTIFY_STATUSES: Record<string, string> = {
+      READY: 'Pronto para envio',
+      SHIPPED: 'Enviado',
+      DELIVERED: 'Entregue',
+      COMPLETED: 'Concluído',
+      CANCELED: 'Cancelado',
+      WITH_ISSUE: 'Com problema',
+    }
+
+    if (NOTIFY_STATUSES[newStatus]) {
+      try {
+        const { data: fullOrder } = await adminClient
+          .from('orders')
+          .select('code, clinic_id, clinics(email), products(name)')
+          .eq('id', orderId)
+          .single()
+
+        const clinicEmail = (fullOrder?.clinics as { email?: string } | null)?.email
+        if (clinicEmail) {
+          const tmpl = orderStatusUpdatedEmail({
+            orderCode: fullOrder?.code ?? orderId,
+            orderId,
+            newStatus,
+            statusLabel: NOTIFY_STATUSES[newStatus],
+            productName: (fullOrder?.products as { name?: string } | null)?.name ?? '—',
+          })
+          await sendEmail({ to: clinicEmail, ...tmpl })
+        }
+      } catch {
+        // email failure must not affect status update
+      }
+    }
 
     return {}
   } catch (err) {

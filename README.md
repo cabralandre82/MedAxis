@@ -145,6 +145,7 @@ npx tsx scripts/setup-production.ts   # Setup inicial de produção
 | [docs/manual-payment-confirmation-flow.md](./docs/manual-payment-confirmation-flow.md) | Fluxo de pagamento manual       |
 | [docs/manual-transfer-flow.md](./docs/manual-transfer-flow.md)                         | Fluxo de repasse manual         |
 | [docs/manual-price-update-flow.md](./docs/manual-price-update-flow.md)                 | Atualização de preços           |
+| [docs/setup-email.md](./docs/setup-email.md)                                           | Configuração de email (Resend)  |
 
 ---
 

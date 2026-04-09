@@ -5,6 +5,9 @@ import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
 import { salesConsultantSchema, type SalesConsultantFormData } from '@/lib/validators'
+import { sendEmail } from '@/lib/email'
+import { consultantTransferEmail } from '@/lib/email/templates'
+import { formatCurrency } from '@/lib/utils'
 
 // ─── Create ────────────────────────────────────────────────────────────────
 
@@ -248,6 +251,27 @@ export async function registerConsultantTransfer(
         reference: transferReference,
       },
     })
+
+    // Notify consultant
+    try {
+      const { data: consultant } = await adminClient
+        .from('sales_consultants')
+        .select('email, full_name')
+        .eq('id', consultantId)
+        .single()
+
+      if (consultant?.email) {
+        const tmpl = consultantTransferEmail({
+          consultantName: consultant.full_name,
+          totalAmount: formatCurrency(grossAmount),
+          reference: transferReference,
+          commissionCount: commissions.length,
+        })
+        await sendEmail({ to: consultant.email, ...tmpl })
+      }
+    } catch {
+      // email failure must not affect transfer registration
+    }
 
     revalidatePath('/consultant-transfers')
     revalidatePath(`/consultants/${consultantId}`)

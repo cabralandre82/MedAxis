@@ -3,6 +3,9 @@
 import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
+import { sendEmail } from '@/lib/email'
+import { paymentConfirmedEmail, transferRegisteredEmail } from '@/lib/email/templates'
+import { formatCurrency } from '@/lib/utils'
 
 interface ConfirmPaymentInput {
   paymentId: string
@@ -153,6 +156,30 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
       },
     })
 
+    // Notify clinic contact
+    const { data: clinicData } = await adminClient
+      .from('clinics')
+      .select('email, trade_name')
+      .eq('id', orderData.clinic_id)
+      .single()
+
+    const { data: orderProduct } = await adminClient
+      .from('orders')
+      .select('products(name)')
+      .eq('id', payment.order_id)
+      .single()
+
+    if (clinicData?.email) {
+      const tmpl = paymentConfirmedEmail({
+        orderCode: payment.order_id,
+        orderId: payment.order_id,
+        productName: (orderProduct?.products as { name?: string } | null)?.name ?? '—',
+        totalPrice: formatCurrency(Number(orderData.total_price)),
+        clinicName: clinicData.trade_name,
+      })
+      await sendEmail({ to: clinicData.email, ...tmpl })
+    }
+
     return {}
   } catch (err) {
     console.error('confirmPayment error:', err)
@@ -216,6 +243,30 @@ export async function completeTransfer(
       action: AuditAction.TRANSFER_REGISTERED,
       newValues: { order_id: transfer.order_id, net_amount: transfer.net_amount, reference },
     })
+
+    // Notify pharmacy
+    const { data: pharmacyData } = await adminClient
+      .from('pharmacies')
+      .select('email, trade_name')
+      .eq('id', transfer.pharmacy_id)
+      .single()
+
+    if (pharmacyData?.email) {
+      const { data: orderForCode } = await adminClient
+        .from('orders')
+        .select('code')
+        .eq('id', transfer.order_id)
+        .single()
+
+      const tmpl = transferRegisteredEmail({
+        orderId: transfer.order_id,
+        orderCode: orderForCode?.code ?? transfer.order_id,
+        pharmacyName: pharmacyData.trade_name,
+        netAmount: formatCurrency(Number(transfer.net_amount)),
+        reference,
+      })
+      await sendEmail({ to: pharmacyData.email, ...tmpl })
+    }
 
     return {}
   } catch (err) {
