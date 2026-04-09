@@ -14,8 +14,8 @@
 
 - [x] Email/senha funcionando
 - [x] Email/senha funcionando
-- [ ] Site URL atualizada no Supabase Auth para `https://clinipharma.com.br`
-- [ ] Redirect URL `https://clinipharma.com.br/**` adicionada no Supabase Auth
+- [x] Site URL atualizada no Supabase Auth para `https://clinipharma.com.br`
+- [x] Redirect URL `https://clinipharma.com.br/**` adicionada no Supabase Auth
 - [ ] SMTP do Resend configurado no Supabase Auth — _ver `docs/setup-email.md` Parte 2_
 - [ ] Email de recuperação de senha testado end-to-end
 
