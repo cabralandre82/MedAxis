@@ -98,9 +98,8 @@ export default async function ConsultantDetailPage({
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: 'Taxa de comissão', value: `${c.commission_rate}%`, color: 'text-blue-700' },
           {
             label: 'Clínicas vinculadas',
             value: String(clinics?.length ?? 0),

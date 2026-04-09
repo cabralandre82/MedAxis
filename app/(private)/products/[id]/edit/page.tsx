@@ -17,22 +17,32 @@ export default async function EditProductPage({ params }: PageProps) {
 
   const supabase = await createServerClient()
 
-  const [{ data: productRaw }, { data: categoriesRaw }, { data: pharmaciesRaw }] =
-    await Promise.all([
-      supabase.from('products').select('*').eq('id', id).single(),
-      supabase.from('product_categories').select('*').order('name'),
-      supabase
-        .from('pharmacies')
-        .select('id, trade_name, status')
-        .eq('status', 'ACTIVE')
-        .order('trade_name'),
-    ])
+  const [
+    { data: productRaw },
+    { data: categoriesRaw },
+    { data: pharmaciesRaw },
+    { data: settingRaw },
+  ] = await Promise.all([
+    supabase.from('products').select('*').eq('id', id).single(),
+    supabase.from('product_categories').select('*').order('name'),
+    supabase
+      .from('pharmacies')
+      .select('id, trade_name, status')
+      .eq('status', 'ACTIVE')
+      .order('trade_name'),
+    supabase
+      .from('app_settings')
+      .select('value_json')
+      .eq('key', 'consultant_commission_rate')
+      .single(),
+  ])
 
   if (!productRaw) notFound()
 
   const product = productRaw as unknown as ProductWithRelations
   const categories = (categoriesRaw ?? []) as unknown as ProductCategory[]
   const pharmacies = (pharmaciesRaw ?? []) as unknown as Pharmacy[]
+  const consultantRate = Number(settingRaw?.value_json ?? 5)
 
   return (
     <div className="space-y-6">
@@ -54,7 +64,12 @@ export default async function EditProductPage({ params }: PageProps) {
         </p>
       </div>
       <div className="rounded-lg border bg-white p-6">
-        <ProductForm product={product} categories={categories} pharmacies={pharmacies} />
+        <ProductForm
+          product={product}
+          categories={categories}
+          pharmacies={pharmacies}
+          consultantRate={consultantRate}
+        />
       </div>
     </div>
   )

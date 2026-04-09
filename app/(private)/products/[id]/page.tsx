@@ -8,6 +8,62 @@ import { PriceUpdateForm } from '@/components/products/price-update-form'
 import { Badge } from '@/components/ui/badge'
 import { Package } from 'lucide-react'
 import type { ProductWithRelations, ProductCategory, Pharmacy, ProductPriceHistory } from '@/types'
+import { getCurrentUser } from '@/lib/auth/session'
+
+function MarginBreakdown({
+  price,
+  cost,
+  consultantRate,
+}: {
+  price: number
+  cost: number
+  consultantRate: number
+}) {
+  const margin = price - cost
+  const consultantComm = Math.round(price * consultantRate) / 100
+  const netWithConsultant = margin - consultantComm
+  const marginPct = price > 0 ? Math.round((margin / price) * 100) : 0
+
+  return (
+    <div className="space-y-3 rounded-lg border bg-white p-6">
+      <h2 className="font-semibold text-gray-900">Análise de margem</h2>
+      <dl className="space-y-2 text-sm">
+        <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
+          <dt className="text-slate-500">Preço ao cliente</dt>
+          <dd className="font-medium">{formatCurrency(price)}</dd>
+        </div>
+        <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
+          <dt className="text-slate-500">Repasse à farmácia</dt>
+          <dd className="font-medium text-slate-700">− {formatCurrency(cost)}</dd>
+        </div>
+        <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
+          <dt className="text-slate-500">Margem bruta ({marginPct}%)</dt>
+          <dd className="font-semibold">{formatCurrency(margin)}</dd>
+        </div>
+        <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
+          <dt className="text-slate-500">Comissão consultor ({consultantRate}%)</dt>
+          <dd className="font-medium text-amber-700">− {formatCurrency(consultantComm)}</dd>
+        </div>
+        <div className="flex flex-col gap-1 pt-1">
+          <div className="flex justify-between">
+            <dt className="font-medium text-slate-700">Lucro s/ consultor</dt>
+            <dd className={`font-bold ${margin < 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {formatCurrency(margin)}
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="font-medium text-slate-700">Lucro c/ consultor</dt>
+            <dd
+              className={`font-bold ${netWithConsultant < 0 ? 'text-red-600' : 'text-green-600'}`}
+            >
+              {formatCurrency(netWithConsultant)}
+            </dd>
+          </div>
+        </div>
+      </dl>
+    </div>
+  )
+}
 
 export const metadata = { title: 'Detalhe do Produto | MedAxis' }
 
@@ -20,12 +76,22 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
 
   const supabase = await createServerClient()
+  const currentUser = await getCurrentUser()
+  const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
 
   const { data: productRaw } = await supabase
     .from('products')
     .select('*, product_categories(*), pharmacies(*)')
     .eq('id', id)
     .single()
+
+  const { data: settingRaw } = await supabase
+    .from('app_settings')
+    .select('value_json')
+    .eq('key', 'consultant_commission_rate')
+    .single()
+
+  const consultantRate = Number(settingRaw?.value_json ?? 5)
 
   if (!productRaw) notFound()
 
@@ -60,7 +126,6 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
           <p className="text-sm text-gray-500">SKU: {product.sku}</p>
         </div>
         <div className="flex gap-3">
-          <PriceUpdateForm productId={id} currentPrice={product.price_current} />
           <ButtonLink href={`/products/${id}/edit`} variant="outline">
             Editar
           </ButtonLink>
@@ -129,12 +194,22 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
               </Badge>
               {product.featured && <Badge className="bg-amber-100 text-amber-800">Destaque</Badge>}
             </div>
+            {isSuperAdmin && (
+              <div className="pt-2">
+                <PriceUpdateForm productId={id} currentPrice={product.price_current} />
+              </div>
+            )}
           </div>
 
-          <div className="flex min-h-[150px] flex-col items-center justify-center rounded-lg border bg-white p-6 text-gray-400">
-            <Package className="mb-2 h-12 w-12" />
+          <MarginBreakdown
+            price={product.price_current}
+            cost={product.pharmacy_cost ?? 0}
+            consultantRate={consultantRate}
+          />
+
+          <div className="flex min-h-[100px] flex-col items-center justify-center rounded-lg border bg-white p-6 text-gray-400">
+            <Package className="mb-2 h-8 w-8" />
             <p className="text-sm">Sem imagens</p>
-            <p className="text-xs">Upload via Supabase Storage</p>
           </div>
         </div>
       </div>

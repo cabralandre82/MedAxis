@@ -32,7 +32,6 @@ export function ConsultantForm({ consultant }: ConsultantFormProps) {
       email: consultant?.email ?? '',
       cnpj: consultant?.cnpj ?? '',
       phone: consultant?.phone ?? '',
-      commission_rate: consultant?.commission_rate ?? 5,
       bank_name: consultant?.bank_name ?? '',
       bank_agency: consultant?.bank_agency ?? '',
       bank_account: consultant?.bank_account ?? '',
@@ -92,22 +91,9 @@ export function ConsultantForm({ consultant }: ConsultantFormProps) {
             <Input id="phone" placeholder="(11) 99999-9999" {...register('phone')} />
             {errors.phone && <p className="text-xs text-red-600">{errors.phone.message}</p>}
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="commission_rate">Taxa de comissão (%) *</Label>
-            <Input
-              id="commission_rate"
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              {...register('commission_rate', { valueAsNumber: true })}
-            />
-            {errors.commission_rate && (
-              <p className="text-xs text-red-600">{errors.commission_rate.message}</p>
-            )}
-            <p className="text-xs text-slate-500">
-              Percentual sobre o valor total de cada pedido das clínicas vinculadas
-            </p>
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            A taxa de comissão é global para todos os consultores e é configurada em{' '}
+            <strong>Configurações → Taxa de comissão dos consultores</strong>.
           </div>
         </div>
       </section>

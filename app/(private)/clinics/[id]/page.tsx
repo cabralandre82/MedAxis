@@ -29,10 +29,7 @@ export default async function ClinicDetailPage({ params }: PageProps) {
   if (!clinic) notFound()
 
   const typedClinic = clinic as unknown as Clinic & {
-    sales_consultants: Pick<
-      SalesConsultant,
-      'id' | 'full_name' | 'commission_rate' | 'status'
-    > | null
+    sales_consultants: Pick<SalesConsultant, 'id' | 'full_name' | 'status'> | null
   }
 
   const { data: allConsultants } = await supabase
@@ -173,9 +170,7 @@ export default async function ClinicDetailPage({ params }: PageProps) {
                 <p className="text-sm font-medium text-blue-900">
                   {typedClinic.sales_consultants.full_name}
                 </p>
-                <p className="text-xs text-blue-700">
-                  Comissão: {typedClinic.sales_consultants.commission_rate}% sobre cada pedido
-                </p>
+                <p className="text-xs text-blue-700">Taxa global configurada em Configurações</p>
               </div>
               <Link
                 href={`/consultants/${typedClinic.sales_consultants.id}`}

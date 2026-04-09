@@ -27,7 +27,7 @@ export default async function ConsultantsPage() {
   const supabase = await createClient()
   const { data: consultants } = await supabase
     .from('sales_consultants')
-    .select('id, full_name, email, cnpj, phone, commission_rate, status, created_at')
+    .select('id, full_name, email, cnpj, phone, status, created_at')
     .order('full_name')
 
   const { data: stats } = await supabase
@@ -86,9 +86,6 @@ export default async function ConsultantsPage() {
                   CNPJ
                 </th>
                 <th className="px-5 py-3.5 text-right text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                  Taxa
-                </th>
-                <th className="px-5 py-3.5 text-right text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   A pagar
                 </th>
                 <th className="px-5 py-3.5 text-right text-xs font-semibold tracking-wide text-slate-500 uppercase">
@@ -114,9 +111,6 @@ export default async function ConsultantsPage() {
                       <p className="text-xs text-slate-500">{c.email}</p>
                     </td>
                     <td className="px-5 py-4 text-sm text-slate-600">{formatCNPJ(c.cnpj)}</td>
-                    <td className="px-5 py-4 text-right text-sm font-medium text-slate-800">
-                      {c.commission_rate}%
-                    </td>
                     <td className="px-5 py-4 text-right text-sm font-semibold text-amber-600">
                       {cStats.pending > 0
                         ? `R$ ${cStats.pending.toFixed(2).replace('.', ',')}`

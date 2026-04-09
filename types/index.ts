@@ -65,7 +65,6 @@ export interface SalesConsultant {
   email: string
   cnpj: string
   phone?: string | null
-  commission_rate: number
   bank_name?: string | null
   bank_agency?: string | null
   bank_account?: string | null
@@ -202,6 +201,7 @@ export interface Product {
   long_description?: string | null
   characteristics_json: Record<string, unknown>
   price_current: number
+  pharmacy_cost: number
   currency: string
   estimated_deadline_days: number
   active: boolean
@@ -245,6 +245,8 @@ export interface Order {
   quantity: number
   unit_price: number
   total_price: number
+  pharmacy_cost_per_unit?: number | null
+  platform_commission_per_unit?: number | null
   payment_status: PaymentStatus
   transfer_status: TransferStatus
   order_status: OrderStatus

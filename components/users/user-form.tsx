@@ -187,7 +187,7 @@ export function UserForm({ clinics, pharmacies, consultants, isSuperAdmin }: Use
               <SelectContent>
                 {consultants.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.full_name} — {c.commission_rate}%
+                    {c.full_name}
                   </SelectItem>
                 ))}
               </SelectContent>

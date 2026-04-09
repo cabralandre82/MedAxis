@@ -76,7 +76,7 @@ export function AssignConsultantDialog({
                 .filter((c) => c.status === 'ACTIVE')
                 .map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.full_name} — {c.commission_rate}%
+                    {c.full_name}
                   </option>
                 ))}
             </select>

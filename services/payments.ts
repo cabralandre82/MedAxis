@@ -3,7 +3,6 @@
 import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
-import { calculateCommission } from '@/lib/payments/commission'
 
 interface ConfirmPaymentInput {
   paymentId: string
@@ -26,14 +25,44 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
     if (fetchError || !payment) return { error: 'Pagamento não encontrado' }
     if (payment.status !== 'PENDING') return { error: 'Pagamento já processado' }
 
-    // Fetch order + clinic consultant info upfront
+    // Fetch order with frozen cost fields + clinic consultant
     const { data: orderData } = await adminClient
       .from('orders')
       .select(
-        'id, pharmacy_id, clinic_id, total_price, clinics(consultant_id, sales_consultants(id, commission_rate))'
+        'id, pharmacy_id, clinic_id, total_price, quantity, pharmacy_cost_per_unit, platform_commission_per_unit, clinics(consultant_id)'
       )
       .eq('id', payment.order_id)
       .single()
+
+    if (!orderData) return { error: 'Pedido não encontrado' }
+
+    const qty = Number(orderData.quantity)
+
+    // Financial breakdown — uses frozen values when available, falls back to product current
+    let pharmacyTransfer: number
+    let platformCommission: number
+
+    if (
+      orderData.pharmacy_cost_per_unit != null &&
+      orderData.platform_commission_per_unit != null
+    ) {
+      // Frozen at order creation (normal path)
+      pharmacyTransfer = Math.round(Number(orderData.pharmacy_cost_per_unit) * qty * 100) / 100
+      platformCommission =
+        Math.round(Number(orderData.platform_commission_per_unit) * qty * 100) / 100
+    } else {
+      // Fallback for orders created before migration 005
+      const { data: product } = await adminClient
+        .from('products')
+        .select('price_current, pharmacy_cost')
+        .eq('id', (orderData as Record<string, unknown>).product_id as string)
+        .single()
+
+      const pCost = Number(product?.pharmacy_cost ?? 0)
+      const pPrice = Number(product?.price_current ?? payment.gross_amount / qty)
+      pharmacyTransfer = Math.round(pCost * qty * 100) / 100
+      platformCommission = Math.round((pPrice - pCost) * qty * 100) / 100
+    }
 
     // Confirm payment
     await adminClient
@@ -49,51 +78,44 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
       })
       .eq('id', input.paymentId)
 
-    // Get commission setting
-    const { data: setting } = await adminClient
-      .from('app_settings')
-      .select('value_json')
-      .eq('key', 'default_commission_percentage')
-      .single()
-
-    const commissionPct = Number(setting?.value_json ?? 15)
-    const commission = calculateCommission(payment.gross_amount, commissionPct)
-
-    // Create commission record
+    // Platform commission record
     await adminClient.from('commissions').insert({
       order_id: payment.order_id,
-      commission_type: 'PERCENTAGE',
-      commission_percentage: commissionPct,
-      commission_total_amount: commission.commissionAmount,
+      commission_type: 'FIXED',
+      commission_fixed_amount: platformCommission,
+      commission_total_amount: platformCommission,
       calculated_by_user_id: user.id,
     })
 
-    // Create transfer record
-    const pharmacyId =
-      orderData?.pharmacy_id ?? (await getOrderPharmacyId(adminClient, payment.order_id))
+    // Pharmacy transfer record (net_amount = what pharmacy receives)
     await adminClient.from('transfers').insert({
       order_id: payment.order_id,
-      pharmacy_id: pharmacyId,
-      gross_amount: commission.grossAmount,
-      commission_amount: commission.commissionAmount,
-      net_amount: commission.netAmount,
+      pharmacy_id: orderData.pharmacy_id,
+      gross_amount: Number(orderData.total_price),
+      commission_amount: platformCommission,
+      net_amount: pharmacyTransfer,
       status: 'PENDING',
     })
 
-    // Auto-create consultant commission if clinic has a consultant linked
-    const clinic = orderData?.clinics as {
-      consultant_id?: string | null
-      sales_consultants?: { id: string; commission_rate: number } | null
-    } | null
-    if (clinic?.consultant_id && clinic?.sales_consultants) {
-      const consultantRate = Number(clinic.sales_consultants.commission_rate ?? 0)
-      const consultantCommission = Math.round(payment.gross_amount * consultantRate) / 100
+    // Consultant commission (global rate from app_settings)
+    const clinic = orderData.clinics as { consultant_id?: string | null } | null
+    if (clinic?.consultant_id) {
+      const { data: setting } = await adminClient
+        .from('app_settings')
+        .select('value_json')
+        .eq('key', 'consultant_commission_rate')
+        .single()
+
+      const consultantRate = Number(setting?.value_json ?? 5)
+      const consultantCommission =
+        Math.round(Number(orderData.total_price) * consultantRate * 100) / 10000
+
       await adminClient.from('consultant_commissions').insert({
         order_id: payment.order_id,
         consultant_id: clinic.consultant_id,
-        order_total: payment.gross_amount,
+        order_total: Number(orderData.total_price),
         commission_rate: consultantRate,
-        commission_amount: Math.round(consultantCommission * 100) / 100,
+        commission_amount: consultantCommission,
         status: 'PENDING',
       })
     }
@@ -125,30 +147,18 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
       action: AuditAction.PAYMENT_CONFIRMED,
       newValues: {
         order_id: payment.order_id,
-        amount: payment.gross_amount,
-        method: input.paymentMethod,
-        commission_pct: commissionPct,
-        commission_amount: commission.commissionAmount,
-        net_amount: commission.netAmount,
+        order_total: orderData.total_price,
+        pharmacy_transfer: pharmacyTransfer,
+        platform_commission: platformCommission,
       },
     })
 
     return {}
   } catch (err) {
     console.error('confirmPayment error:', err)
-    if (err instanceof Error && err.message === 'FORBIDDEN') {
-      return { error: 'Sem permissão' }
-    }
+    if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
     return { error: 'Erro interno' }
   }
-}
-
-async function getOrderPharmacyId(
-  client: ReturnType<typeof import('@/lib/db/admin').createAdminClient>,
-  orderId: string
-): Promise<string> {
-  const { data } = await client.from('orders').select('pharmacy_id').eq('id', orderId).single()
-  return data?.pharmacy_id ?? ''
 }
 
 export async function completeTransfer(
@@ -195,7 +205,7 @@ export async function completeTransfer(
       old_status: 'TRANSFER_PENDING',
       new_status: 'RELEASED_FOR_EXECUTION',
       changed_by_user_id: user.id,
-      reason: `Repasse registrado · ref: ${reference}`,
+      reason: `Repasse à farmácia registrado · ref: ${reference}`,
     })
 
     await createAuditLog({
@@ -204,11 +214,7 @@ export async function completeTransfer(
       entityType: AuditEntity.TRANSFER,
       entityId: transferId,
       action: AuditAction.TRANSFER_REGISTERED,
-      newValues: {
-        order_id: transfer.order_id,
-        net_amount: transfer.net_amount,
-        reference,
-      },
+      newValues: { order_id: transfer.order_id, net_amount: transfer.net_amount, reference },
     })
 
     return {}
