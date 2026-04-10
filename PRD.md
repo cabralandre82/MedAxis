@@ -43,8 +43,25 @@ Ver `RBAC_MATRIX.md` para papéis e permissões detalhadas.
 ### RF-05: Gestão de entidades
 
 - CRUD de clínicas, médicos, farmácias
-- Vinculação médico ↔ clínica
+- Vinculação médico ↔ clínica (incluindo múltiplas clínicas por médico)
 - Gestão de membros por organização
+
+### RF-09: Auto-cadastro de clínicas e médicos
+
+- Página pública `/registro` sem necessidade de login prévio
+- Formulário multi-step: tipo → dados cadastrais → upload de documentos obrigatórios
+- Conta criada imediatamente; acesso à plataforma disponível durante análise (exceto criação de pedidos)
+- SUPER_ADMIN aprova, reprova (com motivo) ou solicita documentos adicionais
+- Ao aprovar: entidade criada automaticamente + email de boas-vindas com link para o usuário definir a própria senha
+- Farmácias: cadastro exclusivo pelo SUPER_ADMIN (não há auto-cadastro)
+- Todos os usuários criados pelo admin (farmácia, clínica, médico) recebem email "Definir minha senha" em vez de senha definida pelo admin
+
+### RF-10: Interesses em produtos indisponíveis
+
+- Produtos podem ter status `active`, `unavailable` ou `inactive`
+- Produtos `unavailable` exibem botão "Tenho interesse" no catálogo
+- Formulário de interesse coleta nome e WhatsApp do interessado
+- SUPER_ADMIN é notificado in-app e por email; painel `/interests` lista todos os registros
 
 ### RF-06: Catálogo (admin)
 
@@ -94,6 +111,15 @@ Ver `RBAC_MATRIX.md` para papéis e permissões detalhadas.
 - App mobile
 - Gateway de pagamento automático
 - Emissão fiscal
-- Notificações por email/SMS
 - Relatórios avançados
 - Integração com ERP
+
+## Implementado além do MVP original
+
+- Notificações in-app em tempo real (realtime Supabase)
+- Emails transacionais via Resend (pedidos, pagamentos, repasses, recuperação de senha, boas-vindas, aprovação/reprovação de cadastro)
+- Auto-cadastro de clínicas e médicos com fluxo de aprovação
+- Produtos com status `unavailable` e módulo de interesses
+- Busca global `⌘K`
+- Exportação CSV/Excel
+- Paginação server-side em todas as listagens

@@ -87,6 +87,62 @@
 5. Pedidos existentes não são afetados
 ```
 
+## UF-08: Auto-cadastro de clínica ou médico
+
+```
+Solicitante (sem conta):
+1. Acessa /login → clica em "Solicitar cadastro"
+2. Em /registro, escolhe perfil: "Clínica / Consultório" ou "Médico"
+3. Preenche dados cadastrais (nome, CNPJ/CRM, email, telefone, endereço, senha)
+4. Faz upload dos documentos obrigatórios
+5. Clica em "Enviar solicitação"
+6. Sistema cria conta com registration_status = PENDING
+7. Solicitante recebe email de confirmação
+8. SUPER_ADMIN recebe email + notificação in-app
+9. Solicitante pode fazer login imediatamente (vê banner de "em análise")
+10. Não consegue criar pedidos até aprovação
+```
+
+## UF-09: Aprovação / reprovação de cadastro (SUPER_ADMIN)
+
+```
+Aprovação:
+1. SUPER_ADMIN acessa /registrations
+2. Filtra por "Aguardando análise"
+3. Clica em "Analisar →" na solicitação
+4. Revisa dados e documentos
+5. Clica em "Aprovar cadastro"
+6. Sistema: cria entidade → atualiza registration_status → envia welcome email
+7. Solicitante recebe email com link "Definir minha senha"
+8. Solicitante clica no link → /auth/callback → /reset-password → define senha
+9. Acesso completo à plataforma liberado
+
+Reprovação:
+1. SUPER_ADMIN acessa detalhe da solicitação
+2. Clica em "Reprovar" → modal para informar motivo
+3. Confirma → sistema envia email com motivo ao solicitante
+4. registration_status = REJECTED
+
+Pedido de documentos:
+1. SUPER_ADMIN acessa detalhe da solicitação
+2. Clica em "Pedir documentos"
+3. Seleciona documentos da lista (ou escreve "Outro")
+4. Confirma → email + notificação in-app ao solicitante
+5. registration_status = PENDING_DOCS
+6. Solicitante faz upload via /profile
+7. Admin recebe notificação; analisa novamente → aprovação ou reprovação
+```
+
+## UF-10: Médico com múltiplas clínicas criando um pedido
+
+```
+1. Médico acessa /orders/new
+2. Na seção "Dados do pedido", dropdown "Clínica" exibe apenas as clínicas vinculadas ao médico
+3. Se o médico tiver apenas uma clínica vinculada, ela é auto-selecionada
+4. Médico seleciona a clínica desejada para o pedido
+5. Fluxo normal de pedido continua (selecionar produtos, quantidade, documentos)
+```
+
 ## UF-07: Login e recuperação de senha
 
 ```

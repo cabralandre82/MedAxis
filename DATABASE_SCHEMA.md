@@ -4,16 +4,16 @@
 
 O banco é organizado em 5 schemas lógicos:
 
-| Schema             | Tabelas                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------ |
-| `auth`             | Gerenciado pelo Supabase Auth                                                                    |
-| `public.auth_ext`  | `profiles`, `user_roles`                                                                         |
-| `public.orgs`      | `clinics`, `clinic_members`, `doctors`, `doctor_clinic_links`, `pharmacies`, `pharmacy_members`  |
-| `public.catalog`   | `product_categories`, `products`, `product_images`, `product_price_history`, `pharmacy_products` |
-| `public.orders`    | `orders`, `order_items`, `order_documents`, `order_status_history`, `order_operational_updates`  |
-| `public.financial` | `payments`, `commissions`, `transfers`                                                           |
-| `public.system`    | `audit_logs`, `app_settings`, `notifications`, `product_interests`                               |
-| `public.sales`     | `sales_consultants`, `consultant_commissions`, `consultant_transfers`                            |
+| Schema             | Tabelas                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `auth`             | Gerenciado pelo Supabase Auth                                                                                         |
+| `public.auth_ext`  | `profiles`, `user_roles`                                                                                              |
+| `public.orgs`      | `clinics`, `clinic_members`, `doctors`, `doctor_clinic_links`, `pharmacies`, `pharmacy_members`                       |
+| `public.catalog`   | `product_categories`, `products`, `product_images`, `product_price_history`, `pharmacy_products`                      |
+| `public.orders`    | `orders`, `order_items`, `order_documents`, `order_status_history`, `order_operational_updates`                       |
+| `public.financial` | `payments`, `commissions`, `transfers`                                                                                |
+| `public.system`    | `audit_logs`, `app_settings`, `notifications`, `product_interests`, `registration_requests`, `registration_documents` |
+| `public.sales`     | `sales_consultants`, `consultant_commissions`, `consultant_transfers`                                                 |
 
 > Na prática, todas as tabelas ficam no schema `public` do Supabase. Os agrupamentos acima são lógicos.
 
@@ -24,15 +24,19 @@ O banco é organizado em 5 schemas lógicos:
 Extensão da tabela `auth.users` do Supabase.
 
 ```sql
-id          uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
-full_name   text NOT NULL
-email       text NOT NULL
-phone       text
-avatar_url  text
-is_active   boolean DEFAULT true
-created_at  timestamptz DEFAULT now()
-updated_at  timestamptz DEFAULT now()
+id                  uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+full_name           text NOT NULL
+email               text NOT NULL
+phone               text
+avatar_url          text
+is_active           boolean DEFAULT true
+registration_status text NOT NULL DEFAULT 'APPROVED'
+                    CHECK (registration_status IN ('PENDING','PENDING_DOCS','APPROVED','REJECTED'))
+created_at          timestamptz DEFAULT now()
+updated_at          timestamptz DEFAULT now()
 ```
+
+`registration_status` é `APPROVED` para todos os usuários criados pelo admin. Para usuários vindos do auto-cadastro público (`/registro`), começa como `PENDING` e evolui conforme o fluxo de aprovação.
 
 ## Tabela: user_roles
 
@@ -185,6 +189,55 @@ updated_at             timestamptz DEFAULT now()
 | `inactive` | Oculto do catálogo |
 
 **Margem bruta por unidade** = `price_current − pharmacy_cost`
+
+## Tabela: registration_requests
+
+Solicitações de cadastro enviadas por clínicas e médicos via auto-cadastro público.
+
+```sql
+id             uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+type           text        NOT NULL CHECK (type IN ('CLINIC', 'DOCTOR'))
+status         text        NOT NULL DEFAULT 'PENDING'
+               CHECK (status IN ('PENDING','PENDING_DOCS','APPROVED','REJECTED'))
+form_data      jsonb       NOT NULL DEFAULT '{}'  -- dados do formulário (varia por tipo)
+user_id        uuid        REFERENCES auth.users(id) ON DELETE SET NULL
+entity_id      uuid        -- clinic_id ou doctor_id após aprovação
+admin_notes    text        -- motivo de reprovação
+requested_docs jsonb       -- [{type, label, custom_text}]
+reviewed_by    uuid        REFERENCES auth.users(id) ON DELETE SET NULL
+reviewed_at    timestamptz
+created_at     timestamptz NOT NULL DEFAULT now()
+updated_at     timestamptz NOT NULL DEFAULT now()
+```
+
+**RLS:**
+
+- Solicitante (owner) pode ver e atualizar sua própria solicitação
+- `SUPER_ADMIN` e `PLATFORM_ADMIN` veem todas (SUPER_ADMIN pode atualizar)
+- `service_role` acesso total
+
+## Tabela: registration_documents
+
+Documentos enviados junto à solicitação de cadastro (ou em resposta a pedido de documentos).
+
+```sql
+id            uuid        PRIMARY KEY DEFAULT gen_random_uuid()
+request_id    uuid        NOT NULL REFERENCES registration_requests(id) ON DELETE CASCADE
+document_type text        NOT NULL  -- 'CNPJ_CARD' | 'OPERATING_LICENSE' | 'RESPONSIBLE_ID' | 'CRM_CARD' | 'IDENTITY_DOC' | 'OTHER'
+label         text        NOT NULL  -- label legível
+filename      text        NOT NULL
+storage_path  text        NOT NULL  -- bucket: registration-documents
+public_url    text
+uploaded_at   timestamptz NOT NULL DEFAULT now()
+```
+
+**RLS:**
+
+- Owner (via request_id → user_id) pode inserir e ver seus próprios documentos
+- `SUPER_ADMIN` e `PLATFORM_ADMIN` veem todos
+- `service_role` acesso total
+
+**Storage bucket:** `registration-documents` (privado)
 
 ## Tabela: product_interests
 

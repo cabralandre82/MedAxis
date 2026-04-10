@@ -121,6 +121,44 @@ margem_bruta = (price_current − pharmacy_cost) × quantity
 
 O valor `pharmacy_cost` nunca é reduzido — a farmácia sempre recebe o que foi acordado no cadastro do produto.
 
+## RN-20: Auto-cadastro gera acesso imediato com restrições
+
+Clínicas e médicos que se auto-cadastrarem em `/registro` têm conta criada imediatamente e podem fazer login. No entanto, enquanto `registration_status ≠ APPROVED`, o acesso é restrito:
+
+- O dashboard exibe um banner informando o status atual (em análise, documentos pendentes ou reprovado)
+- O acesso a `/orders/new` é bloqueado com redirecionamento automático para `/dashboard`
+- Todas as demais telas de leitura (catálogo, perfil etc.) são acessíveis normalmente
+
+## RN-21: Somente SUPER_ADMIN aprova ou reprova cadastros
+
+Ações sobre `registration_requests` (aprovar, reprovar, solicitar documentos) são exclusivas do papel `SUPER_ADMIN`. `PLATFORM_ADMIN` pode visualizar a lista e os detalhes, mas não pode executar ações.
+
+## RN-22: Aprovação cria a entidade e envia welcome email
+
+Ao aprovar uma solicitação de cadastro, o sistema automaticamente:
+
+1. Cria a entidade no banco (`clinics` ou `doctors`) com os dados do formulário
+2. Cria o vínculo do usuário à entidade (membro da clínica ou link médico-clínica, se aplicável)
+3. Atualiza `profiles.registration_status` para `APPROVED`
+4. Envia email de boas-vindas com link para o usuário definir a própria senha (via `generateLink` com `type: recovery`)
+
+## RN-23: Farmácias não possuem auto-cadastro
+
+O cadastro de farmácias é exclusivo do SUPER_ADMIN. Ao criar a farmácia, o sistema cria o usuário `PHARMACY_ADMIN` vinculado sem senha e envia welcome email com link para definição de senha. O admin nunca define a senha manualmente.
+
+## RN-24: Médico com múltiplas clínicas deve selecionar a clínica no pedido
+
+Um médico pode estar vinculado a múltiplas clínicas via `doctor_clinic_links`. Ao criar um pedido, o dropdown de clínica é filtrado para exibir apenas as clínicas vinculadas àquele médico. Se houver apenas uma, ela é auto-selecionada.
+
+## RN-25: Documentos obrigatórios por tipo de entidade
+
+Os documentos mínimos exigidos na solicitação de cadastro são:
+
+- **Clínica:** Cartão CNPJ, Alvará de funcionamento, RG/CPF do responsável
+- **Médico:** Carteira CRM, RG/CPF
+
+O SUPER_ADMIN pode solicitar documentos adicionais (lista predefinida ou campo livre "Outro") em qualquer momento durante a análise. Quando solicitados, o status muda para `PENDING_DOCS` e o solicitante é notificado por email e in-app.
+
 ## RN-19: Taxa de comissão dos consultores é global e única
 
 A comissão dos consultores de vendas é definida como um único percentual global em `app_settings.consultant_commission_rate`, aplicado sobre o `total_price` do pedido. Se a taxa mudar, todos os consultores são afetados a partir dos próximos pedidos; pedidos já criados usam os valores congelados.

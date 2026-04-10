@@ -2,6 +2,65 @@
 
 ---
 
+## [1.0.0] — 2026-04-10
+
+### Added
+
+- **Auto-cadastro de clínicas e médicos (`/registro`):**
+  - Página pública multi-step: escolha de perfil (Clínica ou Médico) → dados cadastrais → upload de documentos obrigatórios
+  - Conta criada imediatamente com `registration_status: PENDING`; usuário pode logar e navegar, mas não pode criar pedidos até aprovação
+  - Email de confirmação enviado ao solicitante; email + notificação in-app ao SUPER_ADMIN
+  - Farmácias continuam sendo cadastradas exclusivamente pelo SUPER_ADMIN (sem auto-cadastro)
+
+- **Fluxo de aprovação (painel `/registrations`):**
+  - Lista filtrável por status: Aguardando análise / Documentos pendentes / Aprovado / Reprovado
+  - Página de detalhe com todos os dados e documentos do solicitante (links para abrir cada arquivo)
+  - Três ações exclusivas do SUPER_ADMIN:
+    - **Aprovar** → cria a entidade (clínica ou médico), email de boas-vindas com link para o usuário definir a própria senha (mesmo mecanismo da recuperação de senha)
+    - **Reprovar** → modal com campo de motivo, email com a justificativa enviado ao solicitante
+    - **Pedir documentos** → seleção de lista predefinida + campo livre "Outro", email e notificação in-app ao solicitante
+  - Item "Cadastros" adicionado à sidebar do SUPER_ADMIN com ícone `ClipboardList`
+
+- **Welcome email com definição de senha:**
+  - Qualquer usuário criado pelo admin (farmácia, clínica, médico via painel) recebe email com link "Definir minha senha" gerado via `supabase.auth.admin.generateLink({ type: 'recovery' })`
+  - Campo de senha removido do formulário de criação de usuário pelo admin; sistema gera senha temporária internamente
+
+- **Banner de status no dashboard:**
+  - Usuários PENDING: banner âmbar "Cadastro em análise"
+  - Usuários PENDING_DOCS: banner laranja "Documentos pendentes" com link para `/profile`
+  - Usuários REJECTED: banner vermelho "Cadastro não aprovado"
+
+- **Bloqueio de criação de pedidos:**
+  - Redirecionamento automático para `/dashboard` ao tentar acessar `/orders/new` sem `registration_status = APPROVED`
+
+- **Seleção de clínica no pedido para médicos:**
+  - Médicos vinculados a uma só clínica: clínica auto-selecionada
+  - Médicos com múltiplas clínicas: dropdown exibe apenas as clínicas vinculadas ao médico
+  - Vinculação via tabela `doctor_clinic_links`
+
+- **Link "Solicitar cadastro" na tela de login** aponta para `/registro`
+
+- **Migration `011_registration_flow.sql`:**
+  - Campo `registration_status text DEFAULT 'APPROVED' CHECK (IN ('PENDING','PENDING_DOCS','APPROVED','REJECTED'))` em `profiles`
+  - Tabela `registration_requests` (tipo, status, form_data jsonb, user_id, entity_id, admin_notes, requested_docs jsonb, reviewer info, timestamps)
+  - Tabela `registration_documents` (request_id, document_type, label, filename, storage_path, public_url)
+  - Bucket `registration-documents` (privado) no Supabase Storage
+  - RLS em ambas as tabelas (owner, admins, service_role)
+
+- **Novos tipos:** `RegistrationStatus`, `RegistrationType`, `RequestedDoc`, `RegistrationRequest`, `RegistrationDocument` em `types/index.ts`
+
+- **Constantes de registro:** `lib/registration-constants.ts` — listas de documentos obrigatórios por tipo, opções extras, labels e cores de status
+
+- **Novo tipo de notificação `REGISTRATION_REQUEST`** adicionado a `lib/notifications.ts`
+
+### Changed
+
+- `services/users.ts`: campo `password` agora opcional; sistema gera senha temporária e envia welcome email automaticamente
+- `middleware.ts`: `/registro` e `/api/registration/submit` adicionados às rotas públicas
+- `ProfileWithRoles` e `Profile` agora expõem `registration_status`
+
+---
+
 ## [0.9.0] — 2026-04-09
 
 ### Added

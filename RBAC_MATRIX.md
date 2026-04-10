@@ -125,3 +125,22 @@
 | Criar usuário         |     ✅      |       ✅       |      ❌      |   ❌   |       ❌       |        ❌        |
 | Redefinir senha       |     ✅      |       ✅       |      ❌      |   ❌   |       ❌       |        ❌        |
 | Editar perfil próprio |     ✅      |       ✅       |      ✅      |   ✅   |       ✅       |        ✅        |
+
+## Módulo: Solicitações de cadastro
+
+| Ação                            | SUPER_ADMIN | PLATFORM_ADMIN | CLINIC_ADMIN | DOCTOR | PHARMACY_ADMIN | SALES_CONSULTANT |
+| ------------------------------- | :---------: | :------------: | :----------: | :----: | :------------: | :--------------: |
+| Enviar solicitação (público)    |      —      |       —        |     Auto     |  Auto  |       ❌       |        ❌        |
+| Listar todas as solicitações    |     ✅      |  ✅ (leitura)  |      ❌      |   ❌   |       ❌       |        ❌        |
+| Ver detalhe + documentos        |     ✅      |  ✅ (leitura)  |      ❌      |   ❌   |       ❌       |        ❌        |
+| Aprovar                         |     ✅      |       ❌       |      ❌      |   ❌   |       ❌       |        ❌        |
+| Reprovar (com motivo)           |     ✅      |       ❌       |      ❌      |   ❌   |       ❌       |        ❌        |
+| Solicitar documentos adicionais |     ✅      |       ❌       |      ❌      |   ❌   |       ❌       |        ❌        |
+
+## Módulo: Interesses em produtos
+
+| Ação                    | SUPER_ADMIN | PLATFORM_ADMIN | CLINIC_ADMIN | DOCTOR | PHARMACY_ADMIN | SALES_CONSULTANT |
+| ----------------------- | :---------: | :------------: | :----------: | :----: | :------------: | :--------------: |
+| Registrar interesse     |      —      |       —        |      ✅      |   ✅   |       ❌       |        ❌        |
+| Ver todos os interesses |     ✅      |       ❌       |      ❌      |   ❌   |       ❌       |        ❌        |
+| Receber notificação     |     ✅      |       ❌       |      ❌      |   ❌   |       ❌       |        ❌        |
