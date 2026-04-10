@@ -4,7 +4,7 @@
 
 ## Infraestrutura
 
-- [x] Migrations aplicadas no Supabase de produção (`jomdntqlgrupvhrqoyai`) — inclui migrations 013 (fcm_tokens, asaas_fields, contracts) e 014 (order_templates, sla_configs, order_tracking_tokens, product_variants, access_logs)
+- [x] Migrations aplicadas no Supabase de produção (`jomdntqlgrupvhrqoyai`) — inclui migrations 013 (fcm_tokens, asaas_fields, contracts), 014 (order_templates, sla_configs, order_tracking_tokens, product_variants, access_logs) e 015 (UNIQUE payments, índices críticos, precisão financeira numeric(15,2), soft-delete, RLS pharmacy docs)
 - [x] RLS habilitada em todas as tabelas
 - [x] Buckets de Storage criados (`product-images` público, `order-documents` privado)
 - [x] Seed de categorias e produtos rodado
@@ -151,7 +151,7 @@
 
 ## Build e Deploy
 
-- [x] `npm run build` passa sem erros (v1.4.0 ✅)
+- [x] `npm run build` passa sem erros (v1.5.0 auditoria ✅)
 - [x] `npm run lint` passa sem warnings críticos
 - [x] Testes unitários passando
 - [x] Deploy na Vercel bem-sucedido (status: Ready)
@@ -201,6 +201,11 @@
 - [x] Rotas privadas redirecionam para login
 - [x] Server Actions e API routes validam papéis no servidor
 - [x] Webhooks protegidos por secret token (Asaas, Cron, Clicksign)
+- [x] Rate limiting em `/forgot-password` (5/min) e `/registration/submit` (3/10min)
+- [x] State machine de status — PHARMACY_ADMIN não pode setar status financeiros
+- [x] Idempotência no webhook Asaas — pagamento duplo ignorado
+- [x] UNIQUE constraint em `payments.order_id` — previne cobrança duplicada
+- [ ] **Rate limiter em produção multi-instância** — migrar `lib/rate-limit.ts` para Upstash Redis quando Vercel escalar além de 1 instância (atualmente in-memory funciona por instância)
 
 ## Email transacional
 

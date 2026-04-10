@@ -2,6 +2,41 @@
 
 ---
 
+## [1.5.0] — 2026-04-08
+
+### Fixed (Auditoria pré-release)
+
+- **P0 — State machine de status de pedido:** `PHARMACY_ADMIN` podia setar qualquer status arbitrário (inclusive `CANCELED`, `COMMISSION_CALCULATED`). Criado `lib/orders/status-machine.ts` com matriz de transições por papel. Agora toda mudança de status é validada antes de persistir.
+- **P0 — Reorder completamente quebrado:** `app/api/orders/reorder/route.ts` usava campos errados (`total_amount` vs `total_price`, `created_by` vs `created_by_user_id`) e não enviava `doctor_id` (coluna `NOT NULL`). Todos os pedidos de repetição falhavam silenciosamente. Corrigido com busca automática do médico principal da clínica.
+- **P0 — Reorder gerava código de formato errado:** gerava `PED-{timestamp}` manualmente, bypassando o trigger do banco (`MED-YYYY-NNNNNN`). Corrigido para deixar `code: ''` e o trigger gerar o código padrão.
+- **P0 — Webhook Asaas: admin jamais recebia notificação de pagamento confirmado:** `createNotification({ userId: '' })` retorna imediatamente sem fazer nada. Corrigido para `createNotificationForRole('SUPER_ADMIN')`.
+- **P0 — Webhook Asaas sem idempotência:** processar `PAYMENT_CONFIRMED` duas vezes avançava o status e criava histórico duplicado. Adicionado guard de idempotência.
+- **P0 — Asaas create payment: campo `amount` inexistente na tabela:** deveria ser `gross_amount`. Pagamentos inseridos sem valor.
+- **P1 — Farmácia não podia ler documentos dos seus pedidos (RLS):** necessário para execução da manipulação. Policy adicionada.
+- **P1 — Sem rate limiting em endpoints sensíveis:** `/forgot-password` e `/registration/submit` expostos a brute force. Rate limiter aplicado.
+- **P1 — Sem idempotência em `payments.order_id`:** sem `UNIQUE` constraint, era possível criar múltiplos pagamentos para o mesmo pedido.
+
+### Added
+
+- `lib/orders/status-machine.ts` — máquina de estados com `isValidTransition()` e `getAllowedTransitions()` por papel
+- `lib/rate-limit.ts` — rate limiter in-memory (pronto para Upstash Redis em produção multi-instância)
+- `lib/utils/cnpj.ts` — validador CNPJ com algoritmo de dígito da Receita Federal
+- `tests/unit/status-machine.test.ts` — 13 testes cobrindo transições válidas/inválidas por papel
+
+### Database
+
+- `supabase/migrations/015_audit_fixes.sql`:
+  - `UNIQUE(payments.order_id)` — previne cobrança duplicada
+  - 9 índices novos em `orders`, `order_items`, `payments`, `profiles`, `clinics`, `order_templates`
+  - Precisão financeira ampliada: `numeric(10,2)` → `numeric(15,2)` em todas as colunas de valor
+  - `orders.deleted_at` — soft-delete
+  - `profiles.last_login_at` — monitoramento de atividade
+  - RLS: farmácia lê documentos de seus pedidos
+  - RLS: clínica pode cancelar pedido em `DRAFT`/`AWAITING_DOCUMENTS`
+  - RLS: DOCTOR pode ver seus próprios pedidos
+
+---
+
 ## [1.4.0] — 2026-04-08
 
 ### Added
