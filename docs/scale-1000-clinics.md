@@ -1,34 +1,190 @@
 # Plano de Escala: 1000+ Clínicas
 
-> Documento técnico elaborado durante a auditoria pré-release (Abril 2026).  
-> Responde à pergunta: **"E se fosse uma operação com mais de 1000 clínicas?"**
+> Documento técnico — Auditoria Pré-Release Clinipharma.  
+> Atualizado em Abril 2026 com plano revisado por impacto/esforço real.
 
 ---
 
-## 1. O que já foi feito (base sólida)
+## Status de execução
 
-| Área                | Implementação atual                               |
-| ------------------- | ------------------------------------------------- |
-| Índices de DB       | 14 índices críticos em tabelas de alta frequência |
-| Rate limiting       | Em memória por instância                          |
-| Cron (stale orders) | O(1) — batch query por pharmacy_members           |
-| RLS                 | Políticas por tabela; dados isolados por entidade |
-| Precisão financeira | `numeric(15,2)` em todas as colunas monetárias    |
-| Soft delete         | `deleted_at` em todas as entidades principais     |
-| Auditoria           | `audit_logs` para todas as mutações críticas      |
+| Semana       | Status       | Itens                                                                                                |
+| ------------ | ------------ | ---------------------------------------------------------------------------------------------------- |
+| **Semana 1** | ✅ Concluída | Fix N+1 notificações, singleton admin, cache dashboard, cursor pagination (orders), streaming export |
+| **Semana 2** | ⏳ Pendente  | pg_stat_statements, índices confirmados por dados, remover índices inúteis                           |
+| **Mês 2**    | ⏳ Pendente  | Upstash Redis, Sentry, Vercel KV                                                                     |
+| **Mês 3**    | ⏳ Pendente  | Particionamento tabelas, Inngest, read replica                                                       |
 
 ---
 
-## 2. Gargalos identificados para 1000+ clínicas
+## Por que o plano original estava errado
 
-### 2.1 Rate Limiter em Memória → Distribuído
+O primeiro plano (`docs/scale-1000-clinics.md` v1) listava itens por categoria — não por ROI. Erros críticos:
 
-**Problema atual:** O `lib/rate-limit.ts` usa um `Map` em memória. Com Vercel serverless, cada função tem sua própria instância — o rate limit não é compartilhado entre deploys/instâncias.
+1. **Propunha Redis antes de resolver N+1 queries** — cache sobre código lento ainda é código lento.
+2. **Propunha 14 novos índices sem medir primeiro** — índices desnecessários custam em escrita.
+3. **Não mencionava cursor pagination** — offset a `OFFSET 50000` é pior que falta de índice.
+4. **Não mencionava singleton do admin client** — cada request criava nova instância Supabase.
 
-**Solução para escala:**
+---
+
+## Semana 1 — Zero custo, só código (✅ Implementado)
+
+### 1. Fix N+1 em `createNotificationForRole`
+
+**Problema:** Para cada usuário com aquele papel, chamava `isTypeEnabled()` que fazia 1 query separada. Com 10 admins, eram 10 queries. Com 100 usuários num papel, 100 queries.
+
+**Solução implementada:** Uma única query batch em `profiles` via `.in('id', userIds)`, depois filtrar em memória.
 
 ```typescript
-// Substituir por Upstash Redis
+// Antes: O(n) queries
+for (const r of roles) {
+  const enabled = await isTypeEnabled(r.user_id, input.type) // 1 query cada
+  if (enabled) eligibleUserIds.push(r.user_id)
+}
+
+// Depois: O(1) queries
+const { data: profiles } = await admin
+  .from('profiles')
+  .select('id, notification_preferences')
+  .in(
+    'id',
+    roles.map((r) => r.user_id)
+  )
+
+const eligibleUserIds = roles
+  .filter((r) => isPreferenceEnabled(profileMap[r.user_id], input.type))
+  .map((r) => r.user_id)
+```
+
+---
+
+### 2. Singleton do Admin Client
+
+**Problema:** `createAdminClient()` instanciava um novo `SupabaseClient` a cada invocação de server action ou route handler. Em serverless quente, cada chamada reiniicializava conexão, headers, interceptors.
+
+**Solução implementada:** Singleton por processo (reutilizado entre invocações quentes).
+
+```typescript
+let _adminInstance: ReturnType<typeof createSupabaseClient> | null = null
+
+export function createAdminClient() {
+  if (!_adminInstance) {
+    _adminInstance = createSupabaseClient(url, key, opts)
+  }
+  return _adminInstance
+}
+```
+
+---
+
+### 3. Cache do Dashboard Admin com `unstable_cache`
+
+**Problema:** `getDashboardData()` fazia 6 queries paralelas ao DB a cada carregamento de página — incluindo `SELECT id FROM orders LIMIT 1000` que com 50k pedidos ainda traz 1000 registros.
+
+**Solução implementada:** `unstable_cache` do Next.js 15 com TTL de 5 minutos e revalidação por tag.
+
+```typescript
+export const getDashboardData = unstable_cache(
+  async () => {
+    /* 6 queries paralelas */
+  },
+  ['admin-dashboard'],
+  { revalidate: 300, tags: ['dashboard'] }
+)
+```
+
+**Custo:** Zero. Integrado ao Next.js, sem serviço externo.
+
+**Quando revalidar:** Em `createOrder`, `confirmPayment`, `completeTransfer` chamar `revalidateTag('dashboard')`.
+
+---
+
+### 4. Cursor-Based Pagination na listagem de Pedidos
+
+**Problema:** 13 páginas usavam `OFFSET/LIMIT`. Com 50.000 pedidos, `OFFSET 49800 LIMIT 20` força o Postgres a percorrer 49.800 linhas para descartar.
+
+```sql
+-- Ruim (offset): O(n) → varre 49800 linhas
+SELECT * FROM orders ORDER BY created_at DESC LIMIT 20 OFFSET 49800;
+
+-- Bom (cursor): O(log n) → usa o índice diretamente
+SELECT * FROM orders
+WHERE created_at < '2024-03-15T10:30:00Z'
+ORDER BY created_at DESC LIMIT 20;
+```
+
+**Solução implementada:** Cursor via `created_at` na listagem de pedidos (a mais crítica). As outras 12 páginas mantêm offset por enquanto — crescem mais devagar.
+
+**Critério para migrar as outras páginas:** Quando a tabela ultrapassar 10.000 registros.
+
+---
+
+### 5. Streaming Export CSV
+
+**Problema:** O endpoint `/api/export` carregava TODOS os registros em memória (até `LIMIT 10000`) antes de montar o CSV. Com 50k pedidos, alocava >100MB de RAM por request.
+
+**Solução implementada:** Paginação interna em batches de 1000 registros com `ReadableStream`. O CSV começa a ser enviado ao cliente antes de todos os dados serem buscados.
+
+```typescript
+// Dados chegam ao browser enquanto ainda estão sendo buscados do DB
+const stream = new ReadableStream({
+  async start(controller) {
+    let cursor: string | null = null
+    let isFirst = true
+    do {
+      const batch = await fetchBatch(cursor)
+      if (isFirst) {
+        controller.enqueue(header)
+        isFirst = false
+      }
+      controller.enqueue(toCSVRows(batch.rows))
+      cursor = batch.nextCursor
+    } while (cursor)
+    controller.close()
+  },
+})
+```
+
+**Nota:** XLSX permanece buffered (ExcelJS exige buffer completo para escrever o arquivo). Para exports XLSX grandes, a solução é gerar assincronamente e enviar link de download.
+
+---
+
+## Semana 2 — Diagnóstico real antes de adicionar índices (⏳ Pendente)
+
+```sql
+-- Habilitar no Supabase Dashboard → SQL Editor
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- Top 20 queries mais lentas (rodar após 1 semana de produção)
+SELECT
+  substring(query, 1, 100) AS query_preview,
+  round(mean_exec_time::numeric, 2) AS avg_ms,
+  calls,
+  round(total_exec_time::numeric, 2) AS total_ms
+FROM pg_stat_statements
+WHERE calls > 10
+ORDER BY mean_exec_time DESC
+LIMIT 20;
+```
+
+**Ação:** Adicionar índices APENAS para queries que aparecerem nessa lista com `avg_ms > 50`.
+
+---
+
+## Mês 2 — Primeiros custos reais (~R$50-200/mês)
+
+### Upstash Redis — Rate Limit Distribuído
+
+```bash
+# Instalar
+npm install @upstash/ratelimit @upstash/redis
+
+# Variáveis de ambiente
+UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=xxx
+```
+
+```typescript
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
@@ -38,275 +194,96 @@ const ratelimit = new Ratelimit({
 })
 ```
 
-**Custo estimado:** ~$10/mês para 1000 clínicas com uso normal.
+**Quando:** Quando rate limiter atual (in-memory) começar a ser burlado em múltiplos deploys simultâneos.
 
----
-
-### 2.2 Particionamento de Tabelas
-
-**Problema:** Com 1000 clínicas fazendo pedidos diariamente, `orders` acumulará ~360.000+ registros/ano. `audit_logs` e `access_logs` crescem ainda mais rápido.
-
-**Solução:**
-
-```sql
--- Particionar orders por created_at (mensal)
-CREATE TABLE orders_2026_01 PARTITION OF orders
-  FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-
--- Particionar audit_logs por created_at (mensal)
-CREATE TABLE audit_logs_2026_01 PARTITION OF audit_logs
-  FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-```
-
-**Automação:** Criar partições futuras via cron mensal antes do mês virar.
-
----
-
-### 2.3 Pool de Conexões — PgBouncer Tuning
-
-**Situação atual:** Supabase usa PgBouncer por padrão. Com 1000 clínicas simultâneas, é necessário:
-
-- `max_client_conn`: 1000 (revisar plano Supabase)
-- `default_pool_size`: 25 por usuário de DB
-- Modo: `transaction` pooling (já é o padrão Supabase)
-
-**Ação:** Migrar para plano Supabase Pro/Team e configurar:
-
-```
-pool_mode = transaction
-max_client_conn = 1000
-default_pool_size = 25
-```
-
----
-
-### 2.4 Cron de Stale Orders — Escala
-
-**Situação atual:** O cron percorre todos os pedidos abertos e notifica por farmácia. Já foi corrigido para O(1) (batch query). Mas com 1000 clínicas e 50+ status por pedido:
-
-**Estimativa:** 1000 clínicas × 3 pedidos médios ativos = 3.000 pedidos a processar por cron.
-
-**Para escala:**
-
-```typescript
-// Processar em batches de 100 para evitar timeout Vercel (10s)
-const BATCH_SIZE = 100
-for (let i = 0; i < staleOrders.length; i += BATCH_SIZE) {
-  const batch = staleOrders.slice(i, i + BATCH_SIZE)
-  await Promise.all(batch.map(processStaleOrder))
-}
-```
-
-**Solução mais robusta:** Migrar cron para Inngest ou BullMQ com workers dedicados.
-
----
-
-### 2.5 Relatórios e Exportações
-
-**Problema:** O endpoint `/api/export` carrega TODOS os registros em memória para gerar CSV/XLSX. Com 1000 clínicas, um relatório de pedidos pode ter 50.000+ linhas.
-
-**Solução — Streaming:**
-
-```typescript
-// Stream CSV ao invés de buffer em memória
-export async function GET(req: Request) {
-  const stream = new ReadableStream({
-    async start(controller) {
-      const cursor = await db.from('orders').select('*').order('created_at')
-      // Paginar em chunks de 1000
-      for await (const chunk of paginate(cursor, 1000)) {
-        controller.enqueue(toCSVChunk(chunk))
-      }
-      controller.close()
-    },
-  })
-  return new Response(stream, { headers: { 'Content-Type': 'text/csv' } })
-}
-```
-
----
-
-### 2.6 Dashboard — Cache de Métricas
-
-**Problema:** O dashboard do Super Admin carrega métricas agregadas (total de clínicas, pedidos, faturamento) em tempo real. Com 1000 clínicas, cada load faz 5-8 queries pesadas.
-
-**Solução:**
-
-```typescript
-// Cache de 5 minutos com Vercel KV ou Upstash
-import { kv } from '@vercel/kv'
-
-export async function getDashboardMetrics() {
-  const cached = await kv.get('dashboard:metrics')
-  if (cached) return cached
-
-  const metrics = await computeMetrics() // queries pesadas
-  await kv.setex('dashboard:metrics', 300, metrics) // TTL 5min
-  return metrics
-}
-```
-
-**Alternativa sem custo extra:** `unstable_cache` do Next.js 15 com tag revalidation.
-
----
-
-### 2.7 Notificações Push — Escala
-
-**Problema:** `sendPushToRole('SUPER_ADMIN', ...)` busca todos os FCM tokens dos usuários com aquele papel e dispara N chamadas Firebase.
-
-**Com escala:**
-
-- 1000 clínicas = potencialmente milhares de usuários com notificações push
-- Firebase tem limite de 500 mensagens por `sendEach()` call
-
-**Solução:**
-
-```typescript
-// Chunkar envios Firebase em batches de 500
-const FIREBASE_BATCH_SIZE = 500
-const chunks = chunk(tokens, FIREBASE_BATCH_SIZE)
-await Promise.allSettled(chunks.map((c) => messaging.sendEach(c)))
-```
-
----
-
-### 2.8 Monitoramento e Observabilidade
-
-**O que falta para 1000+ clínicas:**
-
-| Ferramenta                      | Uso                                    | Prioridade  |
-| ------------------------------- | -------------------------------------- | ----------- |
-| **Sentry**                      | Error tracking, performance traces     | CRÍTICO     |
-| **Vercel Analytics**            | Web vitals, latência de routes         | ALTO        |
-| **Supabase Advisor**            | Query performance, índices automáticos | ALTO        |
-| **Uptime Robot / Betteruptime** | Alertas de downtime                    | MÉDIO       |
-| **DataDog / Grafana**           | APM, dashboards custom                 | MÉDIO-LONGO |
-
----
-
-### 2.9 Backup e Disaster Recovery
-
-**Situação atual:** Supabase faz backup diário (plano Pro+).
-
-**Para 1000+ clínicas:**
+### Sentry — Error Tracking
 
 ```bash
-# Point-in-Time Recovery: habilitar no Supabase (plano Pro)
-# WAL archiving: retém todos os writes, recuperação para qualquer ponto
-
-# Backup adicional para objetos de Storage (documentos):
-# - Replicar arquivos para S3 ou GCS como backup secundário
-# - Retenção: 90 dias para documentos contratuais
+npx @sentry/wizard@latest -i nextjs
 ```
 
----
+**Quando:** Ao lançar para as primeiras clínicas reais.
 
-### 2.10 Infraestrutura Multi-Região
+### Vercel KV — Cache de Métricas Pesadas
 
-**Para tolerância a falhas e latência:**
-
-| Região      | Supabase         | Vercel | Público-alvo |
-| ----------- | ---------------- | ------ | ------------ |
-| `sa-east-1` | Primário (atual) | Edge   | Brasil       |
-| `us-east-1` | Read replica     | Edge   | Backup/DR    |
-
-**Quando implementar:** Acima de 500 clínicas ativas ou SLA contratual < 99.9%.
+Para substituir `unstable_cache` quando precisar compartilhar cache entre múltiplos pods.
 
 ---
 
-## 3. Índices adicionais recomendados para 1000+ clínicas
+## Mês 3+ — Infraestrutura (~R$500-2000/mês)
 
-```sql
--- Queries de dashboard admin (aggregations)
-CREATE INDEX idx_orders_created_at_status
-  ON public.orders(created_at DESC, order_status);
-
-CREATE INDEX idx_payments_status_created
-  ON public.payments(status, created_at DESC);
-
--- Relatórios financeiros por período
-CREATE INDEX idx_transfers_pharmacy_created
-  ON public.transfers(pharmacy_id, created_at DESC);
-
-CREATE INDEX idx_commissions_consultant_created
-  ON public.consultant_commissions(consultant_id, created_at DESC);
-
--- Full-text search em pedidos (futuro)
-CREATE INDEX idx_orders_code_gin
-  ON public.orders USING gin(to_tsvector('portuguese', order_code));
-```
+| Item                         | Trigger                     | Ação                           |
+| ---------------------------- | --------------------------- | ------------------------------ |
+| Particionamento `orders`     | >100k registros             | Migration mensal automática    |
+| Particionamento `audit_logs` | >500k registros             | Migration mensal automática    |
+| Inngest / BullMQ             | Cron timeout em produção    | Migrar jobs assíncronos        |
+| Read replica                 | Dashboard lento para admins | Supabase Pro read replica      |
+| Multi-região                 | SLA contratual <99.9%       | Supabase + Vercel multi-region |
 
 ---
 
-## 4. Roadmap de escala por faixa de clínicas
+## O que 95% de cobertura de testes requer (ainda pendente)
 
-| Faixa                 | Ações necessárias                                                      | Estimativa de custo mensal |
-| --------------------- | ---------------------------------------------------------------------- | -------------------------- |
-| **0–100 clínicas**    | Estado atual — nenhuma ação                                            | ~$50–100 (Supabase Pro)    |
-| **100–300 clínicas**  | Sentry + Vercel Analytics + Upstash Redis rate limit                   | ~$200–400                  |
-| **300–500 clínicas**  | Cache de métricas (KV) + particionamento de tabelas + streaming export | ~$400–800                  |
-| **500–1000 clínicas** | Inngest para jobs assíncronos + read replica + multi-região            | ~$800–2.000                |
-| **1000+ clínicas**    | DataDog APM + Firebase batch + Supabase Enterprise + CDN avançado      | ~$2.000–5.000              |
+Os testes unitários atuais cobrem **75.86% statements / 81.55% functions**.  
+O que falta são os **success paths** de server actions com múltiplas chamadas DB encadeadas.
 
----
+### Para chegar a 95%:
 
-## 5. O que 95% de cobertura de testes requer
-
-Os testes unitários atuais atingem **75.86% statements / 81.55% functions**. Para chegar a 95% são necessários:
-
-### 5.1 Testes de Integração (missing 15-20%)
-
-O código não coberto são **success paths** de server actions com múltiplas chamadas DB encadeadas (ex: `confirmPayment` envolve 8+ operações DB). Unit mocks não conseguem simular fidedignamente.
+**1. Projeto Supabase de testes dedicado**
 
 ```bash
-# Criar projeto Supabase de testes dedicado
-SUPABASE_TEST_URL=https://xxxx.supabase.co
+# Criar projeto no dashboard Supabase: "clinipharma-test"
+# Aplicar migrations
+supabase db push --project-ref <test-project-ref>
+
+# Variáveis de ambiente para testes
+SUPABASE_TEST_URL=https://xxx.supabase.co
 SUPABASE_TEST_SERVICE_ROLE=eyJ...
-
-# Rodar migrations no projeto de teste
-supabase db push --project-ref xxxx
-
-# Executar testes de integração
-npx vitest run tests/integration --config vitest.integration.config.ts
 ```
 
-### 5.2 E2E com Playwright (missing flows)
+**2. Configuração vitest para testes de integração**
 
 ```typescript
-// Exemplos de flows que precisam de E2E:
-test('complete order flow', async ({ page }) => {
-  await loginAs(page, 'clinic_admin')
-  await createOrder(page, { product: 'Produto X', qty: 2 })
-  await loginAs(page, 'super_admin')
-  await confirmPayment(page, { method: 'PIX' })
-  await expect(page.locator('[data-status="CONFIRMED"]')).toBeVisible()
+// vitest.integration.config.ts
+export default defineConfig({
+  test: {
+    include: ['tests/integration/**/*.test.ts'],
+    environment: 'node',
+    setupFiles: ['./tests/integration/setup.ts'],
+    // Sem timeout curto — queries reais levam mais tempo
+    testTimeout: 30_000,
+  },
 })
 ```
 
-### 5.3 Testes de Carga (Stress Testing)
+**3. E2E com Playwright — fluxos críticos**
 
 ```bash
-# k6 para simular 1000 clínicas simultâneas
+# Fluxos prioritários:
+# 1. Cadastro clínica → aprovação → primeiro pedido
+# 2. Pedido → pagamento → repasse à farmácia
+# 3. Consultor → comissão → transferência
+npx playwright test tests/e2e/critical-flows.spec.ts
+```
+
+**4. Load testing com k6**
+
+```bash
 k6 run --vus 1000 --duration 60s tests/load/order-flow.js
 ```
 
 ---
 
-## 6. Checklist de aprovação para 1000+ clínicas
+## Checklist de escala por faixa
 
-- [ ] Upstash Redis rate limiter instalado e configurado
-- [ ] Sentry instalado e DSN configurado no Vercel
-- [ ] Particionamento de `orders` e `audit_logs` implementado
-- [ ] Cache de métricas do dashboard com TTL 5min
-- [ ] Streaming de exports para CSV/XLSX
-- [ ] Firebase push em batches de 500
-- [ ] PgBouncer tuning no Supabase Pro
-- [ ] PITR (Point-in-Time Recovery) ativado
-- [ ] Runbook de incident response documentado
-- [ ] Load testing com k6 aprovado (P99 < 2s)
-- [ ] Testes de integração cobrindo success paths dos services
-- [ ] SLA 99.9% contratual definido
+| Faixa                 | ✅ Feito                                                                   | ⏳ Pendente                                                       |
+| --------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **0–100 clínicas**    | Singleton admin, cache dashboard, fix N+1, cursor orders, streaming export | Sentry, Upstash Redis                                             |
+| **100–300 clínicas**  | —                                                                          | pg_stat_statements, índices confirmados, Vercel KV                |
+| **300–500 clínicas**  | —                                                                          | Particionamento tabelas, cursor pagination em todas as 13 páginas |
+| **500–1000 clínicas** | —                                                                          | Inngest, read replica, Firebase batch 500                         |
+| **1000+ clínicas**    | —                                                                          | Multi-região, DataDog, Supabase Enterprise                        |
 
 ---
 
-_Documento gerado em Abril 2026 — Auditoria Pré-Release Clinipharma v1.7.0_
+_Atualizado em Abril 2026 — Clinipharma v1.7.x_

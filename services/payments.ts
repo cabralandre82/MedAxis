@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
+import { revalidateTag } from 'next/cache'
 import { sendEmail } from '@/lib/email'
 import { paymentConfirmedEmail, transferRegisteredEmail } from '@/lib/email/templates'
 import { createNotification } from '@/lib/notifications'
@@ -206,6 +207,7 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
       })
     }
 
+    revalidateTag('dashboard')
     return {}
   } catch (err) {
     console.error('confirmPayment error:', err)
@@ -309,6 +311,7 @@ export async function completeTransfer(
       }
     }
 
+    revalidateTag('dashboard')
     return {}
   } catch (err) {
     console.error('completeTransfer error:', err)

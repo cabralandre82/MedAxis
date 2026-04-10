@@ -1,6 +1,9 @@
 import ExcelJS from 'exceljs'
 
-export function toCSV(rows: Record<string, unknown>[]): string {
+export function toCSV(
+  rows: Record<string, unknown>[],
+  opts: { skipHeader?: boolean } = {}
+): string {
   if (!rows.length) return ''
   const headers = Object.keys(rows[0])
   const escape = (v: unknown) => {
@@ -10,7 +13,8 @@ export function toCSV(rows: Record<string, unknown>[]): string {
     }
     return s
   }
-  const lines = [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))]
+  const dataLines = rows.map((r) => headers.map((h) => escape(r[h])).join(','))
+  const lines = opts.skipHeader ? dataLines : [headers.join(','), ...dataLines]
   return lines.join('\n')
 }
 

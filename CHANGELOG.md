@@ -2,6 +2,35 @@
 
 ---
 
+## [1.8.0] — 2026-04-08 — Semana 1: Performance & Escala
+
+### Performance (Semana 1 — zero custo, só código)
+
+- **Fix N+1 em `createNotificationForRole`:** O loop de N queries individuais para `isTypeEnabled()` substituído por uma única query batch via `.in('id', userIds)` em `profiles`, filtragem em memória. O(n) → O(1) por chamada de role notification.
+- **Singleton do admin client:** `createAdminClient()` agora reutiliza o mesmo `SupabaseClient` entre invocações quentes (processo Node.js/V8 warm). Elimina re-inicialização de conexão, headers e interceptors por request.
+- **Cache do dashboard admin (`unstable_cache`):** `getDashboardData()` — que fazia 6 queries ao banco a cada carregamento — agora é cacheada por 5 minutos com `unstable_cache` do Next.js 15. Revalidação automática por tag `'dashboard'` nas mutações de `createOrder`, `updateOrderStatus`, `confirmPayment` e `completeTransfer`.
+- **Cursor-based pagination na listagem de pedidos:** Substituído `OFFSET/LIMIT` por cursor via `created_at` na página `/orders`. Elimina full-table scan ao navegar para páginas tardias (OFFSET 50000 → `WHERE created_at < cursor`). Novo componente `CursorPagination`.
+- **Streaming export CSV:** O endpoint `/api/export` agora transmite dados em batches de 1000 linhas via `ReadableStream`. O CSV começa a ser enviado ao cliente antes de todos os dados serem buscados. Uso de memória: O(1) independente do tamanho da exportação. XLSX permanece buffered (limitação do ExcelJS).
+
+### Changes
+
+- `lib/notifications.ts` — batch fetch de `notification_preferences`, `isPreferenceEnabled()` como função pura
+- `lib/db/admin.ts` — singleton pattern com tipo explícito `SupabaseClient<any, 'public', any>`
+- `lib/dashboard.ts` — novo arquivo com `getAdminDashboardData` cacheada
+- `lib/export.ts` — `toCSV()` aceita `opts.skipHeader` para streaming
+- `components/ui/cursor-pagination.tsx` — novo componente de paginação por cursor
+- `app/(private)/orders/page.tsx` — migrado para cursor pagination (`?after=` / `?before=`)
+- `app/api/export/route.ts` — streaming CSV via `ReadableStream`, XLSX via `fetchAllRows`
+- `services/orders.ts` — `revalidateTag('dashboard')` em `createOrder` e `updateOrderStatus`
+- `services/payments.ts` — `revalidateTag('dashboard')` em `confirmPayment` e `completeTransfer`
+- `components/dashboard/admin-dashboard.tsx` — usa `getAdminDashboardData` do cache
+
+### Documentation
+
+- `docs/scale-1000-clinics.md` — plano revisado com checklist por faixa de clínicas, status de execução por semana, e análise crítica do plano anterior
+
+---
+
 ## [1.7.0] — 2026-04-10
 
 ### Performance

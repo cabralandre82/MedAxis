@@ -17,10 +17,26 @@ export interface CreateNotificationInput {
   push?: boolean | Partial<PushPayload>
 }
 
-/** Returns true if the user has this type enabled (or if it's critical). */
-async function isTypeEnabled(userId: string, type: NotificationType): Promise<boolean> {
+/**
+ * Checks a single user's notification_preferences map to decide if the type is enabled.
+ * Pure function — no DB call.
+ */
+function isPreferenceEnabled(
+  prefs: Record<string, boolean> | null | undefined,
+  type: NotificationType
+): boolean {
   if (CRITICAL_TYPES.includes(type)) return true
   if (!SILENCEABLE_TYPES.includes(type)) return true // GENERIC and unknown always on
+  return (prefs ?? {})[type] !== false // missing key → enabled
+}
+
+/**
+ * Single-user check that hits the DB once.
+ * Used by createNotification only.
+ */
+async function isTypeEnabled(userId: string, type: NotificationType): Promise<boolean> {
+  if (CRITICAL_TYPES.includes(type)) return true
+  if (!SILENCEABLE_TYPES.includes(type)) return true
 
   const admin = createAdminClient()
   const { data } = await admin
@@ -30,7 +46,6 @@ async function isTypeEnabled(userId: string, type: NotificationType): Promise<bo
     .single()
 
   const prefs = (data?.notification_preferences ?? {}) as Record<string, boolean>
-  // Missing key → enabled
   return prefs[type] !== false
 }
 
@@ -49,7 +64,6 @@ export async function createNotification(input: CreateNotificationInput): Promis
       link: input.link ?? null,
     })
 
-    // Send push notification for critical types or when explicitly requested
     const shouldPush = input.push !== undefined ? !!input.push : CRITICAL_TYPES.includes(input.type)
 
     if (shouldPush) {
@@ -74,11 +88,27 @@ export async function createNotificationForRole(
     const { data: roles } = await admin.from('user_roles').select('user_id').eq('role', role)
     if (!roles?.length) return
 
-    const eligibleUserIds: string[] = []
-    for (const r of roles) {
-      const enabled = await isTypeEnabled(r.user_id, input.type)
-      if (enabled) eligibleUserIds.push(r.user_id)
-    }
+    const userIds = roles.map((r) => r.user_id)
+
+    // ── O(1) batch query for notification_preferences ──────────────────────
+    // Previously: O(n) — one isTypeEnabled() DB call per user.
+    // Now: one query fetching all preferences, filtered in memory.
+    const { data: profiles } = await admin
+      .from('profiles')
+      .select('id, notification_preferences')
+      .in('id', userIds)
+
+    const profileMap = Object.fromEntries(
+      (profiles ?? []).map((p) => [
+        p.id,
+        (p.notification_preferences ?? {}) as Record<string, boolean>,
+      ])
+    )
+
+    const eligibleUserIds = userIds.filter((uid) =>
+      isPreferenceEnabled(profileMap[uid], input.type)
+    )
+
     if (!eligibleUserIds.length) return
 
     await admin.from('notifications').insert(
@@ -91,7 +121,6 @@ export async function createNotificationForRole(
       }))
     )
 
-    // Push for critical types
     const shouldPush = input.push !== undefined ? !!input.push : CRITICAL_TYPES.includes(input.type)
 
     if (shouldPush) {

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/db/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
+import { revalidateTag } from 'next/cache'
 import { requireAuth } from '@/lib/auth/session'
 import { sendEmail } from '@/lib/email'
 import { newOrderEmail, orderStatusUpdatedEmail } from '@/lib/email/templates'
@@ -244,6 +245,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       // email/notification failure must not affect order creation
     }
 
+    revalidateTag('dashboard')
     return { orderId: order.id }
   } catch (err) {
     console.error('createOrder error:', err)
@@ -363,6 +365,7 @@ export async function updateOrderStatus(
       }
     }
 
+    revalidateTag('dashboard')
     return {}
   } catch (err) {
     console.error('updateOrderStatus error:', err)

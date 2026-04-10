@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { createClient } from '@/lib/db/server'
+import { getAdminDashboardData } from '@/lib/dashboard'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,50 +20,10 @@ interface AdminDashboardProps {
   user: ProfileWithRoles
 }
 
-async function getDashboardData() {
-  const supabase = await createClient()
-
-  const [orders, payments, transfers, products, clinics, pharmacies] = await Promise.all([
-    supabase.from('orders').select('id, order_status, total_price, created_at').limit(1000),
-    supabase.from('payments').select('id, status, gross_amount').limit(1000),
-    supabase.from('transfers').select('id, status, net_amount').limit(1000),
-    supabase.from('products').select('id, active').limit(1000),
-    supabase.from('clinics').select('id, status').limit(1000),
-    supabase.from('pharmacies').select('id, status').limit(1000),
-  ])
-
-  const pendingPayments = payments.data?.filter((p) => p.status === 'PENDING') ?? []
-  const pendingTransfers = transfers.data?.filter((t) => t.status === 'PENDING') ?? []
-  const activeProducts = products.data?.filter((p) => p.active) ?? []
-  const activeClinics = clinics.data?.filter((c) => c.status === 'ACTIVE') ?? []
-  const activePharmacies = pharmacies.data?.filter((p) => p.status === 'ACTIVE') ?? []
-
-  const openOrders =
-    orders.data?.filter((o) => !['COMPLETED', 'CANCELED'].includes(o.order_status)) ?? []
-
-  const recentOrders = orders.data?.slice(-5).reverse() ?? []
-
-  const totalRevenue =
-    payments.data
-      ?.filter((p) => p.status === 'CONFIRMED')
-      .reduce((s, p) => s + p.gross_amount, 0) ?? 0
-
-  return {
-    pendingPaymentsCount: pendingPayments.length,
-    pendingPaymentsAmount: pendingPayments.reduce((s, p) => s + p.gross_amount, 0),
-    pendingTransfersCount: pendingTransfers.length,
-    pendingTransfersAmount: pendingTransfers.reduce((s, t) => s + t.net_amount, 0),
-    activeProductsCount: activeProducts.length,
-    activeClinicsCount: activeClinics.length,
-    activePharmaciesCount: activePharmacies.length,
-    openOrdersCount: openOrders.length,
-    totalRevenue,
-    recentOrders,
-  }
-}
+// getDashboardData is now cached in lib/dashboard.ts (5min TTL, revalidated on mutations)
 
 export async function AdminDashboard({ user }: AdminDashboardProps) {
-  const data = await getDashboardData()
+  const data = await getAdminDashboardData()
 
   return (
     <div className="space-y-6">
