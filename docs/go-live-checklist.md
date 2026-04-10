@@ -54,18 +54,17 @@
 - [x] `NUVEM_FISCAL_CLIENT_SECRET` = `PENDING_CNPJ`
 - [x] `NUVEM_FISCAL_CNPJ` = `PENDING_CNPJ`
 
-### Variáveis opcionais — status de configuração
+### Variáveis opcionais — ✅ todas configuradas
 
-- [x] `NEXT_PUBLIC_SENTRY_DSN` — ✅ configurada (production + preview + development)
-- [ ] `SENTRY_ORG` — pendente: slug da organização (ex: `minha-empresa`). Obtido em sentry.io → Settings → Organization
-- [ ] `SENTRY_PROJECT` — pendente: slug do projeto no Sentry (ex: `clinipharma`)
-- [ ] `SENTRY_AUTH_TOKEN` — pendente: necessário apenas para upload de source maps. Obtido em sentry.io → Settings → **User** → Auth Tokens → Create New Token (NÃO é o Security Header do projeto, é um token pessoal de usuário com escopo `project:releases`)
-- [x] `UPSTASH_REDIS_REST_URL` — ✅ configurada (production + preview + development)
-- [x] `UPSTASH_REDIS_REST_TOKEN` — ✅ configurada (production + preview + development)
+- [x] `NEXT_PUBLIC_SENTRY_DSN` — ✅ `https://c63e33b1b94125b1be02f61a38b6cb6f@o4510907598700544.ingest.us.sentry.io/4511197915381760`
+- [x] `SENTRY_ORG` — ✅ `cabralandre82s-org`
+- [x] `SENTRY_PROJECT` — ✅ `clinipharma`
+- [x] `SENTRY_AUTH_TOKEN` — ✅ token pessoal configurado como `sensitive` (production + preview)
+- [x] `UPSTASH_REDIS_REST_URL` — ✅ `https://subtle-mackerel-96084.upstash.io`
+- [x] `UPSTASH_REDIS_REST_TOKEN` — ✅ configurado (production + preview + development)
 
-> **Sentry operacional:** erros já são capturados e enviados ao Sentry com o DSN configurado.  
-> **Sem source maps:** stack traces mostram código minificado até o `SENTRY_AUTH_TOKEN` ser configurado.  
-> **Upstash ativo:** rate limit distribuído ativo em todas as instâncias do Vercel.
+> **Sentry 100% operacional:** erros capturados com stack traces em TypeScript (source maps ativos via `SENTRY_AUTH_TOKEN`).  
+> **Upstash ativo:** rate limit distribuído em todas as instâncias do Vercel.
 
 ---
 
@@ -224,10 +223,9 @@
 - [x] `product_price_history` corrigido — histórico de preço agora é persistido
 - [x] Cron `stale-orders` corrigido — farmácias agora recebem alertas de pedidos parados
 - [x] Tracking route — `isCancelled` e labels de todos os status corrigidos
-- [x] **Rate limiter Redis-ready** — `lib/rate-limit.ts` detecta automaticamente `UPSTASH_REDIS_REST_URL`. Para ativar Redis: adicionar variáveis no Vercel (sem alteração de código).
-- [ ] **Ativar Upstash Redis** — adicionar `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` no Vercel quando necessário
-- [x] **Sentry instalado e estruturado** — no-op sem `NEXT_PUBLIC_SENTRY_DSN`. Error boundaries integrados com `captureError()`.
-- [ ] **Ativar Sentry** — criar projeto em sentry.io e adicionar `NEXT_PUBLIC_SENTRY_DSN` + `SENTRY_AUTH_TOKEN` no Vercel
+- [x] **Rate limiter Redis-ready** — `lib/rate-limit.ts` detecta automaticamente `UPSTASH_REDIS_REST_URL`. ✅ Upstash ativo.
+- [x] **Upstash Redis** — `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` configuradas. Rate limit multi-instância ativo.
+- [x] **Sentry 100% operacional** — DSN + org (`cabralandre82s-org`) + project (`clinipharma`) + auth token configurados. Source maps e error tracking ativos.
 - [x] **`/api/health` endpoint** — verificação de Supabase + env vars. Configurar UptimeRobot/Better Uptime para monitorar.
 
 ## Email transacional

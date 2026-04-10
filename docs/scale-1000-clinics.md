@@ -179,24 +179,16 @@ LIMIT 20;
 
 **Custo:** Free tier (5k erros/mês gratuitos)
 
-**Status:** DSN configurado no Vercel → erros já são capturados e enviados ao Sentry.
+**Status: ✅ 100% configurado no Vercel**
 
-**Pendente — Source Maps (stack traces legíveis):**
+| Variável                 | Valor                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SENTRY_DSN` | `https://c63e33b1b94125b1be02f61a38b6cb6f@o4510907598700544.ingest.us.sentry.io/4511197915381760` |
+| `SENTRY_ORG`             | `cabralandre82s-org`                                                                              |
+| `SENTRY_PROJECT`         | `clinipharma`                                                                                     |
+| `SENTRY_AUTH_TOKEN`      | configurado como `sensitive` (production + preview)                                               |
 
-O token que aparece em Project Settings → Security Headers **não serve** para source maps.  
-Para erros apontarem para o código TypeScript original (em vez do bundle minificado):
-
-1. sentry.io → clique no avatar → **User Settings** → **Auth Tokens** → Create New Token
-2. Escopos mínimos: `project:releases`, `org:read`
-3. Adicionar no Vercel:
-
-```
-SENTRY_ORG           = <slug-da-sua-org>   # visível na URL: sentry.io/organizations/<slug>/
-SENTRY_PROJECT       = clinipharma         # slug do projeto
-SENTRY_AUTH_TOKEN    = sntrys_xxx          # token criado acima
-```
-
-Sem isso a plataforma funciona. Erros aparecem no Sentry, mas o stack trace mostra o bundle.
+Source maps ativos — erros no Sentry apontam para o código TypeScript original.
 
 ---
 
