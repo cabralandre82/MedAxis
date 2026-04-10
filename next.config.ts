@@ -52,6 +52,15 @@ const nextConfig: NextConfig = {
       },
     ]
   },
+  async rewrites() {
+    // Forward /api/v1/* → /api/* for future API versioning compatibility
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: '/api/:path*',
+      },
+    ]
+  },
 }
 
 export default withSentryConfig(nextConfig, {

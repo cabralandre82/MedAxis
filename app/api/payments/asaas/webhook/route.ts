@@ -6,6 +6,7 @@ import { sendEmail } from '@/lib/email'
 import { sendSms, SMS } from '@/lib/sms'
 import { sendWhatsApp, WA } from '@/lib/whatsapp'
 import { sendPushToUser } from '@/lib/push'
+import { inngest } from '@/lib/inngest'
 
 // Asaas sends a query param accessToken or a header — verify it
 function isAuthorized(req: NextRequest): boolean {
@@ -26,6 +27,16 @@ export async function POST(req: NextRequest) {
 
   if (!paymentData?.externalReference) {
     return NextResponse.json({ ok: true, skipped: true })
+  }
+
+  // Enqueue to Inngest for reliable processing with automatic retry
+  // Return 200 immediately so Asaas doesn't retry the delivery
+  if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
+    await inngest.send({
+      name: 'webhook/asaas.received',
+      data: { event, payment: paymentData },
+    })
+    return NextResponse.json({ ok: true, queued: true, event })
   }
 
   const orderId: string = paymentData.externalReference

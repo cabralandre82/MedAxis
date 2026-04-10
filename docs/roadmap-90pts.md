@@ -79,11 +79,11 @@
 
 - [x] `lib/api-response.ts`: `apiSuccess()`, `apiError()`, `ApiErrors` factory com erros comuns
 - [x] `middleware.ts`: gera e propaga `X-Request-ID` em todos os responses
-- [ ] `next.config.ts`: rewrites de `/api/v1/*` → `/api/*` para compatibilidade futura
-- [ ] Aplicar `apiSuccess`/`apiError` progressivamente em todas as rotas
+- [x] `next.config.ts`: rewrites de `/api/v1/*` → `/api/*` para compatibilidade futura
+- [ ] Aplicar `apiSuccess`/`apiError` progressivamente em todas as rotas (em andamento — aplicar por área conforme features novas)
 - [ ] Documentação interna OpenAPI via `zod-to-openapi`
 
-**Esforço:** 3 dias | **Status:** ✅ helpers criados + X-Request-ID (2026-04-08) | ⬜ aplicação em rotas pendente
+**Esforço:** 3 dias | **Status:** ✅ concluído (2026-04-08) — rewrites ativos | ⬜ aplicação progressiva em andamento
 
 ---
 
@@ -94,11 +94,11 @@
 - [x] `lib/compliance.ts`: `validateCNPJ()` (ReceitaWS, fail-open em timeout/rate-limit), `canPlaceOrder()`, `canAcceptOrder()`
 - [x] Migration 022: `cnpj_validated_at` + `cnpj_situation` em `pharmacies` com índice partial
 - [x] Cron `/api/cron/revalidate-pharmacies` (segunda 06h UTC): suspende + notifica SUPER_ADMIN
-- [ ] `services/pharmacies.ts`: chamar `validateCNPJ()` em `createPharmacy()` e `updatePharmacyStatus('ACTIVE')`
-- [ ] `services/orders.ts`: chamar `canPlaceOrder()` antes de criar pedido
-- [ ] Testes unitários com mock da API
+- [x] `services/pharmacies.ts`: `validateCNPJ()` em `createPharmacy()` e `updatePharmacyStatus('ACTIVE')` — falha com mensagem clara se CNPJ inativo
+- [x] `services/orders.ts`: `canPlaceOrder()` antes de criar pedido — bloqueia pedido se clínica/farmácia inativa ou CNPJ irregular
+- [x] Testes unitários em `tests/unit/lib/compliance.test.ts`
 
-**Esforço:** 5 dias | **Status:** ✅ engine + cron criados (2026-04-08) | ⬜ integrar nos services pendente
+**Esforço:** 5 dias | **Status:** ✅ concluído (2026-04-08)
 
 ---
 
@@ -108,16 +108,19 @@
 
 **Problema:** Exports, emails em lote e webhooks complexos rodam em serverless com limite de 10s.
 
-- [ ] Instalar e configurar Inngest (free tier)
-- [ ] Mover para Inngest:
-  - Export CSV/XLSX (streaming sem timeout)
-  - Envio de emails em lote (ex: notificação de stale orders)
-  - Processamento de webhook Asaas com retry automático (3x com backoff exponencial)
-  - Cron de stale orders
-- [ ] Configurar `INNGEST_EVENT_KEY` e `INNGEST_SIGNING_KEY` no Vercel
-- [ ] Testes de jobs com Inngest Dev Server
+- [x] Instalar e configurar Inngest v4 (free tier)
+- [x] `lib/inngest.ts`: client + event type registry (`ExportOrdersEvent`, `StaleOrdersEvent`, `AsaasWebhookEvent`)
+- [x] `app/api/inngest/route.ts`: serve endpoint (GET/POST/PUT) com todos os jobs registrados
+- [x] Mover para Inngest:
+  - [x] Export CSV (`lib/jobs/export-orders.ts`) — sem timeout, com email de resultado
+  - [x] Stale orders notifications (`lib/jobs/stale-orders.ts`) — com retry 3x
+  - [x] Webhook Asaas payment confirmed (`lib/jobs/asaas-webhook.ts`) — webhook retorna 200 imediatamente, processa em background
+- [ ] Configurar `INNGEST_EVENT_KEY` e `INNGEST_SIGNING_KEY` no Vercel (exige conta Inngest criada)
+- [ ] Testes de jobs com Inngest Dev Server (pós-conta criada)
 
-**Esforço:** 4 dias | **Status:** ⬜ pendente
+**Pendente externo:** Criar conta em [inngest.com](https://app.inngest.com/sign-up) (free tier), copiar `INNGEST_EVENT_KEY` e `INNGEST_SIGNING_KEY` e adicionar no Vercel.
+
+**Esforço:** 4 dias | **Status:** ✅ implementado (2026-04-08) | ⬜ ativar após conta Inngest
 
 ---
 
@@ -125,12 +128,14 @@
 
 **Problema:** Sem ambiente de staging isolado. Testes de integração afetam produção.
 
-- [ ] Criar projeto Vercel `clinipharma-staging` com banco Supabase separado
-- [ ] Configurar deploy automático do branch `staging` → staging environment
-- [ ] Seed de dados de teste no banco de staging
-- [ ] Documentar política: nunca testar fluxos destrutivos em produção
+- [x] Documentar política de staging em `docs/staging-environment.md`
+- [x] Documentar branch strategy: `feature/* → staging → main`
+- [x] Documentar variáveis de ambiente de staging + seed de dados
+- [ ] Criar projeto Supabase `clinipharma-staging` (ação manual — exige conta Supabase)
+- [ ] Configurar deploy automático branch `staging` no Vercel (ação manual)
+- [ ] Criar branch `staging` no repositório e rodar seed
 
-**Esforço:** 2 dias | **Status:** ⬜ pendente
+**Esforço:** 2 dias | **Status:** ✅ documentado (2026-04-08) | ⬜ provisionamento pendente
 
 ---
 
@@ -138,16 +143,14 @@
 
 **Problema:** Sem baseline de performance documentado. Capacidade desconhecida.
 
-- [ ] Instalar k6 + criar scripts para:
-  - Login + autenticação (100 VUs simultâneos)
-  - Criar pedido (50 VUs)
-  - Listar pedidos com paginação (200 VUs)
-  - Export CSV (10 VUs, operação pesada)
-- [ ] Rodar contra staging
-- [ ] Definir SLOs mensuráveis: `p95 < 800ms`, `p99 < 2s`, `error rate < 0.1%`
-- [ ] Documentar resultados em `docs/load-testing.md`
+- [x] Definir SLOs: `p95 < 800ms`, `p99 < 2s`, `error rate < 0.1%`
+- [x] Documentar plano completo em `docs/load-testing.md` com scripts k6 prontos para uso
+- [x] Scripts documentados para: login (100 VUs), create-order (50 VUs), list-orders (200 VUs), export (10 VUs)
+- [ ] Instalar k6 no ambiente de CI/CD ou localmente
+- [ ] Rodar scripts contra staging após provisionamento
+- [ ] Atualizar tabela de resultados em `docs/load-testing.md`
 
-**Esforço:** 2 dias | **Status:** ⬜ pendente
+**Esforço:** 2 dias | **Status:** ✅ plano documentado (2026-04-08) | ⬜ execução pendente staging
 
 ---
 

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
 import { pharmacySchema, type PharmacyFormData } from '@/lib/validators'
+import { validateCNPJ } from '@/lib/compliance'
 import type { EntityStatus } from '@/types'
 
 export async function createPharmacy(
@@ -14,10 +15,29 @@ export async function createPharmacy(
     const parsed = pharmacySchema.safeParse(data)
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
 
+    // Validate CNPJ before creating pharmacy (fail-open: if API is unavailable, we still allow)
+    if (parsed.data.cnpj) {
+      const cnpjResult = await validateCNPJ(parsed.data.cnpj)
+      if (
+        !cnpjResult.valid &&
+        cnpjResult.error !== 'rate_limited' &&
+        cnpjResult.error !== 'timeout'
+      ) {
+        return {
+          error: `CNPJ inativo na Receita Federal: ${cnpjResult.situation ?? cnpjResult.error}`,
+        }
+      }
+    }
+
     const adminClient = createAdminClient()
     const { data: pharmacy, error } = await adminClient
       .from('pharmacies')
-      .insert({ ...parsed.data, status: 'PENDING' })
+      .insert({
+        ...parsed.data,
+        status: 'PENDING',
+        cnpj_validated_at: parsed.data.cnpj ? new Date().toISOString() : null,
+        cnpj_situation: parsed.data.cnpj ? 'ATIVA' : null,
+      })
       .select('id')
       .single()
 
@@ -89,13 +109,32 @@ export async function updatePharmacyStatus(
 
     const { data: existing } = await adminClient
       .from('pharmacies')
-      .select('status')
+      .select('status, cnpj')
       .eq('id', id)
       .single()
 
+    // Re-validate CNPJ when activating a pharmacy
+    let cnpjUpdate: Record<string, string | null> = {}
+    if (status === 'ACTIVE' && existing?.cnpj) {
+      const cnpjResult = await validateCNPJ(existing.cnpj)
+      if (
+        !cnpjResult.valid &&
+        cnpjResult.error !== 'rate_limited' &&
+        cnpjResult.error !== 'timeout'
+      ) {
+        return {
+          error: `CNPJ inativo na Receita Federal: ${cnpjResult.situation ?? cnpjResult.error}`,
+        }
+      }
+      cnpjUpdate = {
+        cnpj_validated_at: new Date().toISOString(),
+        cnpj_situation: cnpjResult.situation ?? 'ATIVA',
+      }
+    }
+
     const { error } = await adminClient
       .from('pharmacies')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ status, updated_at: new Date().toISOString(), ...cnpjUpdate })
       .eq('id', id)
 
     if (error) return { error: 'Erro ao atualizar status' }

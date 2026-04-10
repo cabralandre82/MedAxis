@@ -11,6 +11,7 @@ import { createNotification, createNotificationForRole } from '@/lib/notificatio
 import { formatCurrency } from '@/lib/utils'
 import { z } from 'zod'
 import { isValidTransition } from '@/lib/orders/status-machine'
+import { canPlaceOrder } from '@/lib/compliance'
 
 const createOrderSchema = z.object({
   clinic_id: z.string().uuid(),
@@ -60,6 +61,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     if (pharmacyIds.length > 1) return { error: 'Todos os produtos devem ser da mesma farmácia' }
 
     const pharmacy_id = pharmacyIds[0]
+
+    // Compliance check: clinic and pharmacy must be active; pharmacy CNPJ revalidated if stale
+    const compliance = await canPlaceOrder(clinic_id, pharmacy_id)
+    if (!compliance.allowed)
+      return { error: compliance.reason ?? 'Pedido bloqueado por regra de compliance' }
 
     // Calculate initial total (will be recalculated by trigger)
     const productMap = Object.fromEntries(products.map((p) => [p.id, p]))
