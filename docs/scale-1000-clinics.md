@@ -171,54 +171,131 @@ LIMIT 20;
 
 ---
 
-## Mês 2 — Primeiros custos reais (~R$50-200/mês)
+## Mês 2 — Ativação de serviços externos (✅ Código pronto — só faltam credenciais)
 
-### Upstash Redis — Rate Limit Distribuído
-
-```bash
-# Instalar
-npm install @upstash/ratelimit @upstash/redis
-
-# Variáveis de ambiente
-UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
-UPSTASH_REDIS_REST_TOKEN=xxx
-```
-
-```typescript
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
-
-const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(60, '1 m'),
-})
-```
-
-**Quando:** Quando rate limiter atual (in-memory) começar a ser burlado em múltiplos deploys simultâneos.
+> O código já está implementado e funcionando. Abaixo o que você precisa fazer para ativar cada serviço.
 
 ### Sentry — Error Tracking
 
-```bash
-npx @sentry/wizard@latest -i nextjs
+**Custo:** Free tier disponível (5k erros/mês gratuitos)
+
+**O que você faz:**
+
+1. [sentry.io](https://sentry.io) → Create Project → Next.js → copiar o DSN
+2. Settings → Auth Tokens → Create Token (escopos: `project:releases`, `org:read`)
+3. Adicionar no Vercel (Settings → Environment Variables):
+
+```
+NEXT_PUBLIC_SENTRY_DSN   = https://xxx@oyyy.ingest.sentry.io/zzz
+SENTRY_ORG               = seu-org-slug
+SENTRY_PROJECT           = clinipharma
+SENTRY_AUTH_TOKEN        = sntrys_xxx
 ```
 
-**Quando:** Ao lançar para as primeiras clínicas reais.
+**O que acontece automaticamente após o próximo deploy:**
 
-### Vercel KV — Cache de Métricas Pesadas
-
-Para substituir `unstable_cache` quando precisar compartilhar cache entre múltiplos pods.
+- Todos os erros capturados pelos error boundaries aparecem no Sentry com stack trace
+- Source maps enviados → erros apontam para o código TypeScript original, não o bundle minificado
+- Performance monitoring ativo (10% sampling em produção)
 
 ---
 
-## Mês 3+ — Infraestrutura (~R$500-2000/mês)
+### Upstash Redis — Rate Limit Distribuído
 
-| Item                         | Trigger                     | Ação                           |
-| ---------------------------- | --------------------------- | ------------------------------ |
-| Particionamento `orders`     | >100k registros             | Migration mensal automática    |
-| Particionamento `audit_logs` | >500k registros             | Migration mensal automática    |
-| Inngest / BullMQ             | Cron timeout em produção    | Migrar jobs assíncronos        |
-| Read replica                 | Dashboard lento para admins | Supabase Pro read replica      |
-| Multi-região                 | SLA contratual <99.9%       | Supabase + Vercel multi-region |
+**Custo:** Free tier (10k requests/dia gratuitos). Pago a partir de ~$10/mês em uso real.
+
+**O que você faz:**
+
+1. [upstash.com](https://upstash.com) → Create Database → Global (menor latência multi-região)
+2. Copiar as duas credenciais da tela do dashboard
+3. Adicionar no Vercel:
+
+```
+UPSTASH_REDIS_REST_URL   = https://xxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN = AXxx...
+```
+
+**O que acontece automaticamente após o próximo deploy:**
+
+- `lib/rate-limit.ts` detecta as variáveis e usa Redis automaticamente
+- Rate limiting passa a ser compartilhado entre todas as instâncias do Vercel (multi-instance safe)
+- Sem nenhuma alteração de código
+
+> **Nota:** Hoje o rate limiter in-memory já protege contra abuso. O Redis só se torna necessário quando o Vercel escalar para múltiplas instâncias simultâneas (geralmente com >50 clínicas ativas).
+
+---
+
+### Monitoramento de Uptime — `/api/health`
+
+**Custo:** Gratuito (UptimeRobot free tier, Better Uptime free tier)
+
+**O que você faz:**
+
+1. [uptimerobot.com](https://uptimerobot.com) ou [betteruptime.com](https://betteruptime.com) → Add Monitor
+2. URL: `https://clinipharma.com.br/api/health`
+3. Intervalo: 5 minutos
+4. Alerta: email + WhatsApp quando status 503
+
+---
+
+## Mês 3+ — Infraestrutura baseada em volume real (~R$500-2000/mês)
+
+> Não implementar antes dos triggers abaixo. Custo real, ROI real.
+
+| Item                             | Trigger de ativação                                                       | Como implementar                                                                           | Custo estimado           |
+| -------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------ |
+| **Particionamento `orders`**     | Tabela `orders` > 100k registros                                          | Migration SQL com `PARTITION BY RANGE (created_at)` + cron mensal para criar partição nova | Incluído no Supabase Pro |
+| **Particionamento `audit_logs`** | Tabela `audit_logs` > 500k registros                                      | Mesmo padrão de particionamento por mês                                                    | Incluído no Supabase Pro |
+| **Inngest / BullMQ**             | Cron `/api/cron/stale-orders` timeout em produção, ou jobs de email > 10s | Mover para Inngest (serverless queue)                                                      | ~$25/mês                 |
+| **Read replica**                 | Dashboard admin carregando > 2s mesmo com `unstable_cache`                | Supabase Pro → Read Replicas → apontar queries de leitura para replica                     | +$25/mês no Supabase Pro |
+| **Vercel KV**                    | Cache `unstable_cache` inconsistente entre pods (raro)                    | Substituir por `@vercel/kv` + `revalidateTag`                                              | ~$20/mês                 |
+| **Multi-região**                 | SLA contratual exigindo <99.9% downtime OU clínicas fora do Brasil        | Supabase Enterprise + Vercel Enterprise                                                    | >$500/mês                |
+
+### Como verificar os triggers
+
+```sql
+-- Verificar tamanho das tabelas (rodar no Supabase SQL Editor)
+SELECT
+  relname AS tabela,
+  n_live_tup AS registros_vivos,
+  pg_size_pretty(pg_total_relation_size(relid)) AS tamanho_total
+FROM pg_stat_user_tables
+WHERE relname IN ('orders', 'audit_logs', 'payments', 'transfers', 'notifications')
+ORDER BY n_live_tup DESC;
+
+-- Verificar queries lentas (após pg_stat_statements ativo)
+SELECT
+  substring(query, 1, 100) AS query,
+  round(mean_exec_time::numeric, 2) AS avg_ms,
+  calls
+FROM pg_stat_statements
+WHERE calls > 10
+ORDER BY mean_exec_time DESC
+LIMIT 20;
+```
+
+### Roteiro de particionamento `orders` (quando trigger atingido)
+
+```sql
+-- 1. Renomear tabela atual
+ALTER TABLE orders RENAME TO orders_legacy;
+
+-- 2. Criar tabela particionada
+CREATE TABLE orders (
+  LIKE orders_legacy INCLUDING ALL
+) PARTITION BY RANGE (created_at);
+
+-- 3. Criar partições por mês
+CREATE TABLE orders_2026_04 PARTITION OF orders
+  FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
+
+-- 4. Migrar dados existentes
+INSERT INTO orders SELECT * FROM orders_legacy;
+
+-- 5. Cron mensal para criar partição seguinte (adicionar em /api/cron/)
+-- CREATE TABLE orders_{ano}_{mes} PARTITION OF orders
+--   FOR VALUES FROM ('{ano}-{mes}-01') TO ('{proximo_mes}');
+```
 
 ---
 

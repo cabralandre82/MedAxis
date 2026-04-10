@@ -54,6 +54,17 @@
 - [x] `NUVEM_FISCAL_CLIENT_SECRET` = `PENDING_CNPJ`
 - [x] `NUVEM_FISCAL_CNPJ` = `PENDING_CNPJ`
 
+### Variáveis opcionais — código pronto, credenciais pendentes
+
+- [ ] `NEXT_PUBLIC_SENTRY_DSN` — ativa error tracking automático (obter em sentry.io)
+- [ ] `SENTRY_ORG` — slug da organização no Sentry
+- [ ] `SENTRY_PROJECT` — nome do projeto no Sentry (ex: `clinipharma`)
+- [ ] `SENTRY_AUTH_TOKEN` — token para upload de source maps (Settings → Auth Tokens no Sentry)
+- [ ] `UPSTASH_REDIS_REST_URL` — ativa rate limit distribuído (obter em upstash.com)
+- [ ] `UPSTASH_REDIS_REST_TOKEN` — token de acesso ao Upstash Redis
+
+> Sem essas variáveis a plataforma funciona normalmente. Com elas, erros aparecem no Sentry e o rate limit fica multi-instância safe.
+
 ---
 
 ## 🚨 AÇÕES OBRIGATÓRIAS ANTES DO LANÇAMENTO COMERCIAL
