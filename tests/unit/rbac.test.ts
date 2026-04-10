@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { hasRole, hasAnyRole, isAdmin, isSuperAdmin } from '@/lib/rbac'
 import type { ProfileWithRoles } from '@/types'
 
-function makeUser(roles: string[]): ProfileWithRoles {
+function makeUser(roles: string[], registration_status = 'APPROVED'): ProfileWithRoles {
   return {
     id: 'test-id',
     full_name: 'Test User',
     email: 'test@test.com',
     is_active: true,
+    registration_status: registration_status as ProfileWithRoles['registration_status'],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     roles: roles as ProfileWithRoles['roles'],
@@ -64,5 +65,27 @@ describe('isSuperAdmin', () => {
   it('returns true only for SUPER_ADMIN', () => {
     expect(isSuperAdmin(makeUser(['SUPER_ADMIN']))).toBe(true)
     expect(isSuperAdmin(makeUser(['PLATFORM_ADMIN']))).toBe(false)
+  })
+})
+
+describe('registration_status on ProfileWithRoles', () => {
+  it('APPROVED user has registration_status APPROVED', () => {
+    const user = makeUser(['CLINIC_ADMIN'], 'APPROVED')
+    expect(user.registration_status).toBe('APPROVED')
+  })
+
+  it('PENDING user has registration_status PENDING', () => {
+    const user = makeUser(['CLINIC_ADMIN'], 'PENDING')
+    expect(user.registration_status).toBe('PENDING')
+  })
+
+  it('PENDING_DOCS user is not APPROVED', () => {
+    const user = makeUser(['DOCTOR'], 'PENDING_DOCS')
+    expect(user.registration_status).not.toBe('APPROVED')
+  })
+
+  it('REJECTED user is not APPROVED', () => {
+    const user = makeUser(['CLINIC_ADMIN'], 'REJECTED')
+    expect(user.registration_status).not.toBe('APPROVED')
   })
 })

@@ -28,19 +28,19 @@ describe('formatCurrency', () => {
 })
 
 describe('generateOrderCode', () => {
-  it('generates correct format', () => {
+  it('generates correct CP- format', () => {
     const code = generateOrderCode(2026, 1)
-    expect(code).toBe('MED-2026-000001')
+    expect(code).toBe('CP-2026-000001')
   })
 
   it('pads sequence with zeros', () => {
     const code = generateOrderCode(2026, 42)
-    expect(code).toBe('MED-2026-000042')
+    expect(code).toBe('CP-2026-000042')
   })
 
   it('handles large sequences', () => {
     const code = generateOrderCode(2026, 999999)
-    expect(code).toBe('MED-2026-999999')
+    expect(code).toBe('CP-2026-999999')
   })
 })
 

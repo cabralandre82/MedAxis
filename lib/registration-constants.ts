@@ -11,7 +11,6 @@ export const DOCTOR_REQUIRED_DOCS = [
 
 export const EXTRA_DOC_OPTIONS = [
   { type: 'SPECIALTY_CERT', label: 'Certificado de especialidade' },
-  { type: 'OPERATING_LICENSE', label: 'Alvará de funcionamento' },
   { type: 'SOCIAL_CONTRACT', label: 'Contrato social' },
   { type: 'PROXY', label: 'Procuração' },
   { type: 'OTHER', label: 'Outro (descreva abaixo)' },
