@@ -2,6 +2,30 @@
 
 ---
 
+## [1.6.0] — 2026-04-08
+
+### Fixed (Auditoria completa — Round 2: arquivo por arquivo)
+
+- **P0 — `clinic_members` coluna errada em dois lugares:** `registration/[id]/route.ts` e `services/users.ts` inseriam `role: 'ADMIN'` mas a coluna no schema é `membership_role`. Todo aprovação de registro de clínica e criação de usuário CLINIC_ADMIN falhava silenciosamente — usuário era criado no Auth mas nunca linkado à clínica.
+- **P0 — `product_price_history` coluna errada:** `services/products.ts` inserindo `price:` mas as colunas são `old_price` e `new_price`. Histórico de alteração de preço nunca era persistido.
+- **P0 — Confirmação de pagamento: join morto `orders.products(name)`:** `services/payments.ts` buscava nome do produto via `orders.select('products(name)')` mas a FK `orders.product_id` foi removida na migration 008. Email de confirmação ao cliente sempre mostrava "—". Corrigido para extrair nomes via `order_items → products`.
+- **P0 — `order_status_history` com `old_status` hardcoded `'AWAITING_PAYMENT'`:** pedido poderia estar em `PAYMENT_UNDER_REVIEW` no momento da confirmação. Corrigido para usar `orderData.order_status` real.
+- **P0 — Cron `stale-orders`: PHARMACY_ADMINs nunca notificados:** código consultava `profiles.pharmacy_id` mas a tabela `profiles` não tem essa coluna. Corrigido para buscar via `pharmacy_members` (join correto).
+- **P0 — Tracking route: `isCancelled` sempre `false`:** comparava `order_status === 'CANCELLED'` mas o schema usa `'CANCELED'` (um L). Portal público de rastreamento nunca marcava pedido como cancelado.
+- **P1 — Contracts webhook: admin sem notificação de assinatura:** `createNotification({ userId: '' })` → `createNotificationForRole('SUPER_ADMIN')`.
+- **P1 — IDOR em `updateOwnProfile`:** server action aceitava qualquer `userId` sem verificar se era o caller autenticado. Qualquer usuário logado poderia editar o perfil de outro. Adicionada verificação `user.id !== userId`.
+- **P1 — `WITH_ISSUE` não monitorado pelo sistema de alertas de pedidos parados:** status crítico ficava invisível. Adicionado threshold de 1 dia.
+- **P1 — Vulnerabilidade HIGH em `xlsx`:** CVE Prototype Pollution + ReDoS. Substituído por `exceljs` (sem vulnerabilidades conhecidas). Export XLSX agora com header em negrito e auto-width de colunas.
+
+### Database
+
+- `supabase/migrations/016_second_audit_fixes.sql`:
+  - Precisão `numeric(15,2)` em `product_price_history` e `product_pharmacy_cost_history`
+  - 8 novos índices: `clinic_members.user_id`, `pharmacy_members.user_id`, `doctor_clinic_links.clinic_id`, `fcm_tokens.user_id`, `access_logs(user_id, created_at DESC)`, `notifications(user_id, created_at DESC) WHERE read_at IS NULL`, `sla_configs.order_status`, `order_tracking_tokens.token`
+  - RLS: clinic members e doctors podem ler seus próprios `order_tracking_tokens`
+
+---
+
 ## [1.5.0] — 2026-04-08
 
 ### Fixed (Auditoria pré-release)
