@@ -1,59 +1,76 @@
 # Clinipharma — Limitações Conhecidas do MVP
 
+---
+
 ## Financeiro
 
-- ~~Sem gateway de pagamento automático~~ ✅ **Implementado na v1.3.0**: Asaas (sandbox) integrado — PIX QR, boleto e cartão. Webhook confirma pagamento automaticamente. **Pendente produção**: trocar credenciais sandbox → produção no Vercel.
-- **Sem emissão fiscal**: NF-e/NFS-e não integrada — **modelo fiscal definido** (Nuvem Fiscal); implementação aguarda CNPJ com contadora. Variáveis `NUVEM_FISCAL_*` já configuradas no Vercel com valor `PENDING_CNPJ`.
-- **Sem split de pagamento automático**: repasse é registrado manualmente pelo admin (por design — admin aprova repasses)
+- ~~Sem gateway de pagamento automático~~ ✅ **Implementado na v1.3.0**: Asaas sandbox integrado — PIX QR, boleto e cartão. Webhook confirma pagamento automaticamente.
+  - **⚠️ PENDENTE PRODUÇÃO:** criar conta Asaas PJ (requer CNPJ) → gerar API Key real → atualizar `ASAAS_API_KEY` + `ASAAS_API_URL` no Vercel → configurar webhook no painel Asaas.
 
-## Autenticação
+- **Sem emissão fiscal**: NF-e/NFS-e não integrada.
+  - **⚠️ PENDENTE CNPJ:** modelo fiscal definido (Nuvem Fiscal), variáveis pré-configuradas no Vercel com `PENDING_CNPJ`. Após CNPJ + certificado A1 → substituir os 3 valores `NUVEM_FISCAL_*` no Vercel e implementar emissão.
 
-- **Recuperação de senha via rota própria**: usa `admin.generateLink()` + Resend diretamente. O SMTP do Supabase Auth não está configurado (tentativa falhou silenciosamente; Auth Hook HTTPS também não disparava). A solução atual é robusta e funciona em produção.
-- **Google OAuth preparado mas não ativado**: precisa de configuração manual no Google Cloud Console
-- **Sem 2FA**: autenticação em dois fatores não implementada
-
-## Produtos
-
-- **Farmácia não altera produtos diretamente**: toda atualização de catálogo passa pela plataforma
-- **Sem variações de produto**: cada SKU é um produto separado
-- **Produto indisponível sem estoque real**: o status `unavailable` é gerenciado manualmente pelo SUPER_ADMIN; não há integração com estoque de farmácias
-
-## Pedidos
-
-- **Todos os produtos do pedido devem ser da mesma farmácia**: o carrinho bloqueia a mistura de farmácias para garantir um único repasse por pedido
-- **Sem estimativa de frete**: prazo é o estimado pela farmácia no cadastro do produto
+- **Repasse manual**: por design — admin aprova repasse antes de transferir (sem split automático).
 
 ## Notificações
 
-- ~~Sem notificações push~~ ✅ **Implementado na v1.3.0**: Firebase FCM integrado — service worker, botão no header para ativar. **Pendente:** gerar VAPID key no Firebase Console → atualizar `NEXT_PUBLIC_FIREBASE_VAPID_KEY` no Vercel.
-- ~~Sem SMS~~ ✅ **Implementado na v1.3.0**: Twilio integrado (test credentials). **Pendente produção:** conta real Twilio + número BR.
-- **Sem WhatsApp**: infraestrutura e templates prontos via Evolution API. **Pendente:** número WhatsApp + deploy Evolution API (Docker) + atualizar `EVOLUTION_API_URL` no Vercel.
-- ~~Sem preferências de notificação por usuário~~ ✅ **Implementado na v1.2.0**: usuários podem silenciar tipos não-críticos em `/profile`
-- ~~Sem alertas de pedidos parados~~ ✅ **Implementado na v1.2.0**: widget no dashboard + Vercel Cron diário (08h) notifica SUPER_ADMIN e PHARMACY_ADMIN
+- ~~Sem notificações push~~ ✅ **Implementado na v1.3.0**: Firebase FCM com service worker.
+  - VAPID key configurada: `BNrMF4L9UwGqH3dHkIZp9-plConcw5YXpcTbfL-mF6_XTv6oIlV10Buw1sgCqd-YVveXECTWcxvWxXgbgf_VQ-U` ✅
 
-## Mobile
+- ~~Sem SMS~~ ✅ **Implementado na v1.3.0**: Twilio integrado.
+  - **⚠️ PENDENTE PRODUÇÃO:** test credentials ativas (SMS não chegam ao destinatário). Fazer upgrade para conta real Twilio → adquirir número BR → atualizar `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` no Vercel.
 
-- **Web apenas**: não existe app mobile no MVP
-- **Responsivo**: a interface funciona em mobile, mas é otimizada para desktop
+- **WhatsApp não ativo**: infraestrutura e templates prontos (Evolution API).
+  - **⚠️ PENDENTE:** adquirir número WhatsApp dedicado + deploy Evolution API em Docker (Render plano pago ou Railway) + atualizar `EVOLUTION_API_URL` no Vercel.
 
-## Relatórios
-
-- ~~Sem BI avançado: gráficos são CSS puro sem biblioteca interativa~~ ✅ **Implementado na v1.2.0**: Recharts com 5 tipos de gráfico (barras, donut, horizontal)
-- ~~Sem filtro de período em relatórios~~ ✅ **Implementado na v1.2.0**: DateRangePicker com 8 presets
-- ~~Exportação sem filtro de período~~ ✅ **Implementado na v1.2.0**: CSV/Excel respeita o período ativo na tela
-
-## Infraestrutura
-
-- ~~`CRON_SECRET` deve ser adicionado manualmente no Vercel~~ ✅ **Configurado**: adicionado via API em Production + Preview + Development. Redeploy concluído.
+- ~~Sem preferências de notificação por usuário~~ ✅ **v1.2.0**: toggles em `/profile`
+- ~~Sem alertas de pedidos parados~~ ✅ **v1.2.0**: widget + Vercel Cron diário + email digest
 
 ## Assinatura Eletrônica
 
-- ~~Sem assinatura eletrônica~~ ✅ **Implementado na v1.3.0**: Clicksign integrado (sandbox) — geração de PDF com `pdf-lib`, upload, signatários, notificação por email e webhook. Botão "Enviar contrato" disponível em aprovações de cadastro. **Pendente produção:** token + URL produção Clicksign; configurar webhook no painel Clicksign.
+- ~~Sem assinatura eletrônica~~ ✅ **Implementado na v1.3.0**: Clicksign sandbox integrado — PDF automático, signatários, webhook.
+  - **⚠️ PENDENTE PRODUÇÃO:** criar conta Clicksign empresarial → gerar token produção → atualizar `CLICKSIGN_ACCESS_TOKEN` + `CLICKSIGN_API_URL` no Vercel → configurar webhook no painel Clicksign.
 
-## Integrações pendentes (itens menores)
+## Autenticação
 
-- **App mobile**: não existe, web é responsivo
-- **2FA**: autenticação em dois fatores não implementada
-- **Google OAuth**: preparado mas não ativado (requer Google Cloud Console)
-- **ERP de farmácias**: sem integração de estoque
-- **Variações de produto**: cada SKU é um produto separado
+- **Recuperação de senha**: rota própria com `admin.generateLink()` + Resend. Funciona em produção.
+- **Google OAuth**: preparado mas não ativado (requer Google Cloud Console).
+- **Sem 2FA**: autenticação em dois fatores não implementada.
+
+## Produtos
+
+- **Farmácia não altera produtos**: toda atualização de catálogo passa pelo SUPER_ADMIN.
+- **Sem variações de produto**: cada SKU é um produto separado.
+- **Estoque manual**: status `unavailable` gerenciado manualmente, sem integração com estoque real.
+
+## Pedidos
+
+- **Produtos do mesmo fornecedor**: carrinho bloqueia mistura de farmácias (um repasse por pedido).
+- **Sem frete**: prazo é o estimado pela farmácia no cadastro do produto.
+
+## Relatórios
+
+- ~~Sem BI avançado~~ ✅ **v1.2.0**: Recharts com 5 tipos de gráfico
+- ~~Sem filtro de período~~ ✅ **v1.2.0**: DateRangePicker com 8 presets
+- ~~Exportação sem filtro~~ ✅ **v1.2.0**: CSV/Excel respeita período ativo
+
+## Mobile
+
+- **Web apenas**: responsivo mas otimizado para desktop. App mobile não planejado para MVP.
+
+## Infraestrutura
+
+- ~~`CRON_SECRET`~~ ✅ Configurado no Vercel (Production + Preview + Development)
+- ~~Migration 013~~ ✅ Aplicada em produção (fcm_tokens, asaas_fields, contracts)
+
+---
+
+## Resumo das pendências bloqueantes para lançamento comercial real
+
+| #   | Pendência              | Por que bloqueia                               | Pré-requisito                     |
+| --- | ---------------------- | ---------------------------------------------- | --------------------------------- |
+| 1   | **Asaas produção**     | Sem isso, nenhum pagamento real é processado   | CNPJ da empresa                   |
+| 2   | **NF-e / NFS-e**       | Obrigação fiscal para operar legalmente        | CNPJ + certificado A1             |
+| 3   | **Clicksign produção** | Contratos sandbox não têm valor jurídico pleno | Conta empresarial                 |
+| 4   | **Twilio produção**    | SMS test não chega ao destinatário             | Upgrade de conta                  |
+| 5   | **WhatsApp**           | Canal principal de conversão no Brasil         | Número dedicado + servidor Docker |

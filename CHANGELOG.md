@@ -15,7 +15,7 @@
   - `components/push/push-permission.tsx` — botão no header para solicitar permissão; exibe status ativo/bloqueado
   - `app/api/push/subscribe/route.ts` — `POST`/`DELETE` para salvar/remover FCM tokens na tabela `fcm_tokens`
   - `lib/notifications.ts` — agora envia push automático para `CRITICAL_TYPES`; suporte a `push` flag por notificação
-  - **Pendente:** `NEXT_PUBLIC_FIREBASE_VAPID_KEY` — gerar em Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair e atualizar no Vercel
+  - ~~Pendente VAPID key~~ ✅ **Configurada:** `BNrMF4L9UwGqH3dHkIZp9-plConcw5YXpcTbfL-mF6_XTv6oIlV10Buw1sgCqd-YVveXECTWcxvWxXgbgf_VQ-U` no Vercel. Push notifications FCM totalmente operacionais.
 
 - **Asaas Payment Gateway (sandbox):**
   - `lib/asaas.ts` — wrapper completo: `findOrCreateCustomer`, `createPayment`, `getPixQrCode`, `cancelPayment`, validação de webhook
