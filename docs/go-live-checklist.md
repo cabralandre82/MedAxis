@@ -211,7 +211,11 @@
 - [x] `product_price_history` corrigido — histórico de preço agora é persistido
 - [x] Cron `stale-orders` corrigido — farmácias agora recebem alertas de pedidos parados
 - [x] Tracking route — `isCancelled` e labels de todos os status corrigidos
-- [ ] **Rate limiter em produção multi-instância** — migrar `lib/rate-limit.ts` para Upstash Redis quando Vercel escalar além de 1 instância (atualmente in-memory funciona por instância)
+- [x] **Rate limiter Redis-ready** — `lib/rate-limit.ts` detecta automaticamente `UPSTASH_REDIS_REST_URL`. Para ativar Redis: adicionar variáveis no Vercel (sem alteração de código).
+- [ ] **Ativar Upstash Redis** — adicionar `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` no Vercel quando necessário
+- [x] **Sentry instalado e estruturado** — no-op sem `NEXT_PUBLIC_SENTRY_DSN`. Error boundaries integrados com `captureError()`.
+- [ ] **Ativar Sentry** — criar projeto em sentry.io e adicionar `NEXT_PUBLIC_SENTRY_DSN` + `SENTRY_AUTH_TOKEN` no Vercel
+- [x] **`/api/health` endpoint** — verificação de Supabase + env vars. Configurar UptimeRobot/Better Uptime para monitorar.
 
 ## Email transacional
 

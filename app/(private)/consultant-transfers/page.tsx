@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
-import { formatCurrency, formatDateTime, parsePage, paginationRange } from '@/lib/utils'
+import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { parseCursorParams, sliceCursorResult } from '@/lib/cursor-pagination'
+import { CursorPagination } from '@/components/ui/cursor-pagination'
 import { ConsultantTransferDialog } from '@/components/consultants/consultant-transfer-dialog'
-import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import { ExportButton } from '@/components/shared/export-button'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
 
@@ -11,17 +12,16 @@ export const metadata = { title: 'Repasses a Consultores — Clinipharma' }
 const PAGE_SIZE = 20
 
 interface Props {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ after?: string; before?: string }>
 }
 
 export default async function ConsultantTransfersPage({ searchParams }: Props) {
   const currentUser = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
   const isSuperAdmin = currentUser.roles.includes('SUPER_ADMIN')
-  const { page: pageRaw } = await searchParams
+  const { after, before } = await searchParams
   const supabase = await createClient()
 
-  const page = parsePage(pageRaw)
-  const { from, to } = paginationRange(page, PAGE_SIZE)
+  const cursor = parseCursorParams({ after, before, pageSize: PAGE_SIZE })
 
   // Consultores com comissões pendentes
   const { data: pendingRaw } = await supabase
@@ -62,14 +62,8 @@ export default async function ConsultantTransfersPage({ searchParams }: Props) {
     commByConsultant[c.consultant_id].push(c)
   }
 
-  // Transfer history with pagination
-  const { data: historyRaw, count: historyCount } = await supabase
-    .from('consultant_transfers')
-    .select('*, sales_consultants(full_name)', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(from, to)
-
-  const history = (historyRaw ?? []) as unknown as Array<{
+  // Transfer history — cursor pagination (high-growth table)
+  type HistoryRow = {
     id: string
     consultant_id: string
     gross_amount: number
@@ -78,7 +72,24 @@ export default async function ConsultantTransfersPage({ searchParams }: Props) {
     confirmed_at: string | null
     created_at: string
     sales_consultants: { full_name: string } | null
-  }>
+  }
+
+  let hq = supabase
+    .from('consultant_transfers')
+    .select('*, sales_consultants(full_name)')
+    .order('created_at', { ascending: cursor.ascending })
+
+  if (cursor.after) hq = hq.lt('created_at', cursor.after)
+  if (cursor.before) hq = hq.gt('created_at', cursor.before)
+
+  const { data: historyRaw } = await hq.limit(cursor.fetchSize)
+
+  const {
+    rows: history,
+    nextCursor,
+    prevCursor,
+    isFirstPage,
+  } = sliceCursorResult<HistoryRow>((historyRaw ?? []) as unknown as HistoryRow[], cursor)
 
   return (
     <div className="space-y-8">
@@ -163,9 +174,7 @@ export default async function ConsultantTransfersPage({ searchParams }: Props) {
 
       {/* Histórico */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold text-slate-800">
-          Histórico de repasses{historyCount ? ` (${historyCount})` : ''}
-        </h2>
+        <h2 className="text-base font-semibold text-slate-800">Histórico de repasses</h2>
         {!history.length ? (
           <p className="text-sm text-slate-500">Nenhum repasse registrado ainda.</p>
         ) : (
@@ -224,7 +233,12 @@ export default async function ConsultantTransfersPage({ searchParams }: Props) {
             </table>
           </div>
         )}
-        <PaginationWrapper total={historyCount ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
+        <CursorPagination
+          nextCursor={nextCursor}
+          prevCursor={isFirstPage ? null : prevCursor}
+          pageSize={PAGE_SIZE}
+          resultCount={history.length}
+        />
       </section>
     </div>
   )

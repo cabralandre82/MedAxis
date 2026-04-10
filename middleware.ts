@@ -19,6 +19,8 @@ const PUBLIC_ROUTES = [
   // Public order tracking (no login required)
   '/track/',
   '/api/tracking',
+  // Health check — intentionally public for monitoring services
+  '/api/health',
 ]
 
 export async function middleware(request: NextRequest) {

@@ -2,6 +2,52 @@
 
 ---
 
+## [2.0.0] — 2026-04-08 — Mês 2: Observabilidade, Resiliência e Escala
+
+### Infrastructure
+
+- **`/api/health` endpoint:** Verifica conectividade com Supabase e variáveis de ambiente. Retorna 200/503 com latência por serviço. Integrado ao middleware como rota pública (sem autenticação).
+- **Sentry estrutural (`@sentry/nextjs`):** Instalado e configurado em `sentry.client.config.ts`, `sentry.server.config.ts` e `sentry.edge.config.ts`. Completamente no-op quando `NEXT_PUBLIC_SENTRY_DSN` não está definido. Source maps e performance sampling desativados sem `SENTRY_AUTH_TOKEN`.
+- **`lib/monitoring.ts`:** Abstração de observabilidade desacoplada do Sentry. `captureError()`, `recordMetric()`, `identifyUser()` — fallback para `console.error` estruturado quando sem DSN. A app nunca importa `@sentry/nextjs` diretamente.
+
+### Resilience
+
+- **Error boundaries completos:** `app/global-error.tsx` captura erros no root layout. `app/(private)/error.tsx` captura erros em todas as páginas autenticadas com botão "Tentar novamente" e link para o dashboard. Erros auto-reportados via `captureError()`.
+- **Loading skeletons:** `app/(private)/loading.tsx` (genérico) e `app/(private)/dashboard/loading.tsx` (específico para KPIs). Mostrados durante server-side rendering sem bloquear navegação.
+
+### Rate Limiting
+
+- **`lib/rate-limit.ts` — abstração Redis-ready:** `check()` agora `async`. Backend selecionado automaticamente:
+  - `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` presentes → Upstash Redis (sliding window, multi-instance)
+  - Variáveis ausentes → in-memory (dev/staging, sem custo)
+- **`exportLimiter` adicionado:** 10 exports/minuto por usuário na rota `/api/export`.
+- **Ativação Redis (quando pronto):** Adicionar `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` no Vercel. Sem alteração de código.
+
+### Cursor Pagination
+
+- **`/consultant-transfers`:** Histórico de repasses migrado para cursor pagination. A tabela de comissões pendentes (que não cresce da mesma forma) permanece com query direta.
+
+### Tests
+
+- **411 testes passando** (era 394 após Semana 2).
+- `tests/unit/rate-limit-redis.test.ts` — 12 testes: in-memory backend, pre-configured limiters, Redis detection.
+- `tests/unit/lib/monitoring.test.ts` — 8 testes: no-op mode, active Sentry mode, fallback logging.
+- `tests/__mocks__/@upstash/ratelimit.ts` e `@upstash/redis.ts` — stubs para testes sem pacotes instalados.
+- `vitest.config.ts` — `resolve.alias` para pacotes Upstash opcionais.
+
+### Credentials required to activate (documentado em `docs/go-live-checklist.md`)
+
+```
+NEXT_PUBLIC_SENTRY_DSN=https://xxx@oyyy.ingest.sentry.io/zzz
+SENTRY_ORG=your-org
+SENTRY_PROJECT=clinipharma
+SENTRY_AUTH_TOKEN=sntrys_xxx
+UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=AXxx...
+```
+
+---
+
 ## [1.9.0] — 2026-04-08 — Semana 2: Índices, Cursor Pagination e Cache de Widget
 
 ### Performance (Semana 2)

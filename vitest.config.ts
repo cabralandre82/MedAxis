@@ -42,6 +42,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, '.'),
+      // Stub optional packages that are not installed in the test environment.
+      // These are only needed at runtime (Redis-backed rate limiter).
+      '@upstash/ratelimit': resolve(__dirname, 'tests/__mocks__/@upstash/ratelimit.ts'),
+      '@upstash/redis': resolve(__dirname, 'tests/__mocks__/@upstash/redis.ts'),
     },
   },
 })

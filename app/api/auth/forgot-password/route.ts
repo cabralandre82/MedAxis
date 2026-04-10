@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     // Rate limit: 5 requests per minute per IP
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0] ?? req.headers.get('x-real-ip') ?? 'unknown'
-    const rl = authLimiter.check(`forgot-password:${ip}`)
+    const rl = await authLimiter.check(`forgot-password:${ip}`)
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' },

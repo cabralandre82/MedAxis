@@ -11,7 +11,7 @@
 | ------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Semana 1** | ✅ Concluída | Fix N+1 notificações, singleton admin, cache dashboard, cursor pagination (orders), streaming export                                                              |
 | **Semana 2** | ✅ Concluída | pg_stat_statements (migration 017), 11 índices por análise de código, cursor pagination (payments/audit/transfers), StaleOrdersWidget com filtro DB + cache 10min |
-| **Mês 2**    | ⏳ Pendente  | Upstash Redis, Sentry, Vercel KV                                                                                                                                  |
+| **Mês 2**    | ✅ Concluído | /api/health, error boundaries, loading skeletons, rate-limit Redis-ready, Sentry (no-op sem DSN), cursor pagination consultant-transfers                          |
 | **Mês 3**    | ⏳ Pendente  | Particionamento tabelas, Inngest, read replica                                                                                                                    |
 
 ---

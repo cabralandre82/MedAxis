@@ -4,6 +4,26 @@ import { vi } from 'vitest'
 // ── server-only: must be mocked first ────────────────────────────────────────
 vi.mock('server-only', () => ({}))
 
+// ── Upstash: optional packages — mock so tests run without them installed ─────
+vi.mock('@upstash/ratelimit', () => ({
+  Ratelimit: class {
+    constructor() {}
+    limit(_identifier: string) {
+      return Promise.resolve({ success: true, remaining: 59, reset: Date.now() + 60_000 })
+    }
+    static slidingWindow(max: number, _window: string) {
+      return { type: 'slidingWindow', max }
+    }
+  },
+}))
+vi.mock('@upstash/redis', () => ({
+  Redis: class {
+    static fromEnv() {
+      return new this()
+    }
+  },
+}))
+
 // ── next/cache ────────────────────────────────────────────────────────────────
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }))
 

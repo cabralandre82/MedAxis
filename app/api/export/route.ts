@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { getCurrentUser } from '@/lib/auth/session'
 import { toCSV, toXLSX } from '@/lib/export'
 import { formatCurrency } from '@/lib/utils'
+import { exportLimiter } from '@/lib/rate-limit'
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'PLATFORM_ADMIN']
 const BATCH_SIZE = 1000
@@ -18,6 +19,14 @@ export async function GET(req: NextRequest) {
   const user = await getCurrentUser()
   if (!user || !user.roles.some((r) => ADMIN_ROLES.includes(r))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const rl = await exportLimiter.check(`export:${user.id}`)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Muitas exportações. Aguarde um minuto antes de tentar novamente.' },
+      { status: 429 }
+    )
   }
 
   const { searchParams } = req.nextUrl
