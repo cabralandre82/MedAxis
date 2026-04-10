@@ -42,7 +42,7 @@
 
 ## Infraestrutura
 
-- **`CRON_SECRET` deve ser adicionado manualmente no Vercel**: gerar qualquer string segura (ex: `openssl rand -hex 32`) e adicionar nas Environment Variables do projeto como `CRON_SECRET` (Production + Preview). O cron de pedidos parados não irá executar sem este secret.
+- ~~`CRON_SECRET` deve ser adicionado manualmente no Vercel~~ ✅ **Configurado**: adicionado via API em Production + Preview + Development. Redeploy concluído.
 
 ## Integrações futuras planejadas
 

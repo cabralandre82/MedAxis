@@ -27,7 +27,7 @@
   - UI em `/profile` — seção "Preferências de notificação" com toggles por tipo
   - API `PATCH /api/profile/notification-preferences` persiste as preferências
   - `lib/notifications.ts` checa `notification_preferences` antes de inserir qualquer notificação (críticos ignoram a preferência)
-- **Variável de ambiente `CRON_SECRET`:** adicionada ao `.env.local` para proteger o endpoint do cron.
+- **Variável de ambiente `CRON_SECRET`:** adicionada ao `.env.local` (desenvolvimento) e ao Vercel via API REST (Production + Preview + Development). Redeploy disparado e concluído automaticamente.
 
 ### Tests
 

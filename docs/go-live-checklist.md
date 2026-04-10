@@ -28,14 +28,15 @@
 - [x] `NEXT_PUBLIC_APP_URL` atualizada para `https://clinipharma.com.br`
 - [x] `RESEND_API_KEY` adicionada no Vercel
 - [x] `EMAIL_FROM` = `Clinipharma <noreply@clinipharma.com.br>` adicionada no Vercel
-- [ ] `CRON_SECRET` adicionada no Vercel (gerar com `openssl rand -hex 32`) — necessário para o cron de pedidos parados
+- [x] `CRON_SECRET` adicionada no Vercel (Production + Preview + Development) — cron de pedidos parados ativo
 
 ## Build e Deploy
 
 - [x] `npm run build` passa sem erros
 - [x] `npm run lint` passa sem warnings críticos
 - [x] Deploy na Vercel bem-sucedido (status: Ready)
-- [x] URL de produção acessível (`https://clinipharma-5x0yoajyw-cabralandre-3009s-projects.vercel.app`)
+- [x] URL de produção acessível (`https://clinipharma.com.br`)
+- [x] Redeploy executado após adição do `CRON_SECRET` (deployment `dpl_AYcAU4wEwg775ZNArNUrvwkWsYZb`, status: READY)
 - [x] Repositório GitHub conectado (auto-deploy no push para `main`)
 - [x] Repositório GitHub renomeado para `clinipharma`
 - [x] Git remote local atualizado para `cabralandre82/clinipharma`
