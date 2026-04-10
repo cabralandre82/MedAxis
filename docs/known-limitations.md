@@ -40,19 +40,29 @@
 ## Produtos
 
 - **Farmácia não altera produtos**: toda atualização de catálogo passa pelo SUPER_ADMIN.
-- **Sem variações de produto**: cada SKU é um produto separado.
+- ~~Sem variações de produto~~ ✅ **v1.4.0**: `product_variants` com atributos livres, preço e custo por variante.
 - **Estoque manual**: status `unavailable` gerenciado manualmente, sem integração com estoque real.
 
 ## Pedidos
 
 - **Produtos do mesmo fornecedor**: carrinho bloqueia mistura de farmácias (um repasse por pedido).
 - **Sem frete**: prazo é o estimado pela farmácia no cadastro do produto.
+- ~~Sem reorder/templates~~ ✅ **v1.4.0**: templates por clínica + botão "Repetir pedido".
+- ~~Sem rastreamento público~~ ✅ **v1.4.0**: `/track/[token]` sem login, timeline visual.
 
 ## Relatórios
 
-- ~~Sem BI avançado~~ ✅ **v1.2.0**: Recharts com 5 tipos de gráfico
+- ~~Sem BI avançado~~ ✅ **v1.4.0**: comparação de períodos, ranking clínicas, funil, margem por produto (além dos gráficos v1.2.0)
 - ~~Sem filtro de período~~ ✅ **v1.2.0**: DateRangePicker com 8 presets
 - ~~Exportação sem filtro~~ ✅ **v1.2.0**: CSV/Excel respeita período ativo
+
+## SLA e Alertas
+
+- ~~Thresholds hardcoded~~ ✅ **v1.4.0**: SLA configurável por farmácia com 3 níveis (aviso/alerta/crítico); UI em Configurações.
+
+## Segurança
+
+- ~~Sem histórico de acesso~~ ✅ **v1.4.0**: `access_logs` com detecção de novo dispositivo, alerta in-app, visualização no perfil.
 
 ## Mobile
 

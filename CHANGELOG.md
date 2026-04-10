@@ -2,6 +2,63 @@
 
 ---
 
+## [1.4.0] — 2026-04-08
+
+### Added
+
+- **Variações de produto:**
+  - Tabela `product_variants` com atributos livres (concentração, apresentação, quantidade), preço, custo farmácia e comissão independentes por variante
+  - `components/products/product-variants-manager.tsx` — gerenciador inline no formulário de produto; adicionar, editar, marcar padrão, desativar variantes
+  - `app/api/products/variants/route.ts` — CRUD completo de variantes (GET, POST, PATCH, DELETE)
+  - Migração automática: todos os produtos existentes receberam uma variante "Padrão"
+  - `variant_id` adicionado a `order_items` para rastreamento futuro
+
+- **Templates de pedido e Reorder:**
+  - Tabela `order_templates` por clínica (todos os membros da clínica enxergam)
+  - `components/orders/templates/save-template-modal.tsx` — salva produtos de um pedido como template nomeado
+  - `components/orders/templates/templates-list.tsx` — lista de templates na página de pedidos, com botão "Usar"
+  - `components/orders/reorder-button.tsx` — botão "Repetir pedido" na tela de detalhe (pedidos concluídos)
+  - `app/api/orders/templates/route.ts` — GET/POST/DELETE de templates
+  - `app/api/orders/reorder/route.ts` — cria novo pedido a partir de pedido anterior ou template
+
+- **Portal de rastreamento público:**
+  - Tabela `order_tracking_tokens` com token único por pedido (gerado automaticamente)
+  - `app/track/[token]/page.tsx` — página pública sem autenticação com timeline visual, status atual e ETA estimada; dados financeiros omitidos
+  - `app/api/tracking/route.ts` — valida token e retorna dados públicos do pedido
+  - Link gerado automaticamente na tela de detalhe do pedido
+  - Link expira 30 dias após entrega (configurável via `expires_at`)
+
+- **SLA configurável por farmácia:**
+  - Tabela `sla_configs` com thresholds globais (null = padrão) e por farmácia (overrides)
+  - 3 níveis de alerta: aviso (warning), alerta (alert), crítico (critical)
+  - Seed automático de defaults globais equivalentes aos antigos thresholds hardcoded
+  - `components/settings/sla-config.tsx` — UI em Configurações para editar SLA global e por farmácia
+  - `app/api/settings/sla/route.ts` — GET/PATCH para leitura e atualização
+  - `lib/stale-orders.ts` refatorado para usar DB com fallback
+
+- **BI Avançado (4 novos gráficos em Relatórios):**
+  - **Comparação de períodos** — métricas do período atual vs. anterior com delta %
+  - **Ranking de clínicas** — top 10 por receita com barras proporcionais
+  - **Funil de conversão** — pedidos por etapa (criados → pagos → execução → entregues)
+  - **Margem real por produto** — empilhado: custo farmácia + comissão consultor + margem plataforma
+  - `components/reports/advanced-bi.tsx` — 4 componentes Recharts independentes
+
+- **Histórico de sessões:**
+  - Tabela `access_logs` com IP, user-agent, detecção de novo dispositivo, retenção 90 dias
+  - `lib/session-logger.ts` — registra acesso; envia alerta in-app em novo dispositivo
+  - `app/api/sessions/route.ts` — GET (usuário vê próprios logs, admin vê todos) + POST (registra sessão)
+  - `components/profile/session-history.tsx` — UI no perfil com browser, OS, IP, badge "Novo dispositivo"
+
+### Database
+
+- `supabase/migrations/014_templates_sla_variants_tracking_sessions.sql`:
+  - Tabelas: `order_templates`, `sla_configs`, `order_tracking_tokens`, `product_variants`, `access_logs`
+  - RLS em todas as novas tabelas
+  - Triggers `updated_at` nas tabelas relevantes
+  - Seed de 11 configs SLA globais padrão
+
+---
+
 ## [1.3.0] — 2026-04-10
 
 ### Added
