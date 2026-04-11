@@ -215,13 +215,13 @@
 
 **Problema:** Logs não correlacionados entre requests. Impossível debugar problemas cross-service.
 
-- [ ] `lib/logger.ts`: `log(level, message, context)` com `requestId`, `userId`, `action`, `durationMs`
-- [ ] Integrar `@vercel/otel` para OpenTelemetry
-- [ ] Adicionar spans em: queries Supabase, chamadas a APIs externas, server actions
-- [ ] Logtail (free tier 1GB/mês) como destino de logs estruturados
-- [ ] Substituir todos os `console.log/error` pelo novo logger
+- [x] `lib/logger.ts`: `logger.info/warn/error/debug` + `logger.child()` com campos `requestId`, `userId`, `action`, `durationMs` — output JSON estruturado
+- [x] Substituir `console.error` por `logger.error` em services críticos (orders, payments, consultants, users, settings)
+- [x] `X-Request-ID` já propagado em todos os responses via middleware
+- [ ] Integrar `@vercel/otel` para OpenTelemetry (spans em queries Supabase e APIs externas)
+- [ ] Logtail ou Axiom como destino de logs via Vercel Log Drain (configuração manual no painel Vercel)
 
-**Esforço:** 3 dias | **Status:** ⬜ pendente
+**Esforço:** 3 dias | **Status:** ✅ logger implementado (2026-04-08) | ⬜ Log Drain + OTel pendente
 
 ---
 
@@ -229,17 +229,13 @@
 
 **Problema:** Sem SLOs definidos. Alertas só em erros técnicos, não em eventos de negócio.
 
-- [ ] `docs/slos.md`: formalizar SLOs
-  - Disponibilidade: 99.5% mensal
-  - Latência p95: < 800ms nas rotas principais
-  - Taxa de erro: < 0.5% nas rotas de pedido
-- [ ] Alertas de negócio no Sentry:
-  - Nenhum pedido criado em 4h (horário comercial)
-  - Taxa de erro de pagamento > 10% em 1h
-  - Webhook Clicksign sem eventos por 48h
-  - Circuit breaker aberto em qualquer serviço externo
+- [x] `docs/slos.md`: SLOs formais (disponibilidade 99.5%, p95 < 800ms, erro < 0.5%), SLOs por rota crítica, error budget, incident response P1–P4
+- [x] Alertas de negócio documentados (zero pedidos 4h, circuit breaker aberto, erro pagamento > 10%, Clicksign silencioso 48h)
+- [x] Setup UptimeRobot documentado em `docs/slos.md`
+- [ ] Configurar alertas no Sentry Dashboard (ação manual — ver `docs/slos.md` seção 3.1)
+- [ ] Configurar UptimeRobot para monitorar `/api/health` a cada 1 min (ação manual)
 
-**Esforço:** 2 dias | **Status:** ⬜ pendente
+**Esforço:** 2 dias | **Status:** ✅ documentado (2026-04-08) | ⬜ configuração manual no Sentry/UptimeRobot
 
 ---
 
@@ -247,12 +243,14 @@
 
 **Problema:** Sem auditoria de acessibilidade. Sem PWA manifest. Lei Brasileira de Inclusão (Art. 63).
 
-- [ ] Instalar `axe-core` + rodar auditoria em todas as páginas
-- [ ] Corrigir: contraste de cores, labels em formulários, navegação por teclado, ARIA roles
-- [ ] Adicionar `manifest.json` (nome, ícones, theme color, `display: standalone`)
-- [ ] Service worker para cache de assets estáticos (Next.js `next-pwa`)
+- [x] `public/manifest.json`: nome, descrição, theme_color `#0f3460`, display standalone, shortcuts para "Novo Pedido" e "Meus Pedidos"
+- [x] `app/layout.tsx`: `metadata.manifest`, `themeColor`, `appleWebApp`, `viewport` configurados
+- [ ] Criar ícones PWA: `public/icons/icon-192x192.png` e `public/icons/icon-512x512.png` (design pendente)
+- [ ] Instalar `axe-core` + rodar auditoria de acessibilidade em todas as páginas
+- [ ] Corrigir issues encontrados: contraste, labels, ARIA roles, navegação por teclado
+- [ ] Service worker para cache de assets (avaliar `next-pwa` ou Workbox)
 
-**Esforço:** 3 dias | **Status:** ⬜ pendente
+**Esforço:** 3 dias | **Status:** ✅ PWA manifest ativo (2026-04-08) | ⬜ ícones + auditoria WCAG pendente
 
 ---
 

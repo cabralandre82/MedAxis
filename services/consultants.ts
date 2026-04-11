@@ -1,4 +1,5 @@
 'use server'
+import { logger } from '@/lib/logger'
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/db/admin'
@@ -47,7 +48,7 @@ export async function createConsultant(
     return { id: consultant.id }
   } catch (err) {
     if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
-    console.error('createConsultant error:', err)
+    logger.error('createConsultant error:', { error: err })
     return { error: 'Erro interno' }
   }
 }
@@ -289,7 +290,7 @@ export async function registerConsultantTransfer(
     return { id: transfer.id }
   } catch (err) {
     if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
-    console.error('registerConsultantTransfer error:', err)
+    logger.error('registerConsultantTransfer error:', { error: err })
     return { error: 'Erro interno' }
   }
 }

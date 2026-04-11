@@ -1,4 +1,5 @@
 'use server'
+import { logger } from '@/lib/logger'
 
 import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
@@ -45,7 +46,7 @@ export async function updateSetting(
 
     return {}
   } catch (err) {
-    console.error('updateSetting error:', err)
+    logger.error('updateSetting error:', { error: err })
     return { error: 'Erro ao atualizar configuração' }
   }
 }

@@ -1,4 +1,5 @@
 'use server'
+import { logger } from '@/lib/logger'
 
 import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
@@ -221,7 +222,7 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
     revalidateTag('dashboard')
     return {}
   } catch (err) {
-    console.error('confirmPayment error:', err)
+    logger.error('confirmPayment error:', { error: err })
     if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
     return { error: 'Erro interno' }
   }
@@ -325,7 +326,7 @@ export async function completeTransfer(
     revalidateTag('dashboard')
     return {}
   } catch (err) {
-    console.error('completeTransfer error:', err)
+    logger.error('completeTransfer error:', { error: err })
     return { error: 'Erro interno' }
   }
 }

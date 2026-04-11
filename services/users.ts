@@ -1,4 +1,5 @@
 'use server'
+import { logger } from '@/lib/logger'
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/db/admin'
@@ -188,7 +189,7 @@ export async function createUser(
     return { id: userId }
   } catch (err) {
     if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
-    console.error('createUser error:', err)
+    logger.error('createUser error:', { error: err })
     return { error: 'Erro interno ao criar usuário' }
   }
 }

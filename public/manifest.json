@@ -1,0 +1,42 @@
+{
+  "name": "Clinipharma",
+  "short_name": "Clinipharma",
+  "description": "Plataforma B2B de gestão de pedidos farmacêuticos especializados",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f3460",
+  "orientation": "portrait-primary",
+  "categories": ["business", "health"],
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Novo Pedido",
+      "short_name": "Pedido",
+      "description": "Criar um novo pedido",
+      "url": "/orders/new",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Meus Pedidos",
+      "short_name": "Pedidos",
+      "description": "Ver todos os pedidos",
+      "url": "/orders",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 'use server'
+import { logger } from '@/lib/logger'
 
 import { createClient } from '@/lib/db/server'
 import { createAdminClient } from '@/lib/db/admin'
@@ -93,7 +94,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       .single()
 
     if (orderError || !order) {
-      console.error('Order creation error:', orderError)
+      logger.error('Order creation error:', { error: orderError })
       return { error: 'Erro ao criar pedido. Tente novamente.' }
     }
 
@@ -109,7 +110,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     )
 
     if (itemsError) {
-      console.error('Order items error:', itemsError)
+      logger.error('Order items error:', { error: itemsError })
       await adminClient.from('orders').delete().eq('id', order.id)
       return { error: 'Erro ao registrar itens do pedido.' }
     }
@@ -171,7 +172,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
             })
           }
         } catch (uploadErr) {
-          console.error('Document upload error:', uploadErr)
+          logger.error('Document upload error:', { error: uploadErr })
         }
       }
     }
@@ -254,7 +255,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     revalidateTag('dashboard')
     return { orderId: order.id }
   } catch (err) {
-    console.error('createOrder error:', err)
+    logger.error('createOrder error:', { error: err })
     if (err instanceof Error && err.message === 'UNAUTHORIZED')
       return { error: 'Sessão expirada. Faça login novamente.' }
     return { error: 'Erro interno. Tente novamente.' }
@@ -386,7 +387,7 @@ export async function updateOrderStatus(
     revalidateTag('dashboard')
     return {}
   } catch (err) {
-    console.error('updateOrderStatus error:', err)
+    logger.error('updateOrderStatus error:', { error: err })
     return { error: 'Erro interno' }
   }
 }
