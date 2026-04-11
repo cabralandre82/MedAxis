@@ -106,11 +106,13 @@ export async function createUser(
     const userId = authUser.user.id
 
     // Upsert profile (trigger may have created it already)
-    await adminClient.from('profiles').upsert({
+    const { error: profileUpsertErr } = await adminClient.from('profiles').upsert({
       id: userId,
       full_name: parsed.data.full_name,
       email: parsed.data.email,
     })
+    if (profileUpsertErr)
+      logger.error('[createUser] profiles.upsert failed', { userId, error: profileUpsertErr })
 
     // Assign role
     const { error: roleError } = await adminClient
@@ -124,11 +126,13 @@ export async function createUser(
 
     // Link to organization
     if (parsed.data.role === 'CLINIC_ADMIN' && parsed.data.clinic_id) {
-      await adminClient.from('clinic_members').insert({
+      const { error: memberErr } = await adminClient.from('clinic_members').insert({
         user_id: userId,
         clinic_id: parsed.data.clinic_id,
         membership_role: parsed.data.membership_role ?? 'ADMIN',
       })
+      if (memberErr)
+        logger.error('[createUser] clinic_members.insert failed', { userId, error: memberErr })
     }
 
     if (parsed.data.role === 'DOCTOR' && parsed.data.clinic_id) {
@@ -140,20 +144,27 @@ export async function createUser(
         .maybeSingle()
 
       if (existingDoctor) {
-        await adminClient.from('doctor_clinic_links').upsert({
+        const { error: linkErr } = await adminClient.from('doctor_clinic_links').upsert({
           doctor_id: existingDoctor.id,
           clinic_id: parsed.data.clinic_id,
           is_primary: true,
         })
+        if (linkErr)
+          logger.error('[createUser] doctor_clinic_links.upsert failed', { userId, error: linkErr })
       }
     }
 
     if (parsed.data.role === 'PHARMACY_ADMIN' && parsed.data.pharmacy_id) {
       // Insert into pharmacy_members so RLS policies and auth checks work correctly
-      await adminClient.from('pharmacy_members').insert({
+      const { error: pharmMemberErr } = await adminClient.from('pharmacy_members').insert({
         user_id: userId,
         pharmacy_id: parsed.data.pharmacy_id,
       })
+      if (pharmMemberErr)
+        logger.error('[createUser] pharmacy_members.insert failed', {
+          userId,
+          error: pharmMemberErr,
+        })
       await adminClient.auth.admin.updateUserById(userId, {
         user_metadata: {
           full_name: parsed.data.full_name,
@@ -163,10 +174,15 @@ export async function createUser(
     }
 
     if (parsed.data.role === 'SALES_CONSULTANT' && parsed.data.consultant_id) {
-      await adminClient
+      const { error: consultantErr } = await adminClient
         .from('sales_consultants')
         .update({ user_id: userId, updated_at: new Date().toISOString() })
         .eq('id', parsed.data.consultant_id)
+      if (consultantErr)
+        logger.error('[createUser] sales_consultants.update failed', {
+          userId,
+          error: consultantErr,
+        })
     }
 
     await createAuditLog({

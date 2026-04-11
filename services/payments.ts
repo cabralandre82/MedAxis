@@ -75,7 +75,7 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
       ) / 100
 
     // Confirm payment
-    await adminClient
+    const { error: confirmErr } = await adminClient
       .from('payments')
       .update({
         status: 'CONFIRMED',
@@ -87,18 +87,24 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
         updated_at: new Date().toISOString(),
       })
       .eq('id', input.paymentId)
+    if (confirmErr) return { error: 'Erro ao confirmar pagamento' }
 
     // Platform commission record
-    await adminClient.from('commissions').insert({
+    const { error: commissionErr } = await adminClient.from('commissions').insert({
       order_id: payment.order_id,
       commission_type: 'FIXED',
       commission_fixed_amount: platformCommission,
       commission_total_amount: platformCommission,
       calculated_by_user_id: user.id,
     })
+    if (commissionErr)
+      logger.error('[confirmPayment] commissions.insert failed', {
+        error: commissionErr,
+        orderId: payment.order_id,
+      })
 
     // Pharmacy transfer record (net_amount = what pharmacy receives)
-    await adminClient.from('transfers').insert({
+    const { error: transferErr } = await adminClient.from('transfers').insert({
       order_id: payment.order_id,
       pharmacy_id: orderData.pharmacy_id,
       gross_amount: Number(orderData.total_price),
@@ -106,6 +112,11 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
       net_amount: pharmacyTransfer,
       status: 'PENDING',
     })
+    if (transferErr)
+      logger.error('[confirmPayment] transfers.insert failed', {
+        error: transferErr,
+        orderId: payment.order_id,
+      })
 
     // Consultant commission (global rate from app_settings)
     const clinic = orderData.clinics as { consultant_id?: string | null } | null
@@ -120,7 +131,7 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
       const consultantCommission =
         Math.round(Number(orderData.total_price) * consultantRate * 100) / 10000
 
-      await adminClient.from('consultant_commissions').insert({
+      const { error: consultantCommErr } = await adminClient.from('consultant_commissions').insert({
         order_id: payment.order_id,
         consultant_id: clinic.consultant_id,
         order_total: Number(orderData.total_price),
@@ -128,10 +139,15 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
         commission_amount: consultantCommission,
         status: 'PENDING',
       })
+      if (consultantCommErr)
+        logger.error('[confirmPayment] consultant_commissions.insert failed', {
+          error: consultantCommErr,
+          orderId: payment.order_id,
+        })
     }
 
     // Update order status
-    await adminClient
+    const { error: orderUpdateErr } = await adminClient
       .from('orders')
       .update({
         payment_status: 'CONFIRMED',
@@ -140,14 +156,24 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
         updated_at: new Date().toISOString(),
       })
       .eq('id', payment.order_id)
+    if (orderUpdateErr)
+      logger.error('[confirmPayment] orders.update status failed', {
+        error: orderUpdateErr,
+        orderId: payment.order_id,
+      })
 
-    await adminClient.from('order_status_history').insert({
+    const { error: histErr } = await adminClient.from('order_status_history').insert({
       order_id: payment.order_id,
       old_status: orderData.order_status ?? 'AWAITING_PAYMENT',
       new_status: 'COMMISSION_CALCULATED',
       changed_by_user_id: user.id,
       reason: `Pagamento confirmado (${input.paymentMethod}${input.referenceCode ? ' · ref: ' + input.referenceCode : ''})`,
     })
+    if (histErr)
+      logger.error('[confirmPayment] order_status_history.insert failed', {
+        error: histErr,
+        orderId: payment.order_id,
+      })
 
     await createAuditLog({
       actorUserId: user.id,
@@ -246,7 +272,7 @@ export async function completeTransfer(
     if (fetchError || !transfer) return { error: 'Repasse não encontrado' }
     if (transfer.status === 'COMPLETED') return { error: 'Repasse já concluído' }
 
-    await adminClient
+    const { error: transferUpdateErr } = await adminClient
       .from('transfers')
       .update({
         status: 'COMPLETED',
@@ -257,8 +283,9 @@ export async function completeTransfer(
         updated_at: new Date().toISOString(),
       })
       .eq('id', transferId)
+    if (transferUpdateErr) return { error: 'Erro ao atualizar repasse' }
 
-    await adminClient
+    const { error: orderTransferErr } = await adminClient
       .from('orders')
       .update({
         transfer_status: 'COMPLETED',
@@ -266,14 +293,24 @@ export async function completeTransfer(
         updated_at: new Date().toISOString(),
       })
       .eq('id', transfer.order_id)
+    if (orderTransferErr)
+      logger.error('[completeTransfer] orders.update failed', {
+        error: orderTransferErr,
+        orderId: transfer.order_id,
+      })
 
-    await adminClient.from('order_status_history').insert({
+    const { error: transferHistErr } = await adminClient.from('order_status_history').insert({
       order_id: transfer.order_id,
       old_status: 'TRANSFER_PENDING',
       new_status: 'RELEASED_FOR_EXECUTION',
       changed_by_user_id: user.id,
       reason: `Repasse à farmácia registrado · ref: ${reference}`,
     })
+    if (transferHistErr)
+      logger.error('[completeTransfer] order_status_history.insert failed', {
+        error: transferHistErr,
+        orderId: transfer.order_id,
+      })
 
     await createAuditLog({
       actorUserId: user.id,

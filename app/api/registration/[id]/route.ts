@@ -87,7 +87,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       // Create clinic or doctor entity
       if (request.type === 'CLINIC') {
-        const { data: clinic } = await admin
+        const { data: clinic, error: clinicErr } = await admin
           .from('clinics')
           .insert({
             trade_name: formData.trade_name,
@@ -102,17 +102,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           })
           .select('id')
           .single()
+        if (clinicErr) return NextResponse.json({ error: 'Erro ao criar clínica' }, { status: 500 })
 
         if (clinic && request.user_id) {
           entityId = clinic.id
-          await admin.from('clinic_members').insert({
+          const { error: memberErr } = await admin.from('clinic_members').insert({
             user_id: request.user_id,
             clinic_id: clinic.id,
             membership_role: 'ADMIN',
           })
+          if (memberErr)
+            logger.error('[registration/approve] clinic_members.insert failed', {
+              error: memberErr,
+            })
         }
       } else {
-        const { data: doctor } = await admin
+        const { data: doctor, error: doctorErr } = await admin
           .from('doctors')
           .insert({
             full_name: fullName,
@@ -124,10 +129,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           })
           .select('id')
           .single()
+        if (doctorErr) return NextResponse.json({ error: 'Erro ao criar médico' }, { status: 500 })
 
         if (doctor) {
           entityId = doctor.id
-          // Link to clinic if CNPJ provided and clinic exists
           if (formData.clinic_cnpj) {
             const { data: clinic } = await admin
               .from('clinics')
@@ -135,18 +140,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               .eq('cnpj', formData.clinic_cnpj)
               .maybeSingle()
             if (clinic && request.user_id) {
-              await admin.from('doctor_clinic_links').upsert({
+              const { error: linkErr } = await admin.from('doctor_clinic_links').upsert({
                 doctor_id: doctor.id,
                 clinic_id: clinic.id,
                 is_primary: true,
               })
+              if (linkErr)
+                logger.error('[registration/approve] doctor_clinic_links.upsert failed', {
+                  error: linkErr,
+                })
             }
           }
         }
       }
 
       // Update request + profile
-      await admin
+      const { error: approveErr } = await admin
         .from('registration_requests')
         .update({
           status: 'APPROVED',
@@ -155,12 +164,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           reviewed_at: new Date().toISOString(),
         })
         .eq('id', id)
+      if (approveErr)
+        logger.error('[registration/approve] registration_requests.update failed', {
+          error: approveErr,
+        })
 
       if (request.user_id) {
-        await admin
+        const { error: profileErr } = await admin
           .from('profiles')
           .update({ registration_status: 'APPROVED' })
           .eq('id', request.user_id)
+        if (profileErr)
+          logger.error('[registration/approve] profiles.update failed', { error: profileErr })
       }
 
       // Send welcome email with password link
@@ -170,7 +185,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (action === 'reject') {
-      await admin
+      const { error: rejectErr } = await admin
         .from('registration_requests')
         .update({
           status: 'REJECTED',
@@ -179,12 +194,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           reviewed_at: new Date().toISOString(),
         })
         .eq('id', id)
+      if (rejectErr)
+        logger.error('[registration/reject] registration_requests.update failed', {
+          error: rejectErr,
+        })
 
       if (request.user_id) {
-        await admin
+        const { error: profileRejectErr } = await admin
           .from('profiles')
           .update({ registration_status: 'REJECTED' })
           .eq('id', request.user_id)
+        if (profileRejectErr)
+          logger.error('[registration/reject] profiles.update failed', { error: profileRejectErr })
       }
 
       await resend.emails.send({
@@ -214,7 +235,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (action === 'request_docs') {
-      await admin
+      const { error: pendingDocsErr } = await admin
         .from('registration_requests')
         .update({
           status: 'PENDING_DOCS',
@@ -223,12 +244,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           reviewed_at: new Date().toISOString(),
         })
         .eq('id', id)
+      if (pendingDocsErr)
+        logger.error('[registration/request_docs] registration_requests.update failed', {
+          error: pendingDocsErr,
+        })
 
       if (request.user_id) {
-        await admin
+        const { error: profilePendingErr } = await admin
           .from('profiles')
           .update({ registration_status: 'PENDING_DOCS' })
           .eq('id', request.user_id)
+        if (profilePendingErr)
+          logger.error('[registration/request_docs] profiles.update failed', {
+            error: profilePendingErr,
+          })
       }
 
       const docList = (requested_docs as Array<{ label: string; custom_text?: string }>)

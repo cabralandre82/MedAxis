@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     }
 
     // 2. Anonymize profile PII
-    await admin
+    const { error: profileAnonErr } = await admin
       .from('profiles')
       .update({
         full_name: `Usuário Anonimizado`,
@@ -53,9 +53,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         updated_at: new Date().toISOString(),
       })
       .eq('id', userId)
+    if (profileAnonErr)
+      return NextResponse.json(
+        { error: 'Erro ao anonimizar perfil' },
+        { status: 500, headers: { 'X-Request-ID': requestId } }
+      )
 
     // 3. Anonymize doctor record if exists
-    await admin
+    const { error: doctorAnonErr } = await admin
       .from('doctors')
       .update({
         full_name: `Médico Anonimizado`,
@@ -65,9 +70,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         updated_at: new Date().toISOString(),
       })
       .eq('user_id', userId)
+    if (doctorAnonErr)
+      logger.error('[lgpd/anonymize] doctors.update failed', {
+        userId,
+        error: doctorAnonErr,
+        requestId,
+      })
 
     // 4. Soft-delete notifications (not financial/audit data)
-    await admin.from('notifications').delete().eq('user_id', userId)
+    const { error: notifDelErr } = await admin.from('notifications').delete().eq('user_id', userId)
+    if (notifDelErr)
+      logger.error('[lgpd/anonymize] notifications.delete failed', {
+        userId,
+        error: notifDelErr,
+        requestId,
+      })
 
     // 5. Revoke all active sessions immediately
     await revokeAllUserTokens(userId)

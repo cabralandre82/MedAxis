@@ -191,6 +191,26 @@ describe('deactivateUser', () => {
     const result = await deactivateUser('user-1')
     expect(result.error).toBe('Erro ao desativar usuário')
   })
+
+  it('logs error when profiles.update fails after auth ban but still succeeds', async () => {
+    const admin = mockSupabaseAdmin()
+    vi.mocked(admin.auth.admin.updateUserById).mockResolvedValue({
+      data: {},
+      error: null,
+    } as ReturnType<typeof admin.auth.admin.updateUserById>)
+    const qb = makeQueryBuilder(null, null)
+    qb.update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: { message: 'db error' }, data: null }),
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue({
+      ...admin,
+      from: vi.fn().mockReturnValue(qb),
+    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+
+    // profiles.update failure is non-fatal — ban is already set in Auth
+    const result = await deactivateUser('user-1')
+    expect(result.error).toBeUndefined()
+  })
 })
 
 describe('deactivateUser — self-deactivation guard', () => {

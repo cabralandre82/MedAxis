@@ -27,12 +27,13 @@ export async function updateSetting(
       // keep as string
     }
 
-    await adminClient.from('app_settings').upsert({
+    const { error: upsertErr } = await adminClient.from('app_settings').upsert({
       key,
       value_json: parsedValue,
       updated_by_user_id: user.id,
       updated_at: new Date().toISOString(),
     })
+    if (upsertErr) return { error: 'Erro ao persistir configuração' }
 
     await createAuditLog({
       actorUserId: user.id,

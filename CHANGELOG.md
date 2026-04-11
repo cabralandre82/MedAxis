@@ -28,6 +28,43 @@
 
 ---
 
+## [4.5.0] — 2026-04-08 — Varredura de silent failures: 50+ writes sem error check corrigidos
+
+### Contexto
+
+Varredura automatizada identificou 61 ocorrências de operações de escrita no Supabase
+(`.update()`, `.insert()`, `.delete()`, `.upsert()`) cujo `{ error }` de retorno não era
+capturado — falhas de DB eram silenciosamente ignoradas. Padrão encontrado a partir do bug
+`is_active` que não era atualizado após `deactivateUser`.
+
+### Arquivos corrigidos
+
+| Arquivo                                          | Risco       | Correção                                                                                                                        |
+| ------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/token-revocation.ts`                        | 🔴 CRITICAL | `revokeToken` e `revokeAllUserTokens`: erro no upsert de blacklist agora logado                                                 |
+| `services/payments.ts`                           | 🔴 HIGH     | `confirmPayment`: retorna erro se `payments.update(CONFIRMED)` falhar; loga falhas em commissions, transfers, order status      |
+| `services/payments.ts`                           | 🔴 HIGH     | `completeTransfer`: retorna erro se `transfers.update` falhar; loga falhas em orders e history                                  |
+| `services/consultants.ts`                        | 🔴 HIGH     | Rollback de comissões e mark-paid agora logam falha explicitamente                                                              |
+| `services/users.ts`                              | 🔴 HIGH     | `createUser`: todos os linking ops (clinic_members, doctor_clinic_links, pharmacy_members, sales_consultants) agora logam falha |
+| `services/settings.ts`                           | 🔴 HIGH     | `updateSetting`: retorna erro se upsert falhar                                                                                  |
+| `lib/retention-policy.ts`                        | 🔴 HIGH     | LGPD: anonimização por perfil agora verifica erro e não incrementa contador se falhar; purge de notifications e audit_logs idem |
+| `app/api/admin/lgpd/anonymize/[userId]/route.ts` | 🔴 HIGH     | Retorna 500 se `profiles.update` falhar; loga falhas em doctors e notifications                                                 |
+| `app/api/registration/[id]/route.ts`             | 🔴 HIGH     | approve: retorna 500 se clinic/doctor insert falhar; loga falhas em memberships, status updates e profiles                      |
+
+### Cobertura de testes
+
+- **Novo teste**: `deactivateUser > logs error when profiles.update fails after auth ban but still succeeds`
+- **Total**: 648 testes passando (era 644)
+- Os outros silent failures são logados (não bloqueantes) — cobertos indiretamente pelos testes existentes dos happy paths
+
+### Pendente (MEDIUM, próximo sprint)
+
+- `services/orders.ts`: order_status_history.insert e tracking_token.upsert (não bloqueantes)
+- `app/api/orders/reorder/route.ts`: order_items.insert e history (não bloqueantes)
+- `app/api/registration/submit/route.ts`: profiles.upsert, user_roles.insert, registration_documents.insert
+
+---
+
 ## [4.4.1] — 2026-04-08 — Coluna Status explícita na lista de usuários
 
 ### Melhoria

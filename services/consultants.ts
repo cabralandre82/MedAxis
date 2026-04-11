@@ -233,15 +233,20 @@ export async function registerConsultantTransfer(
 
     if (transferErr || !transfer) {
       // Rollback: revert commissions back to PENDING so they can be retried
-      await adminClient
+      const { error: rollbackErr } = await adminClient
         .from('consultant_commissions')
         .update({ status: 'PENDING', updated_at: new Date().toISOString() })
         .in('id', commissionIds)
+      if (rollbackErr)
+        logger.error(
+          '[registerConsultantTransfer] rollback failed — commissions may be stuck in PROCESSING',
+          { error: rollbackErr, commissionIds }
+        )
       return { error: 'Erro ao registrar repasse' }
     }
 
     // Mark commissions as PAID and link to transfer
-    await adminClient
+    const { error: markPaidErr } = await adminClient
       .from('consultant_commissions')
       .update({
         status: 'PAID',
@@ -249,6 +254,12 @@ export async function registerConsultantTransfer(
         updated_at: new Date().toISOString(),
       })
       .in('id', commissionIds)
+    if (markPaidErr)
+      logger.error('[registerConsultantTransfer] failed to mark commissions as PAID', {
+        error: markPaidErr,
+        transferId: transfer.id,
+        commissionIds,
+      })
 
     await createAuditLog({
       actorUserId: actor.id,

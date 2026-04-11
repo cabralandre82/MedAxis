@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/db/admin'
+import { logger } from '@/lib/logger'
 
 /**
  * Data Retention Policy — LGPD + Brazilian legal requirements.
@@ -48,7 +49,7 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
       .not('email', 'ilike', '%@deleted.clinipharma.invalid') // skip already anonymized
 
     for (const profile of stale ?? []) {
-      await admin
+      const { error: anonErr } = await admin
         .from('profiles')
         .update({
           full_name: 'Usuário Anonimizado',
@@ -58,7 +59,15 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
           updated_at: now.toISOString(),
         })
         .eq('id', profile.id)
-      profilesAnonymized++
+      if (anonErr) {
+        logger.error('[retentionPolicy] profile anonymization failed', {
+          profileId: profile.id,
+          error: anonErr,
+        })
+        errors.push(`profile ${profile.id}: ${anonErr.message}`)
+      } else {
+        profilesAnonymized++
+      }
     }
   } catch (err) {
     errors.push(`profiles: ${err instanceof Error ? err.message : String(err)}`)
@@ -66,13 +75,14 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
 
   // 2. Purge notifications beyond 5 years
   try {
-    const { data: purged } = await admin
+    const { data: purged, error: notifErr } = await admin
       .from('notifications')
       .delete()
       .lt('created_at', fiveYearsAgo)
       .select('id')
 
-    notificationsPurged = purged?.length ?? 0
+    if (notifErr) errors.push(`notifications: ${notifErr.message}`)
+    else notificationsPurged = purged?.length ?? 0
   } catch (err) {
     errors.push(`notifications: ${err instanceof Error ? err.message : String(err)}`)
   }
@@ -80,14 +90,15 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
   // 3. Purge non-financial audit logs beyond 5 years
   // Financial audit logs (entity_type IN ('PAYMENT','COMMISSION','TRANSFER')) are preserved 10 years
   try {
-    const { data: purged } = await admin
+    const { data: purged, error: auditErr } = await admin
       .from('audit_logs')
       .delete()
       .lt('created_at', fiveYearsAgo)
       .not('entity_type', 'in', '("PAYMENT","COMMISSION","TRANSFER","CONSULTANT_TRANSFER")')
       .select('id')
 
-    auditLogsPurged = purged?.length ?? 0
+    if (auditErr) errors.push(`audit_logs: ${auditErr.message}`)
+    else auditLogsPurged = purged?.length ?? 0
   } catch (err) {
     errors.push(`audit_logs: ${err instanceof Error ? err.message : String(err)}`)
   }

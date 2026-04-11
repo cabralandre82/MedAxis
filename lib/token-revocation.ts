@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/db/admin'
+import { logger } from '@/lib/logger'
 
 /**
  * Token revocation blacklist.
@@ -13,9 +14,10 @@ import { createAdminClient } from '@/lib/db/admin'
 /** Add a single token to the blacklist. */
 export async function revokeToken(jti: string, userId: string, expiresAt: Date): Promise<void> {
   const admin = createAdminClient()
-  await admin
+  const { error } = await admin
     .from('revoked_tokens')
     .upsert({ jti, user_id: userId, expires_at: expiresAt.toISOString() }, { onConflict: 'jti' })
+  if (error) logger.error('[revokeToken] failed to insert blacklist entry', { jti, userId, error })
 }
 
 /**
@@ -38,14 +40,14 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
   // Insert sentinel so middleware rejects any in-flight access tokens
   // Sentinel expires in 2 hours (max Supabase access token TTL)
   const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000)
-  await admin.from('revoked_tokens').upsert(
-    {
-      jti: `user:${userId}:all`,
-      user_id: userId,
-      expires_at: expiresAt.toISOString(),
-    },
-    { onConflict: 'jti' }
-  )
+  const { error: sentinelErr } = await admin
+    .from('revoked_tokens')
+    .upsert(
+      { jti: `user:${userId}:all`, user_id: userId, expires_at: expiresAt.toISOString() },
+      { onConflict: 'jti' }
+    )
+  if (sentinelErr)
+    logger.error('[revokeAllUserTokens] failed to insert sentinel', { userId, error: sentinelErr })
 }
 
 /**
