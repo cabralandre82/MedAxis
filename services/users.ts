@@ -287,14 +287,18 @@ export async function deactivateUser(userId: string): Promise<{ error?: string }
 
     const adminClient = createAdminClient()
 
-    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+    const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
       ban_duration: '876600h',
     })
-    if (error) return { error: 'Erro ao desativar usuário' }
+    if (authError) return { error: 'Erro ao desativar usuário' }
 
-    // Mirror ban status in profiles so the list page can query it without
-    // calling the Auth Admin API for every row.
-    await adminClient.from('profiles').update({ is_active: false }).eq('id', userId)
+    // Mirror in profiles — checked explicitly so failures are not silent
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .update({ is_active: false })
+      .eq('id', userId)
+    if (profileError)
+      logger.error('[deactivateUser] failed to mirror is_active', { userId, error: profileError })
 
     await revokeAllUserTokens(userId)
 
@@ -320,12 +324,17 @@ export async function reactivateUser(userId: string): Promise<{ error?: string }
     const actor = await requireRole(['SUPER_ADMIN'])
     const adminClient = createAdminClient()
 
-    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+    const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
       ban_duration: 'none',
     })
-    if (error) return { error: 'Erro ao reativar usuário' }
+    if (authError) return { error: 'Erro ao reativar usuário' }
 
-    await adminClient.from('profiles').update({ is_active: true }).eq('id', userId)
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .update({ is_active: true })
+      .eq('id', userId)
+    if (profileError)
+      logger.error('[reactivateUser] failed to mirror is_active', { userId, error: profileError })
 
     await createAuditLog({
       actorUserId: actor.id,
