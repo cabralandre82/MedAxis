@@ -26,12 +26,18 @@ export default defineConfig({
         'lib/email/index.ts',
         'lib/email/templates.ts',
         'lib/session-logger.ts',
+        // Inngest jobs require integration testing against Inngest Dev Server
+        'lib/jobs/**',
+        // Inngest client setup — no testable logic
+        'lib/inngest.ts',
+        // Uses Next.js unstable_cache — requires real Next.js runtime
+        'lib/dashboard.ts',
         '**/*.d.ts',
       ],
       thresholds: {
         // Unit-test ceiling: complex service success paths (multi-step DB chains)
-        // require integration tests. 95% total coverage needs integration tests
-        // against a real Supabase test project.
+        // require integration tests against a real Supabase test project.
+        // lib/jobs excluded (Inngest integration tests) — reduces denominator.
         statements: 75,
         branches: 60,
         functions: 80,
