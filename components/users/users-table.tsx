@@ -114,6 +114,7 @@ export function UsersTable({ users }: { users: User[] }) {
             <TableRow className="bg-gray-50">
               <TableHead className="font-semibold">Nome</TableHead>
               <TableHead className="font-semibold">Email</TableHead>
+              <TableHead className="font-semibold">Status</TableHead>
               <TableHead className="font-semibold">Papel</TableHead>
               <TableHead className="font-semibold">Cadastrado em</TableHead>
               <TableHead />
@@ -122,25 +123,22 @@ export function UsersTable({ users }: { users: User[] }) {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-gray-400">
+                <TableCell colSpan={6} className="py-10 text-center text-gray-400">
                   Nenhum usuário encontrado
                 </TableCell>
               </TableRow>
             ) : (
               filtered.map((user) => (
-                <TableRow
-                  key={user.id}
-                  className={`hover:bg-gray-50 ${!user.is_active ? 'opacity-60' : ''}`}
-                >
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      {user.full_name}
-                      {!user.is_active && (
-                        <Badge className="bg-red-100 text-xs text-red-700">Desativado</Badge>
-                      )}
-                    </div>
-                  </TableCell>
+                <TableRow key={user.id} className="hover:bg-gray-50">
+                  <TableCell className="font-medium">{user.full_name}</TableCell>
                   <TableCell className="text-gray-600">{user.email}</TableCell>
+                  <TableCell>
+                    {user.is_active ? (
+                      <Badge className="bg-green-100 text-green-700">Ativo</Badge>
+                    ) : (
+                      <Badge className="bg-red-100 text-red-700">Desativado</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {user.user_roles.length > 0 ? (
