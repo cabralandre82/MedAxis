@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/db/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { createNotification } from '@/lib/notifications'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const reorderSchema = z
@@ -173,7 +174,7 @@ export async function POST(req: NextRequest) {
   const code = (newOrder as any).code
 
   // Create order items (trigger will freeze prices from current product data)
-  await admin.from('order_items').insert(
+  const { error: itemsErr } = await admin.from('order_items').insert(
     items.map((i) => ({
       order_id: orderId_new,
       product_id: i.product_id,
@@ -184,23 +185,41 @@ export async function POST(req: NextRequest) {
       pharmacy_cost_per_unit: i.pharmacy_cost_per_unit,
     }))
   )
+  if (itemsErr) {
+    logger.error('[reorder] failed to insert order_items', {
+      orderId: orderId_new,
+      error: itemsErr,
+    })
+    await admin.from('orders').delete().eq('id', orderId_new)
+    return NextResponse.json({ error: 'Erro ao copiar itens do pedido' }, { status: 500 })
+  }
 
-  // Initial status history
-  await admin.from('order_status_history').insert({
+  // Initial status history (non-blocking)
+  const { error: histErr } = await admin.from('order_status_history').insert({
     order_id: orderId_new,
     old_status: null,
     new_status: 'DRAFT',
     changed_by_user_id: user.id,
     reason: `Repetição de ${orderId ? `pedido ${orderId.slice(0, 8)}` : 'template'}`,
   })
+  if (histErr)
+    logger.error('[reorder] failed to insert status history', {
+      orderId: orderId_new,
+      error: histErr,
+    })
 
-  // Create tracking token
-  await admin
+  // Create tracking token (non-blocking)
+  const { error: tokenErr } = await admin
     .from('order_tracking_tokens')
     .upsert(
       { order_id: orderId_new, expires_at: null },
       { onConflict: 'order_id', ignoreDuplicates: true }
     )
+  if (tokenErr)
+    logger.error('[reorder] failed to upsert tracking token', {
+      orderId: orderId_new,
+      error: tokenErr,
+    })
 
   // Notify
   await createNotification({

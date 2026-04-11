@@ -503,3 +503,36 @@ describe('createOrder — insertion errors', () => {
     expect(result.error).toBe('Erro ao registrar itens do pedido.')
   })
 })
+
+describe('updateOrderStatus — history insert failure is non-blocking', () => {
+  it('succeeds even when status history insert fails', async () => {
+    vi.mocked(sessionModule.requireAuth).mockResolvedValue(adminMock)
+    vi.mocked(auditModule.createAuditLog).mockResolvedValue(undefined)
+
+    const admin = mockSupabaseAdmin()
+    const orderQb = makeQueryBuilder(
+      { id: OID, order_status: 'DRAFT', pharmacy_id: 'ph-1', created_by_user_id: 'user-x' },
+      null
+    )
+    const updateQb = makeQueryBuilder(null, null)
+    // history insert returns error — should be logged, not propagated
+    const histFailQb = makeQueryBuilder(null, { message: 'history insert failed' })
+    const notifyQb = makeQueryBuilder(null, null)
+
+    let callCount = 0
+    admin.from = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return orderQb
+      if (callCount === 2) return updateQb
+      if (callCount === 3) return histFailQb
+      return notifyQb
+    })
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await updateOrderStatus(OID, 'AWAITING_PAYMENT', 'note')
+    expect(result.error).toBeUndefined()
+  })
+})

@@ -7,6 +7,11 @@ import { createPharmacy, updatePharmacy, updatePharmacyStatus } from '@/services
 
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/rbac', () => ({ requireRole: vi.fn() }))
+vi.mock('@/lib/compliance', () => ({
+  validateCNPJ: vi.fn().mockResolvedValue({ valid: true, situation: 'ATIVA' }),
+  canPlaceOrder: vi.fn(),
+  canAcceptOrder: vi.fn(),
+}))
 vi.mock('@/lib/audit', () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
   AuditAction: { CREATE: 'CREATE', UPDATE: 'UPDATE', STATUS_CHANGE: 'STATUS_CHANGE' },

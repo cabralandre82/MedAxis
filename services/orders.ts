@@ -115,14 +115,19 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       return { error: 'Erro ao registrar itens do pedido.' }
     }
 
-    // Record initial status history
-    await adminClient.from('order_status_history').insert({
+    // Record initial status history (non-blocking — log on failure)
+    const { error: historyError } = await adminClient.from('order_status_history').insert({
       order_id: order.id,
       old_status: null,
       new_status: 'AWAITING_DOCUMENTS',
       changed_by_user_id: user.id,
       reason: 'Pedido criado',
     })
+    if (historyError)
+      logger.error('[createOrder] failed to insert status history', {
+        orderId: order.id,
+        error: historyError,
+      })
 
     // Fetch updated total (after trigger recalc)
     const { data: updatedOrder } = await adminClient
@@ -142,13 +147,18 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       payment_method: 'MANUAL',
     })
 
-    // Create public tracking token for this order
-    await adminClient
+    // Create public tracking token for this order (non-blocking)
+    const { error: tokenError } = await adminClient
       .from('order_tracking_tokens')
       .upsert(
         { order_id: order.id, expires_at: null },
         { onConflict: 'order_id', ignoreDuplicates: true }
       )
+    if (tokenError)
+      logger.error('[createOrder] failed to upsert tracking token', {
+        orderId: order.id,
+        error: tokenError,
+      })
 
     // Upload documents if any
     if (input.documents && input.documents.length > 0) {
@@ -311,13 +321,18 @@ export async function updateOrderStatus(
 
     if (updateError) return { error: 'Erro ao atualizar status' }
 
-    await adminClient.from('order_status_history').insert({
+    const { error: histUpdateError } = await adminClient.from('order_status_history').insert({
       order_id: orderId,
       old_status: order.order_status,
       new_status: newStatus,
       changed_by_user_id: user.id,
       reason: reason ?? null,
     })
+    if (histUpdateError)
+      logger.error('[updateOrderStatus] failed to insert status history', {
+        orderId,
+        error: histUpdateError,
+      })
 
     await createAuditLog({
       actorUserId: user.id,

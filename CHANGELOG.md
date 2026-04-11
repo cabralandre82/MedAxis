@@ -2,6 +2,44 @@
 
 ---
 
+## [4.6.0] — 2026-04-08 — Correção dos silent failures MEDIUM + cobertura de testes
+
+### Contexto
+
+Completada a correção dos itens MEDIUM identificados na varredura de silent failures de `v4.5.0`.
+Corrigido também timeout de teste em `pharmacies.test.ts` (mock de `validateCNPJ` ausente).
+
+### Arquivos corrigidos
+
+| Arquivo                                  | Risco     | Correção                                                                                                                                      |
+| ---------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/orders.ts`                     | 🟡 MEDIUM | `createOrder`: `order_status_history.insert` e `order_tracking_tokens.upsert` agora capturam e logam erros (não bloqueantes)                  |
+| `services/orders.ts`                     | 🟡 MEDIUM | `updateOrderStatus`: `order_status_history.insert` agora captura e loga erro (não bloqueante)                                                 |
+| `app/api/orders/reorder/route.ts`        | 🟡 MEDIUM | `order_items.insert`: agora retorna 500 e faz rollback do pedido se falhar; `order_status_history` e `tracking_token` logam erros (não bloq.) |
+| `app/api/registration/submit/route.ts`   | 🟡 MEDIUM | `profiles.upsert` e `user_roles.insert`: agora retornam 500 e fazem rollback do auth user se falharem; `registration_documents.insert` loga   |
+| `tests/unit/services/pharmacies.test.ts` | fix       | Adicionado mock de `@/lib/compliance` — `validateCNPJ` causava timeout de 5s por chamada HTTP real em ambiente de teste                       |
+
+### Cobertura de testes adicionada
+
+| Teste novo                                                                            | Arquivo                                      | O que valida                                                       |
+| ------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
+| `updateOrderStatus > succeeds even when status history insert fails`                  | `tests/unit/services/orders.test.ts`         | History insert failure é não bloqueante (não propaga erro)         |
+| `POST /api/registration/submit > returns 500 when profile upsert fails`               | `tests/unit/api/registration-submit.test.ts` | `profiles.upsert` falha → 500 + rollback do auth user              |
+| `POST /api/registration/submit > returns 500 when user_roles insert fails`            | `tests/unit/api/registration-submit.test.ts` | `user_roles.insert` falha → 500 + rollback do auth user            |
+| `POST /api/registration/submit > returns 500 when registration_requests insert fails` | `tests/unit/api/registration-submit.test.ts` | `registration_requests.insert` falha → 500 + rollback do auth user |
+| `POST /api/registration/submit > returns 201 on successful registration`              | `tests/unit/api/registration-submit.test.ts` | Happy path completo de registro                                    |
+
+### Total de testes
+
+**654 testes passando** em 46 arquivos (era 648 em 45 arquivos).
+
+### Status da varredura de silent failures
+
+✅ **Todos os itens identificados foram corrigidos** (CRITICAL + HIGH em v4.5.0, MEDIUM em v4.6.0).
+Nenhum item pendente da varredura original.
+
+---
+
 ## [4.4.0] — 2026-04-08 — Lista de usuários: indicar ativos/inativos com filtros
 
 ### Funcionalidade
@@ -57,11 +95,9 @@ capturado — falhas de DB eram silenciosamente ignoradas. Padrão encontrado a 
 - **Total**: 648 testes passando (era 644)
 - Os outros silent failures são logados (não bloqueantes) — cobertos indiretamente pelos testes existentes dos happy paths
 
-### Pendente (MEDIUM, próximo sprint)
+### Items MEDIUM corrigidos em v4.6.0
 
-- `services/orders.ts`: order_status_history.insert e tracking_token.upsert (não bloqueantes)
-- `app/api/orders/reorder/route.ts`: order_items.insert e history (não bloqueantes)
-- `app/api/registration/submit/route.ts`: profiles.upsert, user_roles.insert, registration_documents.insert
+Todos os itens MEDIUM identificados na varredura foram corrigidos — ver `v4.6.0`.
 
 ---
 

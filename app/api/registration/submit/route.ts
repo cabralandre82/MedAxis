@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { Resend } from 'resend'
 import { registrationLimiter } from '@/lib/rate-limit'
+import { logger } from '@/lib/logger'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const APP_URL = 'https://clinipharma.com.br'
@@ -60,16 +61,33 @@ export async function POST(req: NextRequest) {
     const userId = authData.user.id
 
     // 2. Create profile with PENDING status
-    await admin.from('profiles').upsert({
+    const { error: profileError } = await admin.from('profiles').upsert({
       id: userId,
       full_name,
       email,
       registration_status: 'PENDING',
     })
+    if (profileError) {
+      logger.error('[registration/submit] failed to upsert profile', {
+        userId,
+        error: profileError,
+      })
+      await admin.auth.admin.deleteUser(userId)
+      return NextResponse.json({ error: 'Erro ao criar perfil' }, { status: 500 })
+    }
 
     // 3. Assign role (restricted until approved)
     const role = type === 'CLINIC' ? 'CLINIC_ADMIN' : 'DOCTOR'
-    await admin.from('user_roles').insert({ user_id: userId, role })
+    const { error: roleError } = await admin.from('user_roles').insert({ user_id: userId, role })
+    if (roleError) {
+      logger.error('[registration/submit] failed to assign role', {
+        userId,
+        role,
+        error: roleError,
+      })
+      await admin.auth.admin.deleteUser(userId)
+      return NextResponse.json({ error: 'Erro ao atribuir papel' }, { status: 500 })
+    }
 
     // 4. Create registration request
     const { data: request, error: reqError } = await admin
@@ -105,7 +123,7 @@ export async function POST(req: NextRequest) {
           .from('registration-documents')
           .getPublicUrl(storagePath)
 
-        await admin.from('registration_documents').insert({
+        const { error: docInsertError } = await admin.from('registration_documents').insert({
           request_id: requestId,
           document_type: docType,
           label,
@@ -113,8 +131,15 @@ export async function POST(req: NextRequest) {
           storage_path: storagePath,
           public_url: urlData?.publicUrl ?? null,
         })
-
-        docTypes.push(label)
+        if (docInsertError) {
+          logger.error('[registration/submit] failed to insert registration_document', {
+            requestId,
+            docType,
+            error: docInsertError,
+          })
+        } else {
+          docTypes.push(label)
+        }
       }
     }
 
