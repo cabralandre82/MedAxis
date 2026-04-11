@@ -78,11 +78,28 @@
 
 - [x] **`docs/staging-environment.md`** — plano completo documentado com branch strategy e política de promoção.
 - [x] **`docs/load-testing.md`** — SLOs definidos + scripts k6 prontos para uso.
-- [ ] Provisionar projeto Supabase `clinipharma-staging` (ação manual — ver `docs/staging-environment.md`)
+- [ ] **🔴 AÇÃO PENDENTE DO PROPRIETÁRIO:** Provisionar projeto Supabase `clinipharma-staging` — ver `docs/staging-environment.md` para passo a passo completo
 - [ ] Criar branch `staging` e configurar deploy automático no Vercel
 - [ ] Executar scripts k6 contra staging (ver `docs/load-testing.md`)
 - [ ] **Cloudflare WAF** — ativar OWASP Core Ruleset + rate limit 100 req/min por IP em `/api/`
 - [ ] **Pentest externo** — contratar antes do go-live comercial (Tempest, Conviso, Kondado)
+
+## LGPD e Privacidade (Semana 7–8)
+
+- [x] **`ENCRYPTION_KEY`** — AES-256-GCM gerada e configurada no Vercel. ✅
+- [x] **Migration 023** — colunas `phone_encrypted`, `crm_encrypted`, `form_data_encrypted` adicionadas.
+- [x] **`lib/crypto.ts`** — encrypt/decrypt com fail-open + isEncrypted + reEncrypt.
+- [x] **Portal LGPD** — `/profile/privacy` com exportação de dados e solicitação de exclusão.
+- [x] **`GET /api/lgpd/export`** — exporta todos os dados do usuário em JSON.
+- [x] **`POST /api/lgpd/deletion-request`** — registra solicitação + notifica SUPER_ADMIN.
+- [x] **`POST /api/admin/lgpd/anonymize/:userId`** — anonimiza PII + revoga sessões + preserva financeiros.
+- [x] **`lib/retention-policy.ts`** — política de retenção técnica (5 anos PII, 10 anos financeiros).
+- [x] **Cron mensal de retenção** — `0 2 1 * *` anonimiza e purga dados vencidos automaticamente.
+- [x] **`docs/lgpd-registro-atividades.md`** — registro formal de atividades (Art. 37) + suboperadores.
+- [x] **`docs/disaster-recovery.md`** — plano DR completo (cenários, procedimentos, checklist pós-restore).
+- [ ] **🔴 AÇÃO PENDENTE:** Migrar `phone`/`crm` existentes de plaintext para `*_encrypted` (script de migração)
+- [ ] **🔴 AÇÃO PENDENTE:** DPA formal com farmácias e clínicas (advogado LGPD — pré go-live comercial)
+- [ ] **🔴 AÇÃO PENDENTE:** Publicar Política de Privacidade em `/privacy` e Termos de Uso em `/terms`
 - [x] `NUVEM_FISCAL_CLIENT_ID` = `PENDING_CNPJ`
 - [x] `NUVEM_FISCAL_CLIENT_SECRET` = `PENDING_CNPJ`
 - [x] `NUVEM_FISCAL_CNPJ` = `PENDING_CNPJ`

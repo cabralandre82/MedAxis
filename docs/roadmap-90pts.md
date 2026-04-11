@@ -156,17 +156,12 @@
 
 **Problema:** DR plan existe na cabeça, não documentado e nunca testado.
 
-- [ ] Criar `docs/disaster-recovery.md`:
-  - Contatos de emergência e escalation
-  - RTO target: < 4h | RPO target: < 1h
-  - Passo a passo para restore de banco Supabase
-  - Passo a passo para redeploy na Vercel
-  - Checklist de validação pós-restore
-- [ ] Executar restore do backup mais recente do Supabase em staging
-- [ ] Medir e documentar RTO e RPO reais
-- [ ] Agendar simulação de DR semestral
+- [x] `docs/disaster-recovery.md`: contatos, cenários (DB, deploy, credenciais), checklist pós-restore, política de simulação semestral
+- [ ] Executar restore do backup mais recente do Supabase em staging (pós-provisionamento do staging)
+- [ ] Medir e documentar RTO e RPO reais na tabela de simulações
+- [ ] Agendar simulação semestral no calendário
 
-**Esforço:** 2 dias | **Status:** ⬜ pendente
+**Esforço:** 2 dias | **Status:** ✅ documentado (2026-04-08) | ⬜ simulação pendente staging
 
 ---
 
@@ -176,14 +171,14 @@
 
 **Problema:** Campos como `phone`, `crm`, e `form_data` armazenados em plaintext.
 
-- [ ] `lib/crypto.ts`: `encrypt(value)`, `decrypt(value)` com AES-256-GCM
-  - Chave via env var `ENCRYPTION_KEY` (256 bits, gerado com `openssl rand -hex 32`)
-- [ ] Campos a encriptar: `profiles.phone`, `doctors.crm`, `registration_requests.form_data` (JSON)
-- [ ] Migration: renomear colunas para `_encrypted`, migrar dados existentes
-- [ ] Atualizar todas as queries que leem/escrevem esses campos
-- [ ] Configurar `ENCRYPTION_KEY` no Vercel (Production + Preview)
+- [x] `lib/crypto.ts`: `encrypt()`, `decrypt()`, `reEncrypt()`, `isEncrypted()` com AES-256-GCM — fail-open em erro de decriptação
+- [x] `ENCRYPTION_KEY` gerada (`a48b6d26...`) e configurada no Vercel (Production + Preview + Development)
+- [x] Migration `023_pii_encryption_columns.sql`: colunas `phone_encrypted`, `crm_encrypted`, `form_data_encrypted` adicionadas
+- [x] `GET /api/lgpd/export`: exporta dados decriptados automaticamente
+- [ ] Migrar dados existentes: script para ler `phone`/`crm` em plaintext → encriptar → salvar em `*_encrypted`
+- [ ] Atualizar services que leem/escrevem `phone` e `crm` para usar `*_encrypted`
 
-**Esforço:** 3 dias | **Status:** ⬜ pendente
+**Esforço:** 3 dias | **Status:** ✅ infra criada (2026-04-08) | ⬜ migração de dados e atualização de services pendente
 
 ---
 
@@ -191,14 +186,14 @@
 
 **Problema:** Usuários não conseguem exportar ou solicitar exclusão de seus dados (Art. 18 LGPD).
 
-- [ ] `GET /api/v1/lgpd/export`: gera JSON com todos os dados do usuário autenticado
-- [ ] `POST /api/v1/lgpd/deletion-request`: cria solicitação, notifica SUPER_ADMIN
-- [ ] `POST /api/admin/lgpd/anonymize/:userId`: anonimiza PII, preserva dados financeiros
-- [ ] Página `/profile/privacy` com botões de exportação e solicitação de exclusão
-- [ ] `docs/lgpd-registro-atividades.md`: registro formal das atividades de tratamento (Art. 37)
-- [ ] Template DPA para contratos com farmácias e clínicas
+- [x] `GET /api/lgpd/export`: exporta JSON com todos os dados do usuário autenticado (nome, pedidos, notificações, audit logs)
+- [x] `POST /api/lgpd/deletion-request`: cria solicitação, registra no audit log, notifica SUPER_ADMIN
+- [x] `POST /api/admin/lgpd/anonymize/:userId`: anonimiza PII, revoga sessões, preserva dados financeiros
+- [x] `/profile/privacy`: portal com botões de exportação e solicitação de exclusão
+- [x] `docs/lgpd-registro-atividades.md`: registro formal de atividades de tratamento (Art. 37) + tabela de retenção + suboperadores
+- [ ] DPA formal com farmácias e clínicas (elaborar com advogado LGPD — pré go-live comercial)
 
-**Esforço:** 4 dias | **Status:** ⬜ pendente
+**Esforço:** 4 dias | **Status:** ✅ concluído (2026-04-08)
 
 ---
 
@@ -206,15 +201,11 @@
 
 **Problema:** Política documentada mas não implementada tecnicamente.
 
-- [ ] `lib/retention-policy.ts`: tabela de retenção por entidade
-  - Dados pessoais: 5 anos após `deleted_at`
-  - Dados financeiros: 10 anos (Código Tributário Nacional, Art. 195)
-  - Logs de auditoria: 5 anos
-  - Documentos de pedido: 5 anos
-- [ ] Cron mensal: identifica registros além do prazo e executa purge/anonimização
-- [ ] Testes para garantir que dados financeiros não sejam deletados prematuramente
+- [x] `lib/retention-policy.ts`: `enforceRetentionPolicy()` + `getRetentionDates()` — PII 5 anos, financeiros 10 anos (CTN Art. 195)
+- [x] Cron mensal `0 2 1 * *` (`/api/cron/enforce-retention`): anonimiza perfis expirados, purga notificações e audit logs não-financeiros
+- [x] Testes em `tests/unit/lib/retention-policy.test.ts` garantindo que dados financeiros não são tocados
 
-**Esforço:** 2 dias | **Status:** ⬜ pendente
+**Esforço:** 2 dias | **Status:** ✅ concluído (2026-04-08)
 
 ---
 
