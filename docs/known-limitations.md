@@ -90,6 +90,10 @@
 - ~~Sem CI/CD~~ ✅ **v4.0.0**: GitHub Actions workflow (`.github/workflows/ci.yml`) — unit + lint + TypeScript + E2E smoke.
 - **Testes Inngest**: jobs excluídos do unit coverage por design (requerem Inngest Dev Server). Testar localmente com `npx inngest-cli@latest dev`.
 
+## Padrões arquiteturais — atenção
+
+- **`unstable_cache` + APIs dinâmicas**: nunca usar `cookies()`, `headers()` ou `createClient()` (que usa cookies) dentro de `unstable_cache`. Essas APIs são de escopo de requisição e não estão disponíveis no contexto de revalidação do cache. Usar sempre `createAdminClient()` para queries cacheadas. _(Corrigido no dashboard em v4.2.0)_
+
 ## Mobile
 
 - **Web apenas**: responsivo mas otimizado para desktop. App mobile não planejado para MVP.

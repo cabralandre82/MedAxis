@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-08 | Versão da plataforma: 4.1.0 | 644 testes | 84.37% cobertura
+> Gerado em: 2026-04-08 | Versão da plataforma: 4.2.0 | 644 testes | 84.37% cobertura
+>
+> **v4.2.0 hotfix:** Dashboard crash corrigido (`lib/dashboard.ts` — coluna `order_code` → `code` + `createClient` → `createAdminClient` dentro de `unstable_cache`).
 
 ---
 

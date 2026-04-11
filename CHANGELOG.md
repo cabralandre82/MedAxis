@@ -2,6 +2,22 @@
 
 ---
 
+## [4.2.0] — 2026-04-08 — Hotfix: Dashboard crash (unstable_cache + coluna inexistente)
+
+### Bugs corrigidos (CRÍTICO)
+
+- **CRÍTICO**: Dashboard retornava "Algo deu errado" (código `@E157`) para todos os usuários.
+  Dois bugs simultâneos em `lib/dashboard.ts`:
+  1. **Coluna inexistente**: query selecionava `order_code` — coluna não existe; correta é `code`. Supabase retornava erro 400.
+  2. **`createClient()` dentro de `unstable_cache`**: `createClient()` usa `cookies()` do Next.js internamente (API de escopo de requisição). O `unstable_cache` executa a função fora do contexto de request após o TTL de 5 minutos, onde `cookies()` não está disponível — causando crash na revalidação do cache.
+     **Correção**: substituído `createClient()` por `createAdminClient()` (service role, sem cookies). Auth continua garantida no `dashboard/page.tsx`.
+
+### Arquivos alterados
+
+- `lib/dashboard.ts`
+
+---
+
 ## [4.1.0] — 2026-04-08 — Audit & QA Round Final (bugs, cobertura, docs)
 
 ### Bugs corrigidos
