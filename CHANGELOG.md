@@ -17,9 +17,26 @@
 
 ### Testes
 
-- `deactivateUser`: descrição do teste atualizada para refletir o espelhamento de `is_active`.
-- `reactivateUser`: idem.
-- 19 testes passando em `users.test.ts`.
+| Camada                                    | Coberta?    | Arquivo                                             |
+| ----------------------------------------- | ----------- | --------------------------------------------------- |
+| `deactivateUser` → `is_active: false`     | ✅ unitário | `users.test.ts`                                     |
+| `reactivateUser` → `is_active: true`      | ✅ unitário | `users.test.ts`                                     |
+| `UsersTable` (coluna Status, filtro tabs) | ➖ E2E      | Componente React client puro, sem lógica de negócio |
+| `users/page.tsx` query `is_active`        | ➖ E2E      | Server Component                                    |
+
+19 testes passando em `users.test.ts`.
+
+---
+
+## [4.4.1] — 2026-04-08 — Coluna Status explícita na lista de usuários
+
+### Melhoria
+
+- **`UsersTable`**: adicionada coluna **Status** com badge `🟢 Ativo` / `🔴 Desativado` em cada linha, tornando o estado de cada usuário visível sem necessidade de entrar no perfil. `colSpan` do empty state corrigido de 5 → 6.
+
+### Cobertura
+
+Mesma análise de `v4.4.0` — lógica de serviço (`is_active`) coberta por testes unitários; componente de UI coberto por E2E.
 
 ---
 
