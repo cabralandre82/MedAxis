@@ -21,6 +21,7 @@ import {
   Handshake,
   Wallet,
   Bell,
+  Tags,
 } from 'lucide-react'
 
 interface NavItem {
@@ -78,6 +79,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/products',
     label: 'Produtos',
     icon: Package,
+    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
+  },
+  {
+    href: '/categories',
+    label: 'Categorias',
+    icon: Tags,
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
   },
   {
