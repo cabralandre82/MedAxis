@@ -13,6 +13,7 @@ import { formatCurrency } from '@/lib/utils'
 import { z } from 'zod'
 import { isValidTransition } from '@/lib/orders/status-machine'
 import { canPlaceOrder } from '@/lib/compliance'
+import { getActiveCouponsForOrder } from '@/services/coupons'
 
 const createOrderSchema = z.object({
   clinic_id: z.string().uuid(),
@@ -75,6 +76,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       return sum + (p?.price_current ?? 0) * item.quantity
     }, 0)
 
+    // Auto-detect active coupons for this clinic — trigger will apply math
+    const couponMap = await getActiveCouponsForOrder(clinic_id, productIds)
+
     // Create order header
     const { data: order, error: orderError } = await adminClient
       .from('orders')
@@ -98,7 +102,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       return { error: 'Erro ao criar pedido. Tente novamente.' }
     }
 
-    // Insert items (trigger freezes prices)
+    // Insert items (trigger freezes prices and applies coupon discount)
     const { error: itemsError } = await adminClient.from('order_items').insert(
       items.map((item) => ({
         order_id: order.id,
@@ -106,6 +110,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         quantity: item.quantity,
         unit_price: productMap[item.product_id]?.price_current ?? 0,
         total_price: (productMap[item.product_id]?.price_current ?? 0) * item.quantity,
+        coupon_id: couponMap[item.product_id] ?? null,
       }))
     )
 

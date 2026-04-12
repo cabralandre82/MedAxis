@@ -16,6 +16,7 @@ export type NotificationType =
   | 'SUPPORT_TICKET'
   | 'SUPPORT_REPLY'
   | 'SUPPORT_RESOLVED'
+  | 'COUPON_ASSIGNED'
   | 'GENERIC'
 
 /** Types the user can silence. Critical types are always delivered. */

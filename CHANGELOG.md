@@ -2,6 +2,64 @@
 
 ---
 
+## [5.3.0] — 2026-04-12 — Cupons de desconto por produto e por clínica
+
+### Problema resolvido
+
+A plataforma não tinha mecanismo para conceder descontos negociados individualmente com cada clínica.
+O desconto precisava ser por produto (não pelo total do pedido), vinculado a uma clínica específica, com o custo absorvido integralmente pela plataforma (margem de comissão), sem impacto sobre o repasse à farmácia.
+
+### Solução implementada — 3 camadas
+
+#### 1. Banco de dados (Migration 027)
+
+- Nova tabela `coupons`: `code` único, `product_id`, `clinic_id`, `discount_type` (`PERCENT`|`FIXED`), `discount_value`, `max_discount_amount` (teto em R$ para % grandes), `valid_from`/`valid_until`, `activated_at` (null = aguardando ativação pela clínica), `active`
+- Índice parcial único `(clinic_id, product_id) WHERE active = true`: impede dois cupons ativos para o mesmo par
+- Três novas colunas em `order_items` (nullable, retrocompatíveis): `coupon_id`, `discount_amount`, `original_total_price`
+- Trigger `freeze_order_item_price` atualizado: se `coupon_id` fornecido, valida cupom (ativo + ativado + válido), calcula `discount_amount` e aplica em `total_price`; `pharmacy_cost_per_unit` intacto (plataforma absorve)
+- RLS: admins gerenciam tudo; membros de clínica leem apenas seus próprios cupons
+
+#### 2. Fluxo de negócio
+
+1. Super admin cria cupom → sistema gera código único (formato `XXXXXX-XXXXXX`)
+2. Clínica recebe notificação in-app com o código
+3. Clínica acessa `/coupons`, digita o código **uma única vez** → `activated_at` é gravado
+4. Em pedidos futuros, `createOrder` detecta automaticamente cupons ativos para cada produto e os aplica sem nenhuma ação do usuário
+5. Super admin pode cancelar o cupom a qualquer momento → pedidos futuros não recebem mais desconto
+
+#### 3. Lógica financeira
+
+- `unit_price` (preço original) permanece registrado em `order_items`
+- `original_total_price = unit_price × quantity` (auditoria)
+- `discount_amount` = desconto total do item (por unidade × quantidade)
+- `total_price = original_total_price - discount_amount` → o que a clínica paga
+- `pharmacy_cost_per_unit` inalterado → farmácia recebe valor integral
+- A comissão líquida da plataforma nesse item = `platform_commission_per_unit × quantity - discount_amount`
+
+### Arquivos criados
+
+- `supabase/migrations/027_coupons.sql`
+- `services/coupons.ts` — CRUD admin, ativação pela clínica, helper `getActiveCouponsForOrder`
+- `app/api/coupons/activate/route.ts`
+- `app/api/coupons/mine/route.ts`
+- `app/api/admin/coupons/route.ts`
+- `app/api/admin/coupons/[id]/route.ts`
+- `app/(private)/coupons/page.tsx` — view diferenciada por role (admin vs clínica)
+- `components/coupons/coupon-activate-form.tsx`
+- `components/coupons/admin-coupon-panel.tsx`
+- `tests/unit/api/coupons.test.ts` — 14 novos casos de teste
+
+### Arquivos alterados
+
+- `services/orders.ts` — `createOrder` chama `getActiveCouponsForOrder` e passa `coupon_id` ao inserir order_items
+- `lib/notification-types.ts` — novo tipo `COUPON_ASSIGNED`
+- `components/layout/sidebar.tsx` — novo item de menu "Cupons" (admin + CLINIC_ADMIN)
+- `app/(private)/orders/[id]/page.tsx` — inclui `coupon_id`, `discount_amount`, `original_total_price` no select
+- `components/orders/order-detail.tsx` — badge verde de desconto por unidade na linha do item
+- `tests/unit/services/orders.test.ts` — mock de `services/coupons` adicionado
+
+---
+
 ## [5.2.1] — 2026-04-12 — Migration aplicada + cobertura de testes + fix suite
 
 ### Migration 026 aplicada

@@ -17,6 +17,9 @@ vi.mock('@/lib/audit', () => ({
 vi.mock('@/lib/orders/status-machine', () => ({
   isValidTransition: vi.fn().mockReturnValue(true),
 }))
+vi.mock('@/services/coupons', () => ({
+  getActiveCouponsForOrder: vi.fn().mockResolvedValue({}),
+}))
 vi.mock('@/lib/compliance', () => ({
   canPlaceOrder: vi.fn().mockResolvedValue({ allowed: true }),
 }))

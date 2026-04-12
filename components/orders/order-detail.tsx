@@ -149,6 +149,9 @@ export function OrderDetail({ order, currentUser }: OrderDetailProps) {
     quantity: number
     unit_price: number
     total_price: number
+    discount_amount?: number
+    original_total_price?: number
+    coupon_id?: string | null
     products: { name: string; concentration: string; presentation: string } | null
   }>
 
@@ -215,6 +218,11 @@ export function OrderDetail({ order, currentUser }: OrderDetailProps) {
                       <td className="py-2.5 text-center text-gray-700">{item.quantity}</td>
                       <td className="py-2.5 text-right text-gray-700">
                         {formatCurrency(Number(item.unit_price))}
+                        {item.coupon_id && Number(item.discount_amount) > 0 && (
+                          <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
+                            -{formatCurrency(Number(item.discount_amount) / item.quantity)}/un
+                          </span>
+                        )}
                       </td>
                       <td className="py-2.5 text-right font-semibold text-gray-900">
                         {formatCurrency(Number(item.total_price))}
