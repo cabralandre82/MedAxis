@@ -10,7 +10,7 @@ import {
   TICKET_STATUS_COLORS,
   TICKET_PRIORITY_LABELS,
   TICKET_PRIORITY_COLORS,
-} from '@/services/support'
+} from '@/lib/support-constants'
 
 export const metadata = { title: 'Ticket | Clinipharma' }
 
