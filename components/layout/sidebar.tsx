@@ -60,6 +60,12 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN', 'DOCTOR', 'PHARMACY_ADMIN'],
   },
   {
+    href: '/coupons',
+    label: 'Cupons',
+    icon: Ticket,
+    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN'],
+  },
+  {
     href: '/clinics',
     label: 'Clínicas',
     icon: Building2,
@@ -130,12 +136,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Interesses',
     icon: Bell,
     roles: ['SUPER_ADMIN'],
-  },
-  {
-    href: '/coupons',
-    label: 'Cupons',
-    icon: Ticket,
-    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN'],
   },
   {
     href: '/reports',

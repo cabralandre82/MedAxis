@@ -18,7 +18,7 @@ function generateCouponCode(): string {
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
-export const createCouponSchema = z.object({
+const createCouponSchema = z.object({
   product_id: z.string().uuid(),
   clinic_id: z.string().uuid(),
   discount_type: z.enum(['PERCENT', 'FIXED']),
