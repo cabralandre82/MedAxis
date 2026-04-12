@@ -86,7 +86,7 @@
 
 ## Testes
 
-- ~~Sem testes E2E~~ ✅ **v4.0.0**: Playwright configurado com 5 suítes de testes (auth, admin, orders, privacy, smoke). Pronto para executar contra staging.
+- ~~Sem testes E2E~~ ✅ **v4.0.0**: Playwright configurado com 5 suítes de testes (auth, admin, orders, privacy, smoke). Pronto para executar contra staging. **v5.1.4**: cobertura de regressão adicionada para acesso público a `/terms` e `/privacy` (`smoke.test.ts` + `01-auth.test.ts`).
 - ~~Sem CI/CD~~ ✅ **v4.0.0**: GitHub Actions workflow (`.github/workflows/ci.yml`) — unit + lint + TypeScript + E2E smoke.
 - **Testes Inngest**: jobs excluídos do unit coverage por design (requerem Inngest Dev Server). Testar localmente com `npx inngest-cli@latest dev`.
 

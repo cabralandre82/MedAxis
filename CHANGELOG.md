@@ -2,7 +2,7 @@
 
 ---
 
-## [5.1.4] — 2026-04-12 — Fix: `/terms` inacessível sem autenticação
+## [5.1.4] — 2026-04-12 — Fix: `/terms` inacessível sem autenticação + cobertura E2E
 
 ### Causa raiz
 
@@ -15,11 +15,24 @@ para `/login`, enquanto `/privacy` funcionava normalmente por já estar na lista
 Adicionado `/terms` à lista `PUBLIC_ROUTES` no middleware, tornando a página de Termos de
 Uso acessível publicamente — comportamento simétrico ao da Política de Privacidade.
 
+### Cobertura de testes adicionada
+
+| Teste                                                                | Arquivo                     | O que valida                                                          |
+| -------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------- |
+| `Smoke: public routes — /terms loads without error`                  | `tests/e2e/smoke.test.ts`   | `/terms` carrega sem crash em cada deploy                             |
+| `Smoke: public routes — /privacy loads without error`                | `tests/e2e/smoke.test.ts`   | `/privacy` carrega sem crash em cada deploy                           |
+| `Authentication — legal pages are accessible without authentication` | `tests/e2e/01-auth.test.ts` | `/terms` e `/privacy` não redirecionam para `/login` sem sessão ativa |
+
+Estes testes garantem que o bug não retorne: qualquer remoção acidental de `/terms` ou
+`/privacy` das `PUBLIC_ROUTES` fará a CI falhar antes de chegar à produção.
+
 ### Arquivos
 
-| Arquivo         | Mudança                               |
-| --------------- | ------------------------------------- |
-| `middleware.ts` | `/terms` adicionado a `PUBLIC_ROUTES` |
+| Arquivo                     | Mudança                                                    |
+| --------------------------- | ---------------------------------------------------------- |
+| `middleware.ts`             | `/terms` adicionado a `PUBLIC_ROUTES`                      |
+| `tests/e2e/smoke.test.ts`   | `/terms` e `/privacy` incluídos no array de rotas públicas |
+| `tests/e2e/01-auth.test.ts` | Novo teste: páginas legais acessíveis sem autenticação     |
 
 ---
 

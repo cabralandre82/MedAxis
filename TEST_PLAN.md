@@ -94,3 +94,24 @@
 
 1. Login como CLINIC_ADMIN da Clínica A
 2. Verifica que não vê pedidos da Clínica B
+
+### TC-11: Páginas legais acessíveis sem autenticação
+
+**Arquivo:** `tests/e2e/01-auth.test.ts`
+
+1. Sem sessão ativa, acessa `/terms`
+2. Verifica que **não** redireciona para `/login`
+3. Verifica que o body da página está visível
+4. Repete para `/privacy`
+
+**Regressão cobre:** bug v5.1.4 — `/terms` ausente de `PUBLIC_ROUTES` no middleware.
+
+### TC-12: Smoke — rotas públicas carregam sem erro
+
+**Arquivo:** `tests/e2e/smoke.test.ts`
+
+Para cada rota em `['/login', '/terms', '/privacy']`:
+
+1. Sem sessão ativa, navega para a rota
+2. Verifica body visível e ausência de overlay de erro Next.js
+3. Verifica ausência de erros críticos no console
