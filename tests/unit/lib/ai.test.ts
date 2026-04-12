@@ -140,6 +140,36 @@ describe('analyzeSentiment', () => {
     const result = await analyzeSentiment('mensagem')
     expect(result).toBeNull()
   })
+
+  it('TC-AI-08b: retorna null se sentiment fora do enum (ex: "happy")', async () => {
+    mockCreate.mockResolvedValueOnce(
+      makeOpenAIResponse(
+        JSON.stringify({
+          sentiment: 'happy', // inválido
+          churnRisk: false,
+          shouldEscalate: false,
+          reasoning: 'x',
+        })
+      )
+    )
+    const result = await analyzeSentiment('mensagem')
+    expect(result).toBeNull()
+  })
+
+  it('TC-AI-08c: retorna null se churnRisk ou shouldEscalate não forem boolean', async () => {
+    mockCreate.mockResolvedValueOnce(
+      makeOpenAIResponse(
+        JSON.stringify({
+          sentiment: 'neutral',
+          churnRisk: 'true', // string em vez de boolean
+          shouldEscalate: 1, // número em vez de boolean
+          reasoning: 'x',
+        })
+      )
+    )
+    const result = await analyzeSentiment('mensagem')
+    expect(result).toBeNull()
+  })
 })
 
 describe('extractDocumentData', () => {
@@ -173,6 +203,22 @@ describe('extractDocumentData', () => {
     mockCreate.mockRejectedValueOnce(new Error('Vision API error'))
     const result = await extractDocumentData('https://storage.example.com/doc.pdf')
     expect(result).toBeNull()
+  })
+
+  it('TC-AI-08d: não dispara escalação se shouldEscalate é string "true"', async () => {
+    // Garante que o guard de boolean impede escalação incorreta antes de chegar ao support.ts
+    mockCreate.mockResolvedValueOnce(
+      makeOpenAIResponse(
+        JSON.stringify({
+          sentiment: 'very_negative',
+          churnRisk: 'true', // string — deve ser rejeitado
+          shouldEscalate: 'true', // string — deve ser rejeitado
+          reasoning: 'x',
+        })
+      )
+    )
+    const result = await analyzeSentiment('quero cancelar!')
+    expect(result).toBeNull() // sem null, escalação ocorreria indevidamente
   })
 
   it('TC-AI-11: lida com documento ilegível (low confidence)', async () => {

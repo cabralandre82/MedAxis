@@ -85,7 +85,7 @@ export async function classifyTicket(
           max_tokens: 200,
           temperature: 0.1,
         }),
-      { name: 'openai' }
+      { name: 'openai-classify' }
     )
 
     const text = result.choices[0]?.message?.content ?? '{}'
@@ -127,6 +127,8 @@ Palavras de churn a detectar: "cancelar", "vou embora", "nunca mais", "absurdo",
 Responda APENAS JSON válido:
 {"sentiment":"neutral","churnRisk":false,"shouldEscalate":false,"reasoning":"Justificativa breve"}`
 
+const VALID_SENTIMENTS: Sentiment[] = ['positive', 'neutral', 'negative', 'very_negative']
+
 export async function analyzeSentiment(text: string): Promise<SentimentAnalysis | null> {
   try {
     const result = await withCircuitBreaker(
@@ -141,11 +143,23 @@ export async function analyzeSentiment(text: string): Promise<SentimentAnalysis 
           max_tokens: 150,
           temperature: 0.1,
         }),
-      { name: 'openai' }
+      { name: 'openai-sentiment' }
     )
 
-    const text2 = result.choices[0]?.message?.content ?? '{}'
-    return JSON.parse(text2) as SentimentAnalysis
+    const raw = result.choices[0]?.message?.content ?? '{}'
+    const parsed = JSON.parse(raw) as SentimentAnalysis
+
+    if (!VALID_SENTIMENTS.includes(parsed.sentiment)) {
+      logger.warn('[ai] analyzeSentiment returned invalid sentiment', { parsed })
+      return null
+    }
+
+    if (typeof parsed.churnRisk !== 'boolean' || typeof parsed.shouldEscalate !== 'boolean') {
+      logger.warn('[ai] analyzeSentiment returned non-boolean flags', { parsed })
+      return null
+    }
+
+    return parsed
   } catch (err) {
     logger.error('[ai] analyzeSentiment failed', { err })
     return null
@@ -190,7 +204,7 @@ export async function extractDocumentData(imageUrl: string): Promise<ExtractedDo
           max_tokens: 400,
           temperature: 0,
         }),
-      { name: 'openai' }
+      { name: 'openai-ocr' }
     )
 
     const text = result.choices[0]?.message?.content ?? '{}'
@@ -251,9 +265,9 @@ Personalize com os dados fornecidos. Mencione a Clinipharma como plataforma inte
             },
           ],
           max_tokens: 800,
-          temperature: 0.3,
+          temperature: 0, // deterministic — same data must produce same contract body
         }),
-      { name: 'openai' }
+      { name: 'openai-contract' }
     )
 
     return result.choices[0]?.message?.content ?? null
