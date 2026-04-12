@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition, useRef, useEffect } from 'react'
+import { useState, useTransition, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Send, Lock } from 'lucide-react'
+import { Send, Lock, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -43,6 +43,7 @@ interface TicketConversationProps {
   ticket: Ticket
   messages: Message[]
   currentUserId: string
+  currentUserName: string
   isAdmin: boolean
   categoryLabels: Record<string, string>
   statusLabels: Record<string, string>
@@ -53,11 +54,33 @@ interface TicketConversationProps {
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'WAITING_CLIENT', 'RESOLVED', 'CLOSED'] as const
 const PRIORITY_OPTIONS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const
+const POLL_INTERVAL_MS = 10_000
+
+function formatMessageDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDayLabel(dateStr: string): string {
+  const d = new Date(dateStr)
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  if (d.toDateString() === today.toDateString()) return 'Hoje'
+  if (d.toDateString() === yesterday.toDateString()) return 'Ontem'
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+
+function getDayKey(dateStr: string): string {
+  return new Date(dateStr).toDateString()
+}
 
 export function TicketConversation({
   ticket,
-  messages,
+  messages: initialMessages,
   currentUserId,
+  currentUserName,
   isAdmin,
   categoryLabels,
   statusLabels,
@@ -66,35 +89,74 @@ export function TicketConversation({
   priorityColors,
 }: TicketConversationProps) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const [isSending, startSendTransition] = useTransition()
+  const [isChangingStatus, startStatusTransition] = useTransition()
+  const [isChangingPriority, startPriorityTransition] = useTransition()
+
   const [reply, setReply] = useState('')
   const [isInternal, setIsInternal] = useState(false)
+  // Optimistic messages: shown immediately while server processes
+  const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const isClosed = ['RESOLVED', 'CLOSED'].includes(ticket.status)
 
+  const allMessages = [...initialMessages, ...optimisticMessages]
+
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [allMessages.length])
+
+  // Auto-refresh polling — silently refreshes server data every 10s
+  const refresh = useCallback(() => router.refresh(), [router])
+  useEffect(() => {
+    if (isClosed) return
+    const id = setInterval(refresh, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [isClosed, refresh])
+
+  // Clear optimistic messages when server data arrives (after router.refresh)
+  useEffect(() => {
+    if (optimisticMessages.length > 0) {
+      // If server messages now include our optimistic ones, clear them
+      const serverIds = new Set(initialMessages.map((m) => m.id))
+      const stillPending = optimisticMessages.filter((m) => !serverIds.has(m.id))
+      if (stillPending.length !== optimisticMessages.length) {
+        setOptimisticMessages(stillPending)
+      }
+    }
+  }, [initialMessages, optimisticMessages])
 
   function handleSend() {
-    if (!reply.trim()) return
-    startTransition(async () => {
-      const result = await addMessage({
-        ticket_id: ticket.id,
-        body: reply.trim(),
-        is_internal: isInternal,
-      })
+    const body = reply.trim()
+    if (!body) return
+
+    // Add optimistic message immediately
+    const optimistic: Message = {
+      id: `optimistic-${Date.now()}`,
+      body,
+      is_internal: isInternal,
+      created_at: new Date().toISOString(),
+      sender: { id: currentUserId, full_name: currentUserName },
+    }
+    setOptimisticMessages((prev) => [...prev, optimistic])
+    setReply('')
+
+    startSendTransition(async () => {
+      const result = await addMessage({ ticket_id: ticket.id, body, is_internal: isInternal })
       if (result.error) {
         toast.error(result.error)
+        // Remove optimistic message on failure
+        setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+        setReply(body)
         return
       }
-      setReply('')
       router.refresh()
     })
   }
 
   function handleStatus(status: string) {
-    startTransition(async () => {
+    startStatusTransition(async () => {
       const result = await updateTicketStatus(
         ticket.id,
         status as Parameters<typeof updateTicketStatus>[1]
@@ -105,7 +167,7 @@ export function TicketConversation({
   }
 
   function handlePriority(priority: string) {
-    startTransition(async () => {
+    startPriorityTransition(async () => {
       const result = await updateTicketPriority(
         ticket.id,
         priority as Parameters<typeof updateTicketPriority>[1]
@@ -115,10 +177,26 @@ export function TicketConversation({
     })
   }
 
+  // Group messages by day
+  const groupedMessages: { dayKey: string; dayLabel: string; messages: Message[] }[] = []
+  for (const msg of allMessages) {
+    const key = getDayKey(msg.created_at)
+    const last = groupedMessages[groupedMessages.length - 1]
+    if (last?.dayKey === key) {
+      last.messages.push(msg)
+    } else {
+      groupedMessages.push({
+        dayKey: key,
+        dayLabel: formatDayLabel(msg.created_at),
+        messages: [msg],
+      })
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       {/* Conversation panel */}
-      <div className="flex flex-1 flex-col gap-0 overflow-hidden rounded-xl border bg-white">
+      <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-white">
         {/* Header */}
         <div className="border-b bg-slate-50 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -132,6 +210,15 @@ export function TicketConversation({
             <span className="text-xs text-slate-400">
               {categoryLabels[ticket.category] ?? ticket.category}
             </span>
+            {!isClosed && (
+              <button
+                onClick={refresh}
+                className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+                title="Atualizar agora"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+            )}
           </div>
           <h2 className="mt-1 text-base font-semibold text-slate-900">{ticket.title}</h2>
           {ticket.assigned_to && (
@@ -141,46 +228,70 @@ export function TicketConversation({
           )}
         </div>
 
-        {/* Messages */}
-        <div className="flex max-h-[520px] flex-col gap-3 overflow-y-auto p-4">
-          {messages.map((msg) => {
-            const isMine = msg.sender?.id === currentUserId
-            const senderName = msg.sender?.full_name ?? 'Usuário'
-
-            if (msg.is_internal) {
-              return (
-                <div key={msg.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <div className="mb-1 flex items-center gap-1.5 text-xs text-amber-700">
-                    <Lock className="h-3 w-3" />
-                    <strong>Nota interna</strong> · {senderName} · {formatDate(msg.created_at)}
-                  </div>
-                  <p className="text-sm whitespace-pre-wrap text-amber-900">{msg.body}</p>
-                </div>
-              )
-            }
-
-            return (
-              <div
-                key={msg.id}
-                className={`flex flex-col gap-1 ${isMine ? 'items-end' : 'items-start'}`}
-              >
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  {!isMine && <span className="font-medium text-slate-600">{senderName}</span>}
-                  <span>{formatDate(msg.created_at)}</span>
-                  {isMine && <span className="font-medium text-slate-600">Você</span>}
-                </div>
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
-                    isMine
-                      ? 'bg-primary rounded-tr-sm text-white'
-                      : 'rounded-tl-sm bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{msg.body}</p>
-                </div>
+        {/* Messages with day grouping */}
+        <div className="flex max-h-[560px] flex-col gap-1 overflow-y-auto p-4">
+          {groupedMessages.length === 0 && (
+            <p className="py-8 text-center text-sm text-slate-400">Nenhuma mensagem ainda.</p>
+          )}
+          {groupedMessages.map((group) => (
+            <div key={group.dayKey}>
+              {/* Day separator */}
+              <div className="my-3 flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-100" />
+                <span className="text-xs font-medium text-slate-400">{group.dayLabel}</span>
+                <div className="h-px flex-1 bg-slate-100" />
               </div>
-            )
-          })}
+
+              <div className="flex flex-col gap-2">
+                {group.messages.map((msg) => {
+                  const isMine = msg.sender?.id === currentUserId
+                  const senderName = msg.sender?.full_name ?? 'Usuário'
+                  const isOptimistic = msg.id.startsWith('optimistic-')
+
+                  if (msg.is_internal) {
+                    return (
+                      <div
+                        key={msg.id}
+                        className="rounded-lg border border-amber-200 bg-amber-50 p-3"
+                      >
+                        <div className="mb-1 flex items-center gap-1.5 text-xs text-amber-700">
+                          <Lock className="h-3 w-3" />
+                          <strong>Nota interna</strong> · {senderName} ·{' '}
+                          {formatMessageDate(msg.created_at)}
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap text-amber-900">{msg.body}</p>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}
+                    >
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        {!isMine && (
+                          <span className="font-medium text-slate-600">{senderName}</span>
+                        )}
+                        <span>{formatMessageDate(msg.created_at)}</span>
+                        {isMine && <span className="font-medium text-slate-600">Você</span>}
+                        {isOptimistic && <span className="text-slate-300 italic">enviando…</span>}
+                      </div>
+                      <div
+                        className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm transition-opacity ${
+                          isMine
+                            ? 'bg-primary rounded-tr-sm text-white'
+                            : 'rounded-tl-sm bg-slate-100 text-slate-800'
+                        } ${isOptimistic ? 'opacity-60' : 'opacity-100'}`}
+                      >
+                        <p className="whitespace-pre-wrap">{msg.body}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
           <div ref={bottomRef} />
         </div>
 
@@ -193,7 +304,9 @@ export function TicketConversation({
                   type="button"
                   onClick={() => setIsInternal(false)}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    !isInternal ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'
+                    !isInternal
+                      ? 'bg-primary text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   Responder ao cliente
@@ -218,7 +331,7 @@ export function TicketConversation({
                 placeholder={
                   isInternal
                     ? 'Nota interna — visível apenas para admins...'
-                    : 'Digite sua mensagem...'
+                    : 'Digite sua mensagem... (Ctrl+Enter para enviar)'
                 }
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
@@ -226,18 +339,18 @@ export function TicketConversation({
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSend()
                 }}
                 className={isInternal ? 'border-amber-300 bg-amber-50' : ''}
+                disabled={isSending}
               />
               <Button
                 onClick={handleSend}
-                disabled={isPending || !reply.trim()}
+                disabled={isSending || !reply.trim()}
                 className="gap-1.5 self-end"
                 size="sm"
               >
                 <Send className="h-3.5 w-3.5" />
-                Enviar
+                {isSending ? 'Enviando…' : 'Enviar'}
               </Button>
             </div>
-            <p className="mt-1 text-right text-xs text-slate-400">Ctrl+Enter para enviar</p>
           </div>
         ) : (
           <div className="border-t bg-slate-50 px-4 py-3 text-center text-sm text-slate-500">
@@ -254,14 +367,13 @@ export function TicketConversation({
             <p className="mb-3 text-xs font-semibold tracking-wider text-slate-500 uppercase">
               Gerenciar
             </p>
-
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Status</label>
                 <Select
                   value={ticket.status}
                   onValueChange={(v) => v && handleStatus(v)}
-                  disabled={isPending}
+                  disabled={isChangingStatus}
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
@@ -281,7 +393,7 @@ export function TicketConversation({
                 <Select
                   value={ticket.priority}
                   onValueChange={(v) => v && handlePriority(v)}
-                  disabled={isPending}
+                  disabled={isChangingPriority}
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
@@ -304,9 +416,23 @@ export function TicketConversation({
             </p>
             <p className="font-medium text-slate-700">{ticket.created_by?.full_name ?? '—'}</p>
             <p className="text-slate-400">{ticket.created_by?.email ?? ''}</p>
-            <p className="mt-2 text-slate-400">Aberto em {formatDate(ticket.created_at)}</p>
+            <p className="mt-3 text-slate-400">
+              Aberto em{' '}
+              {new Date(ticket.created_at).toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </p>
             {ticket.resolved_at && (
-              <p className="text-slate-400">Resolvido em {formatDate(ticket.resolved_at)}</p>
+              <p className="text-slate-400">
+                Resolvido em{' '}
+                {new Date(ticket.resolved_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </p>
             )}
           </div>
         </div>

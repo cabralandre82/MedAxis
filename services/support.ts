@@ -56,13 +56,21 @@ export async function createTicket(
     })
     if (msgError) logger.error('[createTicket] first message failed', { error: msgError })
 
-    // Notify admins
-    await createNotificationForRole('SUPER_ADMIN', {
-      type: 'SUPPORT_TICKET',
-      title: `Novo ticket: ${ticket.code}`,
-      message: parsed.data.title,
-      link: `/support/${ticket.id}`,
-    })
+    // Notify all admins (SUPER_ADMIN and PLATFORM_ADMIN)
+    await Promise.all([
+      createNotificationForRole('SUPER_ADMIN', {
+        type: 'SUPPORT_TICKET',
+        title: `Novo ticket: ${ticket.code}`,
+        message: parsed.data.title,
+        link: `/support/${ticket.id}`,
+      }),
+      createNotificationForRole('PLATFORM_ADMIN', {
+        type: 'SUPPORT_TICKET',
+        title: `Novo ticket: ${ticket.code}`,
+        message: parsed.data.title,
+        link: `/support/${ticket.id}`,
+      }),
+    ])
 
     revalidatePath('/support')
     return { id: ticket.id, code: ticket.code }
@@ -158,12 +166,20 @@ export async function addMessage(data: {
             link: `/support/${ticket.id}`,
           })
         } else {
-          await createNotificationForRole('SUPER_ADMIN', {
-            type: 'SUPPORT_REPLY',
-            title: `Nova resposta — ${ticket.code}`,
-            message: `Resposta recebida no ticket: "${ticket.title}"`,
-            link: `/support/${ticket.id}`,
-          })
+          await Promise.all([
+            createNotificationForRole('SUPER_ADMIN', {
+              type: 'SUPPORT_REPLY',
+              title: `Nova resposta — ${ticket.code}`,
+              message: `Resposta recebida no ticket: "${ticket.title}"`,
+              link: `/support/${ticket.id}`,
+            }),
+            createNotificationForRole('PLATFORM_ADMIN', {
+              type: 'SUPPORT_REPLY',
+              title: `Nova resposta — ${ticket.code}`,
+              message: `Resposta recebida no ticket: "${ticket.title}"`,
+              link: `/support/${ticket.id}`,
+            }),
+          ])
         }
       }
     }

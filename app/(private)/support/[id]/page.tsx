@@ -77,6 +77,7 @@ export default async function SupportTicketPage({ params }: PageProps) {
           (messages ?? []) as unknown as Parameters<typeof TicketConversation>[0]['messages']
         }
         currentUserId={user!.id}
+        currentUserName={user!.full_name ?? 'Você'}
         isAdmin={isAdmin}
         categoryLabels={TICKET_CATEGORY_LABELS}
         statusLabels={TICKET_STATUS_LABELS}
