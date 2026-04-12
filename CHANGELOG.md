@@ -2,6 +2,27 @@
 
 ---
 
+## [5.1.4] — 2026-04-12 — Fix: `/terms` inacessível sem autenticação
+
+### Causa raiz
+
+A rota `/terms` não estava incluída na lista `PUBLIC_ROUTES` do `middleware.ts`. Qualquer
+usuário não autenticado que clicasse em "Termos de Uso" na tela de login era redirecionado
+para `/login`, enquanto `/privacy` funcionava normalmente por já estar na lista.
+
+### Correção
+
+Adicionado `/terms` à lista `PUBLIC_ROUTES` no middleware, tornando a página de Termos de
+Uso acessível publicamente — comportamento simétrico ao da Política de Privacidade.
+
+### Arquivos
+
+| Arquivo         | Mudança                               |
+| --------------- | ------------------------------------- |
+| `middleware.ts` | `/terms` adicionado a `PUBLIC_ROUTES` |
+
+---
+
 ## [5.1.3] — 2026-04-12 — Correção do crash Base UI error #31 no header
 
 ### Causa raiz definitiva

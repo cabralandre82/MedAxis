@@ -169,8 +169,8 @@
 
 - [ ] Registrar CNPJ do controlador
 - [ ] Elaborar DPA formal com cada farmácia e clínica parceira (advogado especialista LGPD)
-- [ ] Publicar Política de Privacidade completa em `/privacy`
-- [ ] Publicar Termos de Uso em `/terms`
+- [x] Publicar Política de Privacidade completa em `/privacy` — ✅ v5.1.0
+- [x] Publicar Termos de Uso em `/terms` — ✅ v5.1.0 (acesso público corrigido em v5.1.4)
 - [ ] Nomear DPO formalmente (declaração no site)
 - [ ] Registrar atividades de tratamento na ANPD (quando obrigatório)
 - [ ] Pentest externo para validar medidas de segurança (Art. 46)

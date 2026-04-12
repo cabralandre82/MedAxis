@@ -24,6 +24,7 @@ const PUBLIC_ROUTES = [
   '/api/health',
   // LGPD public pages
   '/privacy',
+  '/terms',
 ]
 
 /** Extract JWT payload without verifying signature (Supabase already verified it). */

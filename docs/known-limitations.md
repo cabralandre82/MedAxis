@@ -75,7 +75,7 @@
 - ~~Sem política de retenção técnica~~ ✅ **v3.0.0**: cron mensal anonimiza PII (5 anos) e preserva financeiros (10 anos).
 - ~~Sem encriptação de PII~~ ✅ **v3.0.0**: colunas `*_encrypted` criadas com AES-256-GCM. **⚠️ PENDENTE:** migrar dados existentes de plaintext.
 - **DPA formal pendente**: elaborar com advogado LGPD e assinar com farmácias/clínicas antes do go-live comercial.
-- **Política de Privacidade / Termos de Uso**: páginas `/privacy` e `/terms` não desenvolvidas.
+- ~~**Política de Privacidade / Termos de Uso**~~ ✅ **v5.1.0**: páginas `/privacy` e `/terms` implementadas. **v5.1.4**: `/terms` adicionado às rotas públicas do middleware (bug de acesso sem autenticação corrigido).
 
 ## Observabilidade
 
