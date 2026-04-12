@@ -1,5 +1,7 @@
 # Clinipharma — Limitações Conhecidas do MVP
 
+> **Plano de testes / auditoria:** ver `docs/audit-qa-plena-2026-04.md` (v6.0.2) — matriz alinhada a este documento (N/A explícitos para capacidades ainda não existentes).
+
 ---
 
 ## Financeiro
