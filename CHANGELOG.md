@@ -2,6 +2,62 @@
 
 ---
 
+## [5.1.0] — 2026-04-08 — Política de Privacidade e Termos de Uso
+
+### Conformidade legal (Pendência #6)
+
+Implementação das páginas públicas `/privacy` e `/terms`, eliminando o último bloqueio de
+conformidade legal passível de resolução via código.
+
+**Política de Privacidade** (`/privacy`) — 12 seções:
+
+- Identificação do Controlador e canal DPO (`privacidade@clinipharma.com.br`)
+- Mapeamento de dados coletados: identificação, uso, financeiros, documentos e dados de saúde
+- Tabela de finalidades × bases legais (Art. 7 LGPD) para cada tipo de tratamento
+- Todos os operadores/subprocessadores listados com suas responsabilidades (Asaas, Clicksign, Supabase, Vercel, Resend, Twilio, Inngest, ReceitaWS)
+- Transferência internacional: SCCs e DPAs exigidos
+- Tabela de retenção por categoria com prazo e base legal (RDC ANVISA 67/2007, Código Civil, Marco Civil, Lei 9.613/98)
+- Segurança documentada: TLS 1.3, AES-256-GCM, RBAC, RLS, logs imutáveis, rate limiting
+- Notificação de incidente em 72h (Art. 48 LGPD)
+- 10 direitos do titular com canal explícito e prazo de 15 dias
+- Cookies: apenas estritamente necessários (HttpOnly, Secure, SameSite=Lax)
+
+**Termos de Uso** (`/terms`) — 15 cláusulas:
+
+- Elegibilidade setorial: AFE/AE ANVISA, CRM ativo, CNES, CRF exigidos por papel de usuário
+- Cláusula essencial de intermediação tecnológica (afasta responsabilidade por qualidade dos produtos)
+- Obrigações específicas por ator: farmácia, médico/clínica
+- Usos proibidos com referência às normas ANVISA, Portaria 344/98, Lei 5.991/73
+- Pagamentos via Asaas PCI DSS, comissões, inadimplência com multa 2% + 1% a.m.
+- Propriedade intelectual, limitação de responsabilidade, indenização
+- Rescisão automática por cassação de licenças regulatórias
+- Conformidade com RDC 67/2007, RDC 204/2017, CFM, CFF, LGPD
+- Foro eleito: Comarca de São Paulo/SP
+
+**Infraestrutura compartilhada:**
+
+- Componente `LegalLayout` com helpers `Section`, `Sub`, `P`, `UL`, `Highlight`, `Warning`
+- Link "Termos de Uso · Política de Privacidade" no rodapé da tela de login
+
+### Arquivos criados/alterados
+
+| Arquivo                             | Mudança                                           |
+| ----------------------------------- | ------------------------------------------------- |
+| `app/privacy/page.tsx`              | Novo: Política de Privacidade completa            |
+| `app/terms/page.tsx`                | Novo: Termos de Uso completos                     |
+| `components/legal/legal-layout.tsx` | Novo: layout e helpers compartilhados             |
+| `app/(auth)/layout.tsx`             | Link para Termos e Privacidade no rodapé do login |
+| `docs/PENDING.md`                   | Pendência #6 marcada como concluída               |
+
+### Normas referenciadas
+
+Lei 13.709/2018 (LGPD), Lei 12.965/2014 (Marco Civil), Lei 9.610/1998 (Direitos Autorais),
+Lei 9.279/1996 (Propriedade Industrial), Lei 5.991/1973, Lei 9.613/1998, Código Civil (Lei
+10.406/2002), RDC ANVISA 67/2007, RDC ANVISA 204/2017, Portaria SVS/MS 344/1998,
+Resolução CFM 1.931/2009, Resolução CFF 586/2013.
+
+---
+
 ## [5.0.0] — 2026-04-08 — Sistema de Suporte por Tickets
 
 ### Funcionalidade
