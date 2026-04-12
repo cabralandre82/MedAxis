@@ -1,8 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-08 | Versão da plataforma: **4.6.0** | **654 testes** | cobertura atualizada
+> Gerado em: 2026-04-08 | Versão da plataforma: **5.0.0** | **685 testes** | cobertura atualizada
 >
-> **v4.6.0:** Varredura de silent failures concluída — todos os itens CRITICAL, HIGH e MEDIUM corrigidos. 654 testes passando em 46 arquivos.
+> **v5.0.0:** Sistema de suporte por tickets conversacional implementado e em produção. Migration 025 aplicada ao Supabase. 685 testes passando em 48 arquivos. Build Vercel corrigido (constantes separadas de `'use server'`).
 
 ---
 
@@ -127,7 +127,16 @@ Itens do roadmap que dependem de CNPJ ativo para implementar:
 | 🟢 Onboarding (após go-live)          | 7      | Comercial + Fundador      |
 | **Total**                             | **39** |                           |
 
-**O que está 100% pronto:** plataforma técnica, autenticação, pedidos, pagamentos sandbox, notificações (push/email), LGPD portal, auditoria, compliance CNPJ, E2E tests, CI/CD, documentação.
+### Funcionalidades entregues (v4.7.0 → v5.0.0)
+
+| Versão | Feature                                                    | Testes |
+| ------ | ---------------------------------------------------------- | ------ |
+| 4.7.0  | Explicações contextuais de SKU, Slug e Variantes no form   | ✅     |
+| 4.8.0  | SKU gerado automaticamente no formato `[CAT]-[FAR]-[NNNN]` | ✅     |
+| 4.9.0  | Página de gerenciamento de categorias de produtos          | ✅     |
+| 5.0.0  | Sistema de suporte por tickets conversacional              | ✅     |
+
+**O que está 100% pronto:** plataforma técnica, autenticação, pedidos, pagamentos sandbox, notificações (push/email), LGPD portal, auditoria, compliance CNPJ, suporte por tickets, gerenciamento de categorias, SKU automático, E2E tests, CI/CD, documentação.
 
 **O que bloqueia lançamento comercial:** CNPJ da empresa → Asaas produção → NF-e → DPA/LGPD.
 
