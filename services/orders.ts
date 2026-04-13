@@ -224,11 +224,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         .eq('id', clinic_id)
         .single()
 
-      const { data: doctor } = await adminClient
-        .from('doctors')
-        .select('full_name')
-        .eq('id', doctor_id)
-        .single()
+      const { data: doctor } = doctor_id
+        ? await adminClient.from('doctors').select('full_name').eq('id', doctor_id).single()
+        : { data: null }
 
       const productNames = items
         .map((i) => `${productMap[i.product_id]?.name ?? '—'} (×${i.quantity})`)
