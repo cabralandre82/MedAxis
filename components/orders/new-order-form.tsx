@@ -141,7 +141,7 @@ export function NewOrderForm({
     try {
       const result = await createOrder({
         clinic_id: clinicId,
-        doctor_id: doctorId,
+        doctor_id: doctorId || null,
         notes: notes || undefined,
         items: cart.map((c) => ({ product_id: c.product.id, quantity: c.quantity })),
         documents,
