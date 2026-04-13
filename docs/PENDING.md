@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.24** | **881 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.25** | **883 testes** | cobertura atualizada
+>
+> **v6.5.25:** Fluxo completo de revisão de preço. Card "Revisar preço" agora linka para `/products?needs_review=1`. Lista de produtos: suporte ao filtro `?needs_review=1` (mostra apenas produtos pendentes + banner laranja informativo + botão "Limpar filtro"); badge `⚠️ Revisar preço` visível por linha para admin. Detalhe do produto: banner laranja "Repasse atualizado pela farmácia" quando `needs_price_review=true` com dois CTAs — "Alterar preço" (abre `PriceUpdateForm`, zera flag ao salvar) e "Confirmar sem alterar" (`DismissPriceReviewButton` → `dismissPriceReview()` server action). `dismissPriceReview`: nova server action que seta `needs_price_review=false` + audit log + revalidações. 2 novos testes (883 total).
 >
 > **v6.5.24:** Dashboard admin em tempo real — `DashboardRealtimeRefresher` (componente cliente invisível) subscreve `postgres_changes` (`event: '*'`) nas 4 tabelas que alimentam os KPI cards (`products`, `orders`, `payments`, `transfers`). Quando qualquer mudança chega, chama server action `revalidateDashboard()` (invalida `revalidateTag('dashboard')` no servidor) seguido de `router.refresh()` para re-render imediato com dados frescos. Mesmo padrão anti-auth-race do `OrderRealtimeUpdater`: `auth.getSession()` antes de subscrever. Fallback polling silencioso de 60 s como safety-net. `lib/actions/revalidate.ts` — server action reutilizável.
 >

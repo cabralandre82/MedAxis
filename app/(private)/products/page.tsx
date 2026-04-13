@@ -6,7 +6,7 @@ import { ButtonLink } from '@/components/ui/button-link'
 import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import { parsePage, paginationRange, formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
-import { Plus, Package, ExternalLink } from 'lucide-react'
+import { Plus, Package, ExternalLink, X } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -23,15 +23,16 @@ export const metadata: Metadata = { title: 'Produtos | Clinipharma' }
 const PAGE_SIZE = 20
 
 interface Props {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; needs_review?: string }>
 }
 
 export default async function ProductsPage({ searchParams }: Props) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PHARMACY_ADMIN'])
-  const { page: pageRaw } = await searchParams
+  const { page: pageRaw, needs_review } = await searchParams
   const supabase = createAdminClient()
   const currentUser = await getCurrentUser()
   const isPharmacy = currentUser?.roles.includes('PHARMACY_ADMIN') ?? false
+  const filterReview = needs_review === '1' && !isPharmacy
 
   // Resolve pharmacy membership for scoping
   let pharmacyId: string | undefined
@@ -51,7 +52,7 @@ export default async function ProductsPage({ searchParams }: Props) {
     .from('products')
     .select(
       `id, name, sku, concentration, presentation, price_current,
-       estimated_deadline_days, active, featured,
+       estimated_deadline_days, active, featured, needs_price_review,
        product_categories (name), pharmacies (trade_name)`,
       { count: 'exact' }
     )
@@ -59,6 +60,7 @@ export default async function ProductsPage({ searchParams }: Props) {
     .order('name')
 
   if (isPharmacy && pharmacyId) q = q.eq('pharmacy_id', pharmacyId)
+  if (filterReview) q = q.eq('needs_price_review', true)
 
   const { data: products, count } = await q.range(from, to)
 
@@ -74,6 +76,21 @@ export default async function ProductsPage({ searchParams }: Props) {
           Novo produto
         </ButtonLink>
       </div>
+
+      {filterReview && (
+        <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
+          <p className="text-sm font-medium text-orange-800">
+            ⚠️ Mostrando apenas produtos com repasse atualizado — verifique o preço ao cliente
+          </p>
+          <Link
+            href="/products"
+            className="ml-4 flex items-center gap-1 text-xs font-medium text-orange-600 hover:underline"
+          >
+            <X className="h-3.5 w-3.5" />
+            Limpar filtro
+          </Link>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         <div className="overflow-x-auto">
@@ -135,19 +152,26 @@ export default async function ProductsPage({ searchParams }: Props) {
                       <span className="text-sm text-gray-600">{p.estimated_deadline_days}d</span>
                     </TableCell>
                     <TableCell>
-                      {p.price_current === 0 ? (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                          ⏳ Aguardando preço
-                        </span>
-                      ) : (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            p.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {p.active ? 'Ativo' : 'Inativo'}
-                        </span>
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {p.price_current === 0 ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                            ⏳ Aguardando preço
+                          </span>
+                        ) : (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              p.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {p.active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        )}
+                        {!isPharmacy && p.needs_price_review && (
+                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+                            ⚠️ Revisar preço
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Link

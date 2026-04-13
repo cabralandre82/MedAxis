@@ -101,7 +101,7 @@ export async function AdminDashboard({ user }: AdminDashboardProps) {
           value={data.needsPriceReviewCount.toString()}
           icon={RefreshCw}
           color={data.needsPriceReviewCount > 0 ? 'orange' : 'green'}
-          href="/products"
+          href="/products?needs_review=1"
           alert={data.needsPriceReviewCount > 0}
           small
         />

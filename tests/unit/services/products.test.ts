@@ -9,6 +9,7 @@ import {
   updateProductPrice,
   updatePharmacyCost,
   toggleProductActive,
+  dismissPriceReview,
   generateSKU,
 } from '@/services/products'
 
@@ -352,6 +353,29 @@ describe('updatePharmacyCost', () => {
 
     const result = await updatePharmacyCost('prod-1', 105, 'aumento repasse')
     expect(result.error).toBeUndefined()
+  })
+})
+
+describe('dismissPriceReview', () => {
+  it('clears needs_price_review flag successfully', async () => {
+    const qb = makeQueryBuilder(null, null)
+    vi.mocked(adminModule.createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue(qb),
+    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+
+    const result = await dismissPriceReview('prod-1')
+    expect(result.error).toBeUndefined()
+  })
+
+  it('returns error when PHARMACY_ADMIN tries to dismiss review', async () => {
+    const pharmacyActor = { ...actorMock, roles: ['PHARMACY_ADMIN'] as ['PHARMACY_ADMIN'] }
+    vi.mocked(rbacModule.requireRole).mockRejectedValueOnce(new Error('FORBIDDEN'))
+
+    const result = await dismissPriceReview('prod-1')
+    expect(result.error).toBeDefined()
+    // restore
+    vi.mocked(rbacModule.requireRole).mockResolvedValue(pharmacyActor as never)
+    vi.mocked(rbacModule.requireRole).mockResolvedValue(actorMock)
   })
 })
 

@@ -354,6 +354,36 @@ export async function updatePharmacyCost(
   }
 }
 
+export async function dismissPriceReview(productId: string): Promise<{ error?: string }> {
+  try {
+    const user = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const adminClient = createAdminClient()
+
+    const { error } = await adminClient
+      .from('products')
+      .update({ needs_price_review: false, updated_at: new Date().toISOString() })
+      .eq('id', productId)
+
+    if (error) return { error: 'Erro ao dispensar revisão' }
+
+    await createAuditLog({
+      actorUserId: user.id,
+      actorRole: user.roles[0],
+      entityType: AuditEntity.PRODUCT,
+      entityId: productId,
+      action: AuditAction.UPDATE,
+      newValues: { needs_price_review: false, note: 'Revisão dispensada pelo admin' },
+    })
+
+    revalidatePath(`/products/${productId}`)
+    revalidatePath('/products')
+    revalidateTag('dashboard')
+    return {}
+  } catch {
+    return { error: 'Erro interno' }
+  }
+}
+
 export async function toggleProductActive(
   id: string,
   active: boolean

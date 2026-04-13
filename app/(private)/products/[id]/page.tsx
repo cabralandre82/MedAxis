@@ -8,8 +8,9 @@ import { ButtonLink } from '@/components/ui/button-link'
 import { PriceUpdateForm } from '@/components/products/price-update-form'
 import { PharmacyCostUpdateForm } from '@/components/products/pharmacy-cost-update-form'
 import { ToggleProductActive } from '@/components/products/toggle-product-active'
+import { DismissPriceReviewButton } from '@/components/products/dismiss-price-review-button'
 import { Badge } from '@/components/ui/badge'
-import { Package, AlertTriangle } from 'lucide-react'
+import { Package, AlertTriangle, RefreshCw } from 'lucide-react'
 import type { ProductWithRelations, ProductCategory, Pharmacy, ProductPriceHistory } from '@/types'
 import { getCurrentUser } from '@/lib/auth/session'
 
@@ -156,9 +157,40 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
   }>
 
   const awaitingPrice = !isPharmacy && product.price_current === 0
+  const needsReview =
+    !isPharmacy &&
+    !awaitingPrice &&
+    !!(product as { needs_price_review?: boolean }).needs_price_review
 
   return (
     <div className="space-y-6">
+      {/* Banner: repasse updated by pharmacy — admin should review price */}
+      {needsReview && (
+        <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
+          <RefreshCw className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-orange-800">
+              Repasse atualizado pela farmácia
+            </p>
+            <p className="mt-0.5 text-sm text-orange-700">
+              O repasse deste produto foi alterado. Verifique se o preço ao cliente precisa ser
+              ajustado para manter a margem saudável.
+            </p>
+          </div>
+          <div className="flex flex-shrink-0 flex-col gap-2 sm:flex-row">
+            {isSuperAdmin && (
+              <PriceUpdateForm
+                productId={id}
+                currentPrice={product.price_current}
+                label="Alterar preço"
+                highlight
+              />
+            )}
+            <DismissPriceReviewButton productId={id} />
+          </div>
+        </div>
+      )}
+
       {/* Banner: platform admin sees this when product needs pricing */}
       {awaitingPrice && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
