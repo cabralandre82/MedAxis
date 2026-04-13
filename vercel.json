@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/product-recommendations",
       "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/expire-doc-deadlines",
+      "schedule": "0 6 * * *"
     }
   ]
 }

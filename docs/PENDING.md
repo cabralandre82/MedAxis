@@ -1,6 +1,10 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.4.4** | **851 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.0** | cobertura atualizada
+>
+> **v6.5.0:** Fluxo de revisão de documentos pela farmácia — migration 033 (`order_documents.status/rejection_reason`, `order_items.doc_status`, `orders.docs_deadline`); endpoint `/api/documents/[id]/download` (URL assinada, 5 min); `services/document-review.ts` com `reviewDocument`, `evaluateOrderDocuments` (avanço automático para `AWAITING_PAYMENT` ou bloqueio para `AWAITING_DOCUMENTS` com prazo de 3 dias úteis) e `removeOrderItem` (clínica remove item rejeitado, pedido recalculado, cancelado se ficar vazio); cron `/api/cron/expire-doc-deadlines` (cancela pedidos com prazo expirado); UI `DocumentManager` com download, badges de status, controles de aprovar/rejeitar por documento; `order-detail` com badge `doc_status` por item e botão de remoção para `CLINIC_ADMIN`. 7 novos testes unitários.
+>
+> **v6.4.5:** Upload de documentos tipado — cada arquivo recebe tipo explícito (`PRESCRIPTION`, `IDENTITY`, `MEDICAL_REPORT`, `AUTHORIZATION`, `OTHER`) com seletor inline no formulário de criação. Tipo padrão inteligente: `PRESCRIPTION` quando carrinho tem produto com `requires_prescription`, `OTHER` caso contrário. Status avança automaticamente para `READY_FOR_REVIEW` quando pelo menos um documento é enviado na criação.
 >
 > **v6.4.4:** Fix carrinho perdido ao navegar para `/doctors/new` — carrinho serializado como `?cart=id:qty,id:qty` na URL; restaurado ao voltar para `/orders/new`. `parseCartParam` extraído para `lib/orders/doctor-field-rules.ts` com 7 testes unitários.
 >
@@ -99,14 +103,15 @@ Sem impacto no go-live mas reduzem risco operacional e dívida técnica.
 
 ### Produto / UX
 
-| #      | Pendência                          | Detalhe                                                                                 |
-| ------ | ---------------------------------- | --------------------------------------------------------------------------------------- |
-| ~~24~~ | ~~**Ícones PWA**~~                 | ✅ **v6.3.0**: `public/icons/icon-192x192.png` e `icon-512x512.png` criados             |
-| 25     | **Auditoria WCAG 2.1**             | Instalar `axe-core` + corrigir issues de contraste, labels, ARIA, navegação por teclado |
-| 26     | **Service Worker (cache offline)** | Avaliar `next-pwa` ou Workbox para cache de assets estáticos                            |
-| 27     | **OpenAPI / Swagger**              | Documentação interna via `zod-to-openapi` — útil para integrações futuras               |
-| 28     | **2FA**                            | Autenticação em dois fatores não implementada                                           |
-| 29     | **Google OAuth**                   | Preparado no Supabase, não ativado (requer Google Cloud Console)                        |
+| #      | Pendência                           | Detalhe                                                                                                                                                                                                                                                                                |
+| ------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~24~~ | ~~**Ícones PWA**~~                  | ✅ **v6.3.0**: `public/icons/icon-192x192.png` e `icon-512x512.png` criados                                                                                                                                                                                                            |
+| 25     | **Auditoria WCAG 2.1**              | Instalar `axe-core` + corrigir issues de contraste, labels, ARIA, navegação por teclado                                                                                                                                                                                                |
+| 26     | **Service Worker (cache offline)**  | Avaliar `next-pwa` ou Workbox para cache de assets estáticos                                                                                                                                                                                                                           |
+| 27     | **OpenAPI / Swagger**               | Documentação interna via `zod-to-openapi` — útil para integrações futuras                                                                                                                                                                                                              |
+| 28     | **2FA**                             | Autenticação em dois fatores não implementada                                                                                                                                                                                                                                          |
+| 29     | **Google OAuth**                    | Preparado no Supabase, não ativado (requer Google Cloud Console)                                                                                                                                                                                                                       |
+| 36     | **Substâncias controladas (SNGPC)** | Produtos psicotrópicos/entorpecentes exigem retenção física da receita e notificação ao SNGPC (ANVISA). Quando implementar: (1) flag `controlled_substance` em `products`; (2) bloquear pedido até confirmação de retenção física; (3) integrar API SNGPC para notificação automática. |
 
 ### Cobertura de testes
 

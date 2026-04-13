@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import Link from 'next/link'
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,7 +26,9 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  Trash2,
 } from 'lucide-react'
+import { removeOrderItem } from '@/services/document-review'
 import type { ProfileWithRoles, OrderStatus } from '@/types'
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
@@ -62,9 +67,35 @@ interface OrderDetailProps {
   prescriptionItems?: OrderItemPrescriptionState[]
 }
 
+const DOC_ITEM_STATUS: Record<string, { label: string; className: string }> = {
+  OK: { label: 'Docs OK', className: 'bg-green-100 text-green-700' },
+  PENDING_DOCS: { label: 'Aguardando', className: 'bg-amber-100 text-amber-700' },
+  REJECTED_DOCS: { label: 'Rejeitado', className: 'bg-red-100 text-red-700' },
+}
+
 export function OrderDetail({ order, currentUser, prescriptionItems = [] }: OrderDetailProps) {
+  const router = useRouter()
   const isAdmin = currentUser.roles.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
   const isPharmacy = currentUser.roles.includes('PHARMACY_ADMIN')
+  const [removingItemId, setRemovingItemId] = useState<string | null>(null)
+
+  async function handleRemoveItem(itemId: string) {
+    if (!confirm('Remover este item do pedido? Esta ação não pode ser desfeita.')) return
+    setRemovingItemId(itemId)
+    try {
+      const result = await removeOrderItem(String(order.id), itemId)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Item removido do pedido')
+      router.refresh()
+    } catch {
+      toast.error('Erro ao remover item')
+    } finally {
+      setRemovingItemId(null)
+    }
+  }
 
   const statusHistory =
     (
@@ -86,6 +117,8 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
       mime_type: string
       file_size: number
       created_at: string
+      status?: string
+      rejection_reason?: string | null
     }>) ?? []
 
   const payment =
@@ -147,6 +180,8 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
     specialty: string | null
   } | null
   const pharmacy = order.pharmacies as { trade_name: string; city: string; state: string } | null
+  const isClinicAdmin = currentUser.roles.includes('CLINIC_ADMIN')
+
   const orderItems = (order.order_items ?? []) as Array<{
     id: string
     product_id: string
@@ -156,7 +191,13 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
     discount_amount?: number
     original_total_price?: number
     coupon_id?: string | null
-    products: { name: string; concentration: string; presentation: string } | null
+    doc_status?: string
+    products: {
+      name: string
+      concentration: string
+      presentation: string
+      requires_prescription?: boolean
+    } | null
   }>
 
   return (
@@ -208,31 +249,65 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
                     <th className="w-16 pb-2 text-center font-medium">Qtd</th>
                     <th className="w-28 pb-2 text-right font-medium">Unit.</th>
                     <th className="w-28 pb-2 text-right font-medium">Subtotal</th>
+                    <th className="w-8 pb-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {orderItems.map((item) => (
-                    <tr key={item.id}>
-                      <td className="py-2.5">
-                        <p className="font-medium text-gray-900">{item.products?.name ?? '—'}</p>
-                        <p className="text-xs text-gray-400">
-                          {item.products?.concentration} · {item.products?.presentation}
-                        </p>
-                      </td>
-                      <td className="py-2.5 text-center text-gray-700">{item.quantity}</td>
-                      <td className="py-2.5 text-right text-gray-700">
-                        {formatCurrency(Number(item.unit_price))}
-                        {item.coupon_id && Number(item.discount_amount) > 0 && (
-                          <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
-                            -{formatCurrency(Number(item.discount_amount) / item.quantity)}/un
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 text-right font-semibold text-gray-900">
-                        {formatCurrency(Number(item.total_price))}
-                      </td>
-                    </tr>
-                  ))}
+                  {orderItems.map((item) => {
+                    const docStatusCfg = item.doc_status ? DOC_ITEM_STATUS[item.doc_status] : null
+                    const canRemove =
+                      isClinicAdmin &&
+                      order.order_status === 'AWAITING_DOCUMENTS' &&
+                      item.doc_status === 'REJECTED_DOCS'
+                    return (
+                      <tr key={item.id}>
+                        <td className="py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {item.products?.name ?? '—'}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {item.products?.concentration} · {item.products?.presentation}
+                              </p>
+                            </div>
+                            {docStatusCfg && item.doc_status !== 'OK' && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${docStatusCfg.className}`}
+                              >
+                                {docStatusCfg.label}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 text-center text-gray-700">{item.quantity}</td>
+                        <td className="py-2.5 text-right text-gray-700">
+                          {formatCurrency(Number(item.unit_price))}
+                          {item.coupon_id && Number(item.discount_amount) > 0 && (
+                            <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
+                              -{formatCurrency(Number(item.discount_amount) / item.quantity)}/un
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 text-right font-semibold text-gray-900">
+                          {formatCurrency(Number(item.total_price))}
+                        </td>
+                        <td className="py-2.5 text-center">
+                          {canRemove && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(item.id)}
+                              disabled={removingItemId === item.id}
+                              className="text-gray-300 hover:text-red-500 disabled:opacity-50"
+                              title="Remover item"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
                 <tfoot>
                   {(() => {
@@ -320,6 +395,7 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
                 orderId={String(order.id)}
                 documents={documents}
                 canUpload={!['COMPLETED', 'CANCELED'].includes(String(order.order_status))}
+                canReview={(isAdmin || isPharmacy) && order.order_status === 'READY_FOR_REVIEW'}
               />
             </CardContent>
           </Card>

@@ -33,9 +33,10 @@ export default async function OrderPage({ params }: OrderPageProps) {
         id, product_id, quantity, unit_price, total_price,
         pharmacy_cost_per_unit, platform_commission_per_unit,
         coupon_id, discount_amount, original_total_price,
-        products (id, name, concentration, presentation)
+        doc_status,
+        products (id, name, concentration, presentation, requires_prescription)
       ),
-      order_documents (id, document_type, original_filename, mime_type, file_size, created_at),
+      order_documents (id, document_type, original_filename, mime_type, file_size, created_at, status, rejection_reason),
       order_status_history (
         id, old_status, new_status, reason, created_at,
         profiles!changed_by_user_id (full_name)
