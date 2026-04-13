@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.19** | **872 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.20** | **876 testes** | cobertura atualizada
+>
+> **v6.5.20:** Workflow de precificação de produtos — farmácia cria produto → plataforma precifica e publica. `createProduct` por `PHARMACY_ADMIN` força `price_current=0` + `status=inactive` (produto nunca vai ao catálogo sem preço). Notificação automática `PRODUCT_AWAITING_PRICE` disparada para todos `SUPER_ADMIN`/`PLATFORM_ADMIN` com push. Dashboard: novo card "Aguardando preço" (âmbar com alerta quando > 0). Lista de produtos: badge `⏳ Aguardando preço` substitui Ativo/Inativo; produtos sem preço sobem ao topo. Detalhe do produto: banner âmbar com botão "Definir preço" em destaque quando `price_current=0`. `PriceUpdateForm`: novas props `label` e `highlight`. 4 novos testes unitários (876 total).
 >
 > **v6.5.19:** Fluxo de precificação corrigido — farmácia define `pharmacy_cost` (seu repasse), plataforma define `price_current` (preço à clínica). `createProduct`: força `price_current=0` quando chamado por `PHARMACY_ADMIN`. `updatePharmacyCost`: aberto para `PHARMACY_ADMIN` com ownership check (farmácia atualiza próprio custo sem precisar de admin). Validator: `price_current ≥ 0`. `ProductForm`: nova prop `isPharmacyAdmin` — esconde campo de preço ao cliente, análise de margem, comissão do consultor e lucro da plataforma; seção renomeada para "Seu repasse". Detalhe do produto: `PHARMACY_ADMIN` vê seu repasse em destaque (não o preço), `PharmacyCostUpdateForm` disponível para farmácia, `PriceUpdateForm` restrito a `SUPER_ADMIN`.
 >
@@ -251,6 +253,7 @@ Itens do roadmap que dependem de CNPJ ativo para implementar:
 | 6.5.17  | Fix acesso negado em `/products/[id]` para `PHARMACY_ADMIN` — `requireRolePage` + ownership check              | ✅     |
 | 6.5.18  | Fix info-leak: margem/comissão/lucro ocultos de `PHARMACY_ADMIN` em produtos e repasses; varredura completa    | ✅     |
 | 6.5.19  | Fix fluxo de precificação: farmácia define repasse, plataforma define preço; ownership em `updatePharmacyCost` | ✅     |
+| 6.5.20  | Workflow de precificação: inativo ao criar, notificação push, card dashboard, badge lista, banner detalhe      | ✅     |
 
 **O que está 100% pronto:** plataforma técnica, autenticação, pedidos, pagamentos sandbox, notificações (push/email/SMS/push), LGPD portal, auditoria, compliance CNPJ, suporte por tickets com IA, cupons de desconto, gerenciamento de categorias, SKU automático, Política de Privacidade, Termos de Uso, E2E tests, CI/CD, documentação, **8 features de IA em produção**, **enforcement completo de receitas médicas com controle por produto e por unidade**, **atualizações em tempo real via Supabase Realtime** (status do pedido sincronizado automaticamente entre clínica, farmácia e admin).
 
