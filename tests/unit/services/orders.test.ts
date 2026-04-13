@@ -586,7 +586,7 @@ describe('createOrder — document upload advances status', () => {
     const result = await createOrder({
       clinic_id: CID,
       items: [{ product_id: PID, quantity: 1 }],
-      documents: [file],
+      documents: [{ file, type: 'PRESCRIPTION' }],
     })
 
     expect(result.error).toBeUndefined()

@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { createOrder } from '@/services/orders'
+import { createOrder, type OrderDocument } from '@/services/orders'
 import { resolveDoctorFieldState } from '@/lib/orders/doctor-field-rules'
+import { REQUIRED_DOCUMENT_TYPES } from '@/components/orders/document-manager'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -58,7 +59,7 @@ export function NewOrderForm({
 }: NewOrderFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [documents, setDocuments] = useState<File[]>([])
+  const [documents, setDocuments] = useState<OrderDocument[]>([])
   const [clinicId, setClinicId] = useState(resolvedClinic?.id ?? '')
   const [doctorId, setDoctorId] = useState('')
   const [notes, setNotes] = useState('')
@@ -119,10 +120,18 @@ export function NewOrderForm({
     return cartParam ? `/doctors/new?cart=${encodeURIComponent(cartParam)}` : '/doctors/new'
   }
 
+  // Default document type: PRESCRIPTION when cart has any prescription product, otherwise OTHER
+  const hasRxProduct = cart.some((c) => c.product.requires_prescription)
+  const defaultDocType = hasRxProduct ? 'PRESCRIPTION' : 'OTHER'
+
   const handleFileAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    setDocuments((prev) => [...prev, ...files])
+    setDocuments((prev) => [...prev, ...files.map((file) => ({ file, type: defaultDocType }))])
     e.target.value = ''
+  }
+
+  function updateDocType(index: number, type: string) {
+    setDocuments((prev) => prev.map((d, i) => (i === index ? { ...d, type } : d)))
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -375,7 +384,9 @@ export function NewOrderForm({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-gray-500">
-            Anexe a prescrição médica e demais documentos obrigatórios.
+            {hasRxProduct
+              ? 'Este pedido contém produtos com receita obrigatória. Anexe a receita médica e demais documentos necessários.'
+              : 'Anexe documentos de suporte ao pedido, se necessário.'}
           </p>
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-5 transition-colors hover:border-blue-400 hover:bg-blue-50/50">
             <Upload className="h-5 w-5 text-gray-400" />
@@ -390,18 +401,33 @@ export function NewOrderForm({
           </label>
           {documents.length > 0 && (
             <ul className="space-y-2">
-              {documents.map((file, i) => (
+              {documents.map((doc, i) => (
                 <li
                   key={i}
-                  className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5"
+                  className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
                 >
                   <FileText className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                  <span className="flex-1 truncate text-sm text-gray-700">{file.name}</span>
-                  <span className="text-xs text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-gray-700">
+                    {doc.file.name}
+                  </span>
+                  <span className="flex-shrink-0 text-xs text-gray-400">
+                    {(doc.file.size / 1024).toFixed(0)} KB
+                  </span>
+                  <select
+                    value={doc.type}
+                    onChange={(e) => updateDocType(i, e.target.value)}
+                    className="flex-shrink-0 rounded border border-gray-200 bg-white px-2 py-1 text-xs focus:ring-1 focus:ring-blue-400 focus:outline-none"
+                  >
+                    {REQUIRED_DOCUMENT_TYPES.map((t) => (
+                      <option key={t.type} value={t.type}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     onClick={() => setDocuments((p) => p.filter((_, j) => j !== i))}
-                    className="text-gray-400 hover:text-red-500"
+                    className="flex-shrink-0 text-gray-400 hover:text-red-500"
                   >
                     <X className="h-4 w-4" />
                   </button>

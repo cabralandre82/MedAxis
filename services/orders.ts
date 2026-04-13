@@ -37,8 +37,13 @@ const createOrderSchema = z.object({
     .min(1, 'Adicione ao menos um produto'),
 })
 
+export type OrderDocument = {
+  file: File
+  type: string
+}
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema> & {
-  documents?: File[]
+  documents?: OrderDocument[]
 }
 
 interface CreateOrderResult {
@@ -186,7 +191,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     // Upload documents if any; track how many were saved successfully
     let uploadedCount = 0
     if (input.documents && input.documents.length > 0) {
-      for (const file of input.documents) {
+      for (const { file, type } of input.documents) {
         try {
           const fileName = `${order.id}/${Date.now()}-${file.name}`
           const arrayBuffer = await file.arrayBuffer()
@@ -197,7 +202,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           if (uploadData) {
             await adminClient.from('order_documents').insert({
               order_id: order.id,
-              document_type: 'OTHER',
+              document_type: type,
               storage_path: uploadData.path,
               original_filename: file.name,
               mime_type: file.type,
