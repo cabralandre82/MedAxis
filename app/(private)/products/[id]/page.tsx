@@ -78,17 +78,34 @@ interface PageProps {
 
 export default async function ProductDetailAdminPage({ params }: PageProps) {
   const { id } = await params
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PHARMACY_ADMIN'])
 
   const supabase = createAdminClient()
   const currentUser = await getCurrentUser()
   const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
+  const isPharmacy = currentUser?.roles.includes('PHARMACY_ADMIN') ?? false
+
+  // Resolve pharmacy membership for ownership check
+  let myPharmacyId: string | undefined
+  if (isPharmacy && currentUser) {
+    const { data: membership } = await supabase
+      .from('pharmacy_members')
+      .select('pharmacy_id')
+      .eq('user_id', currentUser.id)
+      .single()
+    myPharmacyId = membership?.pharmacy_id ?? undefined
+  }
 
   const { data: productRaw } = await supabase
     .from('products')
     .select('*, product_categories(*), pharmacies(*)')
     .eq('id', id)
     .single()
+
+  // PHARMACY_ADMIN can only view products belonging to their own pharmacy
+  if (isPharmacy && productRaw && myPharmacyId && productRaw.pharmacy_id !== myPharmacyId) {
+    notFound()
+  }
 
   const { data: settingRaw } = await supabase
     .from('app_settings')
