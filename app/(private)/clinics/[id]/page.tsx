@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { formatCNPJ, formatPhone, formatDate } from '@/lib/utils'
+
+export const dynamic = 'force-dynamic'
 import { EntityStatusBadge } from '@/components/shared/status-badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { ClinicStatusActions } from '@/components/clinics/clinic-status-actions'
@@ -19,7 +21,7 @@ export default async function ClinicDetailPage({ params }: PageProps) {
   const { id } = await params
   const currentUser = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
   const isSuperAdmin = currentUser.roles.includes('SUPER_ADMIN')
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
   const { data: clinic } = await supabase
     .from('clinics')
     .select('*, sales_consultants(id, full_name, commission_rate, status)')

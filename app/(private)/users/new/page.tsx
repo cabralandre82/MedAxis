@@ -1,6 +1,8 @@
 import { requireRolePage } from '@/lib/rbac'
 import { getCurrentUser } from '@/lib/auth/session'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
+
+export const dynamic = 'force-dynamic'
 import { UserForm } from '@/components/users/user-form'
 import type { Clinic, Pharmacy, SalesConsultant } from '@/types'
 import type { Metadata } from 'next'
@@ -13,7 +15,7 @@ export default async function NewUserPage() {
   const currentUser = await getCurrentUser()
   const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
 
   const [{ data: clinicsRaw }, { data: pharmaciesRaw }, { data: consultantsRaw }] =
     await Promise.all([

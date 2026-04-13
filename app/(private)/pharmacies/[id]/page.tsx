@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { formatCNPJ, formatPhone, formatDate, formatCurrency } from '@/lib/utils'
+
+export const dynamic = 'force-dynamic'
 import { EntityStatusBadge } from '@/components/shared/status-badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { PharmacyStatusActions } from '@/components/pharmacies/pharmacy-status-actions'
@@ -18,7 +20,7 @@ export default async function PharmacyDetailPage({ params }: PageProps) {
   const { id } = await params
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
   const { data: pharmacy } = await supabase.from('pharmacies').select('*').eq('id', id).single()
 
   if (!pharmacy) notFound()

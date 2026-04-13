@@ -2,8 +2,9 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
 import { getCurrentUser } from '@/lib/auth/session'
-import { createServerClient } from '@/lib/db/server'
 import { createAdminClient } from '@/lib/db/admin'
+
+export const dynamic = 'force-dynamic'
 import { formatDate, formatPhone } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResetPasswordDialog } from '@/components/users/reset-password-dialog'
@@ -40,10 +41,9 @@ export default async function UserDetailPage({ params }: PageProps) {
   const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
   const isSelf = currentUser?.id === id
 
-  const supabase = await createServerClient()
   const adminClient = createAdminClient()
 
-  const { data: profileRaw } = await supabase
+  const { data: profileRaw } = await adminClient
     .from('profiles')
     .select('*, user_roles(role)')
     .eq('id', id)
@@ -65,7 +65,7 @@ export default async function UserDetailPage({ params }: PageProps) {
     user_roles: Array<{ role: string }>
   }
 
-  const { data: clinicLinksRaw } = await supabase
+  const { data: clinicLinksRaw } = await adminClient
     .from('clinic_members')
     .select('role, clinics(id, trade_name)')
     .eq('user_id', id)
@@ -75,7 +75,7 @@ export default async function UserDetailPage({ params }: PageProps) {
     clinics: { id: string; trade_name: string } | null
   }>
 
-  const { data: recentOrdersRaw } = await supabase
+  const { data: recentOrdersRaw } = await adminClient
     .from('orders')
     .select('id, code, order_status, created_at')
     .eq('created_by_user_id', id)

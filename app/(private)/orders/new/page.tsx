@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
-import { createClient } from '@/lib/db/server'
 import { createAdminClient } from '@/lib/db/admin'
+
+export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/session'
 import { NewOrderForm, type NewOrderFormProduct } from '@/components/orders/new-order-form'
@@ -24,10 +25,9 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
     redirect('/dashboard')
   }
 
-  const supabase = await createClient()
   const admin = createAdminClient()
 
-  const { data: productsRaw } = await supabase
+  const { data: productsRaw } = await admin
     .from('products')
     .select(
       'id, name, slug, concentration, presentation, price_current, estimated_deadline_days, requires_prescription, pharmacy_id, pharmacies(id, trade_name), product_images(id, public_url, alt_text, sort_order)'

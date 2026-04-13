@@ -1,5 +1,5 @@
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { CategoriesManager } from '@/components/categories/categories-manager'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +9,7 @@ export const metadata = { title: 'Categorias de Produtos | Clinipharma' }
 export default async function CategoriesPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
 
   const { data: categoriesRaw } = await supabase
     .from('product_categories')

@@ -1,13 +1,14 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { formatPhone, formatDate } from '@/lib/utils'
 import { EntityStatusBadge } from '@/components/shared/status-badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { DoctorStatusActions } from '@/components/doctors/doctor-status-actions'
 import type { Doctor, EntityStatus } from '@/types'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Detalhe do Médico | Clinipharma' }
 
 interface PageProps {
@@ -18,7 +19,7 @@ export default async function DoctorDetailPage({ params }: PageProps) {
   const { id } = await params
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN'])
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
   const { data: doctor } = await supabase.from('doctors').select('*').eq('id', id).single()
 
   if (!doctor) notFound()

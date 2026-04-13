@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { requireRolePage } from '@/lib/rbac'
 import { getCurrentUser } from '@/lib/auth/session'
+
+export const dynamic = 'force-dynamic'
 import { ButtonLink } from '@/components/ui/button-link'
 import { formatCNPJ, formatCurrency } from '@/lib/utils'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
@@ -34,7 +36,7 @@ export default async function ConsultantDetailPage({
   const { id } = await params
   const currentUser = await getCurrentUser()
   const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: consultant } = await supabase
     .from('sales_consultants')

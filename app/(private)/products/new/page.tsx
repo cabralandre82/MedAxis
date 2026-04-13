@@ -1,6 +1,8 @@
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { ProductForm } from '@/components/products/product-form'
+
+export const dynamic = 'force-dynamic'
 import type { ProductCategory, Pharmacy } from '@/types'
 
 export const metadata = { title: 'Novo Produto | Clinipharma' }
@@ -8,7 +10,7 @@ export const metadata = { title: 'Novo Produto | Clinipharma' }
 export default async function NewProductPage() {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
 
   const [{ data: categoriesRaw }, { data: pharmaciesRaw }, { data: settingRaw }] =
     await Promise.all([

@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { formatCurrency, formatDate } from '@/lib/utils'
+
+export const dynamic = 'force-dynamic'
 import { ButtonLink } from '@/components/ui/button-link'
 import { PriceUpdateForm } from '@/components/products/price-update-form'
 import { PharmacyCostUpdateForm } from '@/components/products/pharmacy-cost-update-form'
@@ -77,7 +79,7 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
   const { id } = await params
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
   const currentUser = await getCurrentUser()
   const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
 

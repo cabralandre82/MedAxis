@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { requireRolePage } from '@/lib/rbac'
+import { formatCurrency, formatDateTime } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
 import { parseCursorParams, sliceCursorResult } from '@/lib/cursor-pagination'
 import { CursorPagination } from '@/components/ui/cursor-pagination'
 import { ConsultantTransferDialog } from '@/components/consultants/consultant-transfer-dialog'
@@ -21,7 +21,7 @@ export default async function ConsultantTransfersPage({ searchParams }: Props) {
   const currentUser = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
   const isSuperAdmin = currentUser.roles.includes('SUPER_ADMIN')
   const { after, before } = await searchParams
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const cursor = parseCursorParams({ after, before, pageSize: PAGE_SIZE })
 

@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { getCurrentUser } from '@/lib/auth/session'
+
+export const dynamic = 'force-dynamic'
 import { TicketConversation } from '@/components/support/ticket-conversation'
 import {
   TICKET_CATEGORY_LABELS,
@@ -29,7 +31,7 @@ export default async function SupportTicketPage({ params }: PageProps) {
   ])
 
   const user = await getCurrentUser()
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
   const isAdmin = user?.roles?.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r)) ?? false
 
   const { data: ticket } = await supabase

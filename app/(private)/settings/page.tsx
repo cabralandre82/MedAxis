@@ -1,18 +1,18 @@
 import { Metadata } from 'next'
-import { createClient } from '@/lib/db/server'
 import { requireRolePage } from '@/lib/rbac'
 import { SettingsForm } from '@/components/shared/settings-form'
 import { SlaConfig } from '@/components/settings/sla-config'
 import { createAdminClient } from '@/lib/db/admin'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = { title: 'Configurações' }
 
 export default async function SettingsPage() {
   const user = await requireRolePage(['SUPER_ADMIN'])
-  const supabase = await createClient()
   const admin = createAdminClient()
 
-  const { data: settings } = await supabase.from('app_settings').select('*').order('key')
+  const { data: settings } = await admin.from('app_settings').select('*').order('key')
   const { data: pharmacies } = await admin
     .from('pharmacies')
     .select('id, trade_name')

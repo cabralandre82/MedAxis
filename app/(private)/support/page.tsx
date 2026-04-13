@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
+import { getCurrentUser } from '@/lib/auth/session'
 
 export const dynamic = 'force-dynamic'
-import { getCurrentUser } from '@/lib/auth/session'
 import { TicketList } from '@/components/support/ticket-list'
 import { ButtonLink } from '@/components/ui/button-link'
 import {
@@ -27,7 +27,7 @@ export default async function SupportPage() {
   ])
 
   const user = await getCurrentUser()
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
   const isAdmin = user?.roles?.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r)) ?? false
 
   const query = supabase

@@ -1,8 +1,8 @@
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
+import { ButtonLink } from '@/components/ui/button-link'
 
 export const dynamic = 'force-dynamic'
-import { ButtonLink } from '@/components/ui/button-link'
 import { UsersTable } from '@/components/users/users-table'
 import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import { parsePage, paginationRange } from '@/lib/utils'
@@ -21,7 +21,7 @@ export default async function UsersPage({ searchParams }: Props) {
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
   const { page: pageRaw } = await searchParams
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
 
   const page = parsePage(pageRaw)
   const { from, to } = paginationRange(page, PAGE_SIZE)

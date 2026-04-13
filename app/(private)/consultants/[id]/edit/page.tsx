@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { requireRolePage } from '@/lib/rbac'
+
+export const dynamic = 'force-dynamic'
 import { ConsultantForm } from '@/components/consultants/consultant-form'
 import type { SalesConsultant } from '@/types'
 
@@ -9,7 +11,7 @@ export const metadata = { title: 'Editar Consultor — Clinipharma' }
 export default async function EditConsultantPage({ params }: { params: Promise<{ id: string }> }) {
   await requireRolePage(['SUPER_ADMIN'])
   const { id } = await params
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data } = await supabase.from('sales_consultants').select('*').eq('id', id).single()
   if (!data) notFound()

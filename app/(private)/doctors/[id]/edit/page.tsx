@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
-import { createServerClient } from '@/lib/db/server'
+import { createAdminClient } from '@/lib/db/admin'
 import { DoctorForm } from '@/components/doctors/doctor-form'
+
+export const dynamic = 'force-dynamic'
 import type { Doctor } from '@/types'
 
 export const metadata = { title: 'Editar Médico | Clinipharma' }
@@ -15,7 +17,7 @@ export default async function EditDoctorPage({ params }: PageProps) {
   const { id } = await params
   await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
 
-  const supabase = await createServerClient()
+  const supabase = createAdminClient()
   const { data: doctor } = await supabase.from('doctors').select('*').eq('id', id).single()
 
   if (!doctor) notFound()
