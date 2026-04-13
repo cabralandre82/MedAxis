@@ -14,9 +14,11 @@ import type { Doctor } from '@/types'
 
 interface DoctorFormProps {
   doctor?: Doctor
+  /** Where to redirect after successful creation. Defaults to /doctors/:id */
+  redirectTo?: string
 }
 
-export function DoctorForm({ doctor }: DoctorFormProps) {
+export function DoctorForm({ doctor, redirectTo }: DoctorFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const isEditing = !!doctor
@@ -57,7 +59,7 @@ export function DoctorForm({ doctor }: DoctorFormProps) {
           return
         }
         toast.success('Médico cadastrado com sucesso!')
-        router.push(`/doctors/${result.id}`)
+        router.push(redirectTo ?? `/doctors/${result.id}`)
       }
       router.refresh()
     } finally {

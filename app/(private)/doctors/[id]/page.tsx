@@ -16,7 +16,7 @@ interface PageProps {
 
 export default async function DoctorDetailPage({ params }: PageProps) {
   const { id } = await params
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN'])
 
   const supabase = await createServerClient()
   const { data: doctor } = await supabase.from('doctors').select('*').eq('id', id).single()
