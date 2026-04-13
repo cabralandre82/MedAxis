@@ -107,6 +107,10 @@ export const productSchema = z.object({
   active: z.boolean().optional(),
   status: z.enum(['active', 'unavailable', 'inactive']).optional(),
   featured: z.boolean().optional(),
+  // Prescription control
+  requires_prescription: z.boolean().optional(),
+  prescription_type: z.enum(['SIMPLE', 'SPECIAL_CONTROL', 'ANTIMICROBIAL']).nullable().optional(),
+  max_units_per_prescription: z.number().int().min(1).nullable().optional(),
 })
 
 export type ProductFormData = z.infer<typeof productSchema>

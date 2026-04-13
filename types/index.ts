@@ -211,6 +211,9 @@ export interface Product {
   featured: boolean
   created_at: string
   updated_at: string
+  requires_prescription: boolean
+  prescription_type: 'SIMPLE' | 'SPECIAL_CONTROL' | 'ANTIMICROBIAL' | null
+  max_units_per_prescription: number | null
 }
 
 export interface ProductWithRelations extends Product {

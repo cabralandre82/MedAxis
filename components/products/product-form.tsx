@@ -22,7 +22,7 @@ import { productSchema, type ProductFormData } from '@/lib/validators'
 import { createProduct, updateProduct } from '@/services/products'
 import { slugify, formatCurrency } from '@/lib/utils'
 import type { ProductWithRelations, ProductCategory, Pharmacy } from '@/types'
-import { AlertTriangle, TrendingUp, Info, Link2, Tag, Layers } from 'lucide-react'
+import { AlertTriangle, TrendingUp, Info, Link2, Tag, Layers, FileText } from 'lucide-react'
 
 interface ProductFormProps {
   product?: ProductWithRelations
@@ -61,6 +61,9 @@ export function ProductForm({ product, categories, pharmacies, consultantRate }:
           active: product.active,
           status: (product.status as 'active' | 'unavailable' | 'inactive') ?? 'active',
           featured: product.featured,
+          requires_prescription: product.requires_prescription ?? false,
+          prescription_type: product.prescription_type ?? null,
+          max_units_per_prescription: product.max_units_per_prescription ?? null,
         }
       : {
           active: true,
@@ -68,6 +71,9 @@ export function ProductForm({ product, categories, pharmacies, consultantRate }:
           featured: false,
           pharmacy_cost: 0,
           characteristics_json: {},
+          requires_prescription: false,
+          prescription_type: null,
+          max_units_per_prescription: null,
         },
   })
 
@@ -75,6 +81,7 @@ export function ProductForm({ product, categories, pharmacies, consultantRate }:
   const slugValue = watch('slug') ?? ''
   const priceValue = watch('price_current') ?? 0
   const pharmacyCostValue = watch('pharmacy_cost') ?? 0
+  const requiresPrescription = watch('requires_prescription') ?? false
 
   // Live margin calculations
   const platformMargin = Math.max(0, priceValue - pharmacyCostValue)
@@ -511,6 +518,110 @@ export function ProductForm({ product, categories, pharmacies, consultantRate }:
             />
             <Label htmlFor="featured">Destaque</Label>
           </div>
+        </div>
+      </section>
+
+      {/* Receita Médica */}
+      <section>
+        <h3 className="mb-4 text-sm font-semibold tracking-wider text-gray-700 uppercase">
+          Receita Médica
+        </h3>
+
+        <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+          {/* Toggle principal */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FileText className="h-4 w-4 text-gray-500" />
+              <div>
+                <p className="text-sm font-medium text-gray-800">Exige receita médica</p>
+                <p className="text-xs text-gray-500">
+                  O pedido só avançará após o envio da receita
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="requires_prescription"
+              checked={requiresPrescription}
+              onCheckedChange={(v) => {
+                setValue('requires_prescription', v)
+                if (!v) {
+                  setValue('prescription_type', null)
+                  setValue('max_units_per_prescription', null)
+                }
+              }}
+            />
+          </div>
+
+          {/* Campos condicionais — só aparecem se requires_prescription = true */}
+          {requiresPrescription && (
+            <div className="space-y-4 border-t border-gray-100 pt-4">
+              {/* Tipo de receita */}
+              <div className="space-y-2">
+                <Label>Tipo de receita</Label>
+                <Select
+                  defaultValue={product?.prescription_type ?? undefined}
+                  onValueChange={(v) =>
+                    setValue(
+                      'prescription_type',
+                      v as 'SIMPLE' | 'SPECIAL_CONTROL' | 'ANTIMICROBIAL'
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SIMPLE">
+                      📋 Receita Simples — receita médica comum (branca ou azul)
+                    </SelectItem>
+                    <SelectItem value="SPECIAL_CONTROL">
+                      🔴 Controle Especial — Portaria 344/98 (Lista B1, B2, C1, C2, C3)
+                    </SelectItem>
+                    <SelectItem value="ANTIMICROBIAL">
+                      💊 Antimicrobiano — receita de retenção em 2 vias
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-400">
+                  Informação exibida na interface da clínica ao enviar a receita.
+                </p>
+              </div>
+
+              {/* Limite de unidades por receita */}
+              <div className="space-y-2">
+                <Label htmlFor="max_units_per_prescription">Unidades cobertas por receita</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="max_units_per_prescription"
+                    type="number"
+                    min="1"
+                    placeholder="Deixe em branco para sem limite"
+                    className="w-56"
+                    defaultValue={product?.max_units_per_prescription ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setValue('max_units_per_prescription', val === '' ? null : parseInt(val, 10))
+                    }}
+                  />
+                  <span className="text-sm text-gray-500">unidades por receita</span>
+                </div>
+                <div className="space-y-1 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                  <p>
+                    <strong>Em branco:</strong> uma receita cobre qualquer quantidade pedida (Modelo
+                    A — receita simples)
+                  </p>
+                  <p>
+                    <strong>1:</strong> uma receita por unidade — ex: testosterona, controlados
+                    especiais (Modelo B)
+                  </p>
+                  <p>
+                    <strong>N:</strong> uma receita cobre N unidades — ex: antibiótico de 30
+                    cápsulas, 1 caixa = 1 receita
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
