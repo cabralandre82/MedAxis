@@ -51,7 +51,17 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     const user = await requireAuth()
 
     const parsed = createOrderSchema.safeParse(input)
-    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
+    if (!parsed.success) {
+      logger.error('[createOrder] schema validation failed', {
+        issues: parsed.error.issues,
+        input: {
+          clinic_id: input.clinic_id,
+          doctor_id: input.doctor_id,
+          itemCount: input.items?.length,
+        },
+      })
+      return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
+    }
 
     const { clinic_id, doctor_id = null, notes, items } = parsed.data
     const supabase = await createClient()
