@@ -4,8 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bell, Check, CheckCheck, ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/db/client'
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+
+const POLL_MS = 30_000
 
 interface Notification {
   id: string
@@ -34,6 +37,8 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  const clientRef = useRef<SupabaseClient | null>(null)
 
   const fetchNotifications = useCallback(async () => {
     const supabase = createClient()
@@ -46,20 +51,39 @@ export function NotificationBell() {
     setUnreadCount((data ?? []).filter((n: Notification) => !n.read_at).length)
   }, [])
 
+  // Polling fallback — guarantees eventual consistency even if Realtime is down
+  useEffect(() => {
+    const id = setInterval(fetchNotifications, POLL_MS)
+    return () => clearInterval(id)
+  }, [fetchNotifications])
+
+  // Realtime subscription — guarded by auth session check to avoid anon connections
   useEffect(() => {
     fetchNotifications()
 
-    // Realtime subscription
     const supabase = createClient()
-    const channel = supabase
-      .channel('notifications-bell')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () =>
-        fetchNotifications()
-      )
-      .subscribe()
+    clientRef.current = supabase
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (clientRef.current !== supabase) return
+      if (!data.session) return // not authenticated — polling fallback handles it
+
+      const channel = supabase
+        .channel('notifications-bell')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () =>
+          fetchNotifications()
+        )
+        .subscribe()
+
+      channelRef.current = channel
+    })
 
     return () => {
-      supabase.removeChannel(channel)
+      clientRef.current = null
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
     }
   }, [fetchNotifications])
 

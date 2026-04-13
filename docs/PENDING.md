@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.21** | **881 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.22** | **881 testes** | cobertura atualizada
+>
+> **v6.5.22:** Dois bugs corrigidos. (1) Dashboard "pedidos em aberto": status `DELIVERED` não estava na lista de exclusão (`['COMPLETED','CANCELED']`), fazendo pedidos entregues aparecerem como abertos. Adicionado `DELIVERED` ao filtro. (2) Sino de notificações não atualizava em tempo real: tabela `notifications` nunca foi adicionada à publication `supabase_realtime` (migration 035), e o componente `NotificationBell` sofria o mesmo auth-race corrigido no `OrderRealtimeUpdater` (WebSocket conectava como anon antes da sessão carregar). Corrigido com `auth.getSession()` antes de subscrever + polling fallback de 30 s.
 >
 > **v6.5.21:** Integridade de preços — resposta em 3 camadas quando farmácia atualiza `pharmacy_cost`. (1) 🟡 Margem > 15%: notificação informativa "repasse atualizado, margem parece OK — revise o preço ao cliente" (não silenciável). (2) 🟠 Margem ≤ 15%: alerta "margem crítica — revise o preço com urgência". (3) 🔴 `pharmacy_cost ≥ price_current`: produto **desativado automaticamente** + alerta urgente "produto desativado — repasse excede preço ao cliente". Nenhuma ação quando `price_current=0` (produto já estava inativo aguardando precificação). Novo tipo de notificação `PRODUCT_COST_UPDATED` (não silenciável). 5 novos testes unitários (881 total).
 >

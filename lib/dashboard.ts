@@ -41,7 +41,7 @@ export const getAdminDashboardData = unstable_cache(
     const activePharmacies = (pharmacies.data ?? []).filter((p) => p.status === 'ACTIVE')
 
     const openOrders = (orders.data ?? []).filter(
-      (o) => !['COMPLETED', 'CANCELED'].includes(o.order_status)
+      (o) => !['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.order_status)
     )
 
     const recentOrders = (orders.data ?? []).slice(0, 5)
