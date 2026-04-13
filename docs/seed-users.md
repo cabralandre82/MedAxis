@@ -111,6 +111,41 @@ Após a criação do pedido:
 
 Uploads adicionais após a criação são feitos via `DocumentManager` na página de detalhe (`/orders/[id]`), com seletor de tipo e checklist visual dos tipos obrigatórios.
 
+**Fluxo de revisão de documentos pela farmácia:**
+
+Quando o pedido chega em `READY_FOR_REVIEW`, a farmácia analisa cada documento na página de detalhe do pedido:
+
+- **Download**: botão por documento gera URL assinada (válida 5 min) via `/api/documents/[id]/download`
+- **Aprovar**: documento marcado como `APPROVED`
+- **Rejeitar**: documento marcado como `REJECTED` com motivo obrigatório (exibido para a clínica)
+
+Após cada ação, `evaluateOrderDocuments` reavalia o pedido inteiro:
+
+| Resultado                    | Ação automática                                                                              |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Todos os itens com docs OK   | Pedido avança para `AWAITING_PAYMENT` + notifica clínica                                     |
+| Algum item com doc rejeitado | Pedido volta para `AWAITING_DOCUMENTS` + prazo de 3 dias úteis + notifica clínica com motivo |
+
+**Reenvio pela clínica:**
+
+- Pode reenviar documentos ilimitadas vezes até o prazo expirar
+- Pode remover um item com `doc_status = REJECTED_DOCS` enquanto pedido está em `AWAITING_DOCUMENTS`
+  - Se restar pelo menos 1 item → pedido vai para `READY_FOR_REVIEW` automaticamente
+  - Se não restar nenhum item → pedido cancelado
+
+**Expiração de prazo:**
+
+- Cron diário (`/api/cron/expire-doc-deadlines`, 6h) cancela pedidos em `AWAITING_DOCUMENTS` com `docs_deadline` vencido
+- Clínica é notificada e deve abrir novo pedido
+
+**Campos adicionados pela migration 033:**
+
+- `order_documents`: `status`, `rejection_reason`, `reviewed_by_user_id`, `reviewed_at`
+- `order_items`: `doc_status` (`OK` / `PENDING_DOCS` / `REJECTED_DOCS`)
+- `orders`: `docs_deadline`
+
+---
+
 **Compliance:**
 
 O `canPlaceOrder` valida CNPJ da farmácia via API externa. CNPJs fictícios (dados seed) serão bloqueados. Para testes, execute no Supabase SQL Editor:
