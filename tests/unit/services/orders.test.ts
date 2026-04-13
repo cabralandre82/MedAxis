@@ -535,6 +535,100 @@ describe('createOrder — insertion errors', () => {
   })
 })
 
+describe('createOrder — document upload advances status', () => {
+  const validProducts = [
+    {
+      id: PID,
+      pharmacy_id: 'ph-1',
+      price_current: 100,
+      name: 'Prod A',
+      estimated_deadline_days: 3,
+      active: true,
+    },
+  ]
+
+  beforeEach(async () => {
+    const { canPlaceOrder } = await import('@/lib/compliance')
+    vi.mocked(canPlaceOrder).mockResolvedValue({ allowed: true })
+  })
+
+  it('advances status to READY_FOR_REVIEW when a document is uploaded', async () => {
+    const supabase = mockSupabaseClient()
+    const productsQb = makeQueryBuilder(validProducts, null)
+    supabase.from = vi.fn().mockReturnValue(productsQb)
+    vi.mocked(serverModule.createClient).mockResolvedValue(
+      supabase as ReturnType<typeof mockSupabaseClient>
+    )
+
+    const admin = mockSupabaseAdmin()
+    const genericQb = makeQueryBuilder(null, null)
+    const orderInsertQb = makeQueryBuilder({ id: OID, code: 'ORD-001' }, null)
+
+    // Mock storage upload success
+    admin.storage = {
+      from: vi.fn().mockReturnValue({
+        upload: vi.fn().mockResolvedValue({ data: { path: 'order-id/file.pdf' }, error: null }),
+      }),
+    } as unknown as typeof admin.storage
+
+    let callCount = 0
+    admin.from = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return orderInsertQb // orders insert
+      return genericQb // items, history, payment, token, order_documents, status update, history
+    })
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const file = new File(['pdf content'], 'doc.pdf', { type: 'application/pdf' })
+    const result = await createOrder({
+      clinic_id: CID,
+      items: [{ product_id: PID, quantity: 1 }],
+      documents: [file],
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.orderId).toBe(OID)
+    // status update + history insert for READY_FOR_REVIEW must have been called
+    expect(admin.from).toHaveBeenCalledWith('orders')
+    expect(admin.from).toHaveBeenCalledWith('order_status_history')
+  })
+
+  it('keeps status AWAITING_DOCUMENTS when no documents are sent', async () => {
+    const supabase = mockSupabaseClient()
+    const productsQb = makeQueryBuilder(validProducts, null)
+    supabase.from = vi.fn().mockReturnValue(productsQb)
+    vi.mocked(serverModule.createClient).mockResolvedValue(
+      supabase as ReturnType<typeof mockSupabaseClient>
+    )
+
+    const admin = mockSupabaseAdmin()
+    const orderInsertQb = makeQueryBuilder({ id: OID, code: 'ORD-001' }, null)
+    const genericQb = makeQueryBuilder(null, null)
+
+    let callCount = 0
+    admin.from = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return orderInsertQb
+      return genericQb
+    })
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await createOrder({
+      clinic_id: CID,
+      items: [{ product_id: PID, quantity: 1 }],
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.orderId).toBe(OID)
+  })
+})
+
 describe('updateOrderStatus — history insert failure is non-blocking', () => {
   it('succeeds even when status history insert fails', async () => {
     vi.mocked(sessionModule.requireAuth).mockResolvedValue(adminMock)

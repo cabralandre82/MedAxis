@@ -183,7 +183,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         error: tokenError,
       })
 
-    // Upload documents if any
+    // Upload documents if any; track how many were saved successfully
+    let uploadedCount = 0
     if (input.documents && input.documents.length > 0) {
       for (const file of input.documents) {
         try {
@@ -196,18 +197,35 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           if (uploadData) {
             await adminClient.from('order_documents').insert({
               order_id: order.id,
-              document_type: 'PRESCRIPTION',
+              document_type: 'OTHER',
               storage_path: uploadData.path,
               original_filename: file.name,
               mime_type: file.type,
               file_size: file.size,
               uploaded_by_user_id: user.id,
             })
+            uploadedCount++
           }
         } catch (uploadErr) {
           logger.error('Document upload error:', { error: uploadErr })
         }
       }
+    }
+
+    // If at least one document was uploaded, advance status to READY_FOR_REVIEW
+    if (uploadedCount > 0) {
+      await adminClient
+        .from('orders')
+        .update({ order_status: 'READY_FOR_REVIEW', updated_at: new Date().toISOString() })
+        .eq('id', order.id)
+
+      await adminClient.from('order_status_history').insert({
+        order_id: order.id,
+        old_status: 'AWAITING_DOCUMENTS',
+        new_status: 'READY_FOR_REVIEW',
+        changed_by_user_id: user.id,
+        reason: `${uploadedCount} documento(s) enviado(s) na criação do pedido`,
+      })
     }
 
     await createAuditLog({
