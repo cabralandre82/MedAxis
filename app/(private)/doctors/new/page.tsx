@@ -1,12 +1,23 @@
 import { requireRolePage } from '@/lib/rbac'
-import { getCurrentUser } from '@/lib/auth/session'
 import { DoctorForm } from '@/components/doctors/doctor-form'
 
 export const metadata = { title: 'Novo Médico | Clinipharma' }
 
-export default async function NewDoctorPage() {
+interface NewDoctorPageProps {
+  searchParams: Promise<{ cart?: string }>
+}
+
+export default async function NewDoctorPage({ searchParams }: NewDoctorPageProps) {
   const user = await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN'])
   const isClinicAdmin = user.roles.includes('CLINIC_ADMIN')
+  const { cart } = await searchParams
+
+  // Preserve cart in the redirect URL so /orders/new can restore it
+  const redirectTo = isClinicAdmin
+    ? cart
+      ? `/orders/new?cart=${encodeURIComponent(cart)}`
+      : '/orders/new'
+    : undefined
 
   return (
     <div className="space-y-6">
@@ -19,7 +30,7 @@ export default async function NewDoctorPage() {
         </p>
       </div>
       <div className="rounded-lg border bg-white p-6">
-        <DoctorForm redirectTo={isClinicAdmin ? '/orders/new' : undefined} />
+        <DoctorForm redirectTo={redirectTo} />
       </div>
     </div>
   )

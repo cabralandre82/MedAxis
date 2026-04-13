@@ -43,6 +43,8 @@ interface NewOrderFormProps {
   doctors: { id: string; full_name: string; crm: string; crm_state: string }[]
   /** Whether the current user is a CLINIC_ADMIN (shows doctor shortcut links). */
   isClinicAdmin?: boolean
+  /** Pre-populated cart items restored from URL (e.g. after navigating to /doctors/new). */
+  initialCart?: { productId: string; quantity: number }[]
 }
 
 export function NewOrderForm({
@@ -52,6 +54,7 @@ export function NewOrderForm({
   adminClinics,
   doctors,
   isClinicAdmin = false,
+  initialCart,
 }: NewOrderFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -61,10 +64,16 @@ export function NewOrderForm({
   const [notes, setNotes] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Cart
-  const [cart, setCart] = useState<CartItem[]>(
-    initialProduct ? [{ product: initialProduct, quantity: 1 }] : []
-  )
+  // Cart — restored from initialCart (URL param) or seeded with initialProduct
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (initialCart && initialCart.length > 0) {
+      return initialCart.flatMap(({ productId, quantity }) => {
+        const product = availableProducts.find((p) => p.id === productId)
+        return product ? [{ product, quantity }] : []
+      })
+    }
+    return initialProduct ? [{ product: initialProduct, quantity: 1 }] : []
+  })
   const [selectedProductId, setSelectedProductId] = useState('')
   const [addQty, setAddQty] = useState(1)
 
@@ -102,6 +111,13 @@ export function NewOrderForm({
     cart.map((c) => ({ requires_prescription: c.product.requires_prescription })),
     doctors
   )
+
+  // Serializes the current cart into the /doctors/new URL so the cart is
+  // restored when the user navigates back to /orders/new.
+  function doctorNewUrl() {
+    const cartParam = cart.map((c) => `${c.product.id}:${c.quantity}`).join(',')
+    return cartParam ? `/doctors/new?cart=${encodeURIComponent(cartParam)}` : '/doctors/new'
+  }
 
   const handleFileAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -290,7 +306,7 @@ export function NewOrderForm({
                 </Label>
                 {isClinicAdmin && (
                   <Link
-                    href="/doctors/new"
+                    href={doctorNewUrl()}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
                   >
                     <UserPlus className="h-3 w-3" />
@@ -322,7 +338,7 @@ export function NewOrderForm({
                 </p>
                 <div className="mt-2 flex gap-3">
                   <Link
-                    href="/doctors/new"
+                    href={doctorNewUrl()}
                     className="flex items-center gap-1 text-xs font-medium text-amber-900 underline hover:no-underline"
                   >
                     <UserPlus className="h-3 w-3" />

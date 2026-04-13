@@ -8,13 +8,22 @@ import { NewOrderForm, type NewOrderFormProduct } from '@/components/orders/new-
 export const metadata: Metadata = { title: 'Novo pedido | Clinipharma' }
 
 interface NewOrderPageProps {
-  searchParams: Promise<{ product?: string }>
+  searchParams: Promise<{ product?: string; cart?: string }>
 }
 
 export default async function NewOrderPage({ searchParams }: NewOrderPageProps) {
   const params = await searchParams
   const user = await getCurrentUser()
   if (!user) redirect('/login')
+
+  // Parse ?cart=id:qty,id:qty (set when navigating away to /doctors/new)
+  const initialCart = params.cart
+    ? params.cart.split(',').flatMap((entry) => {
+        const [productId, qtyStr] = entry.split(':')
+        const quantity = parseInt(qtyStr ?? '1', 10)
+        return productId && quantity > 0 ? [{ productId, quantity }] : []
+      })
+    : undefined
 
   if (user.registration_status && user.registration_status !== 'APPROVED') {
     redirect('/dashboard')
@@ -122,6 +131,7 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
         adminClinics={adminClinics}
         doctors={linkedDoctors}
         isClinicAdmin={user.roles.includes('CLINIC_ADMIN')}
+        initialCart={initialCart}
       />
     </div>
   )
