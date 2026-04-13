@@ -335,6 +335,178 @@ describe('updateProduct', () => {
   })
 })
 
+describe('createProduct — PHARMACY_ADMIN role', () => {
+  const pharmacyActorMock = {
+    ...actorMock,
+    id: 'pharm-user-1',
+    roles: ['PHARMACY_ADMIN'] as ['PHARMACY_ADMIN'],
+  }
+
+  it('forces price_current=0 regardless of form input', async () => {
+    vi.mocked(rbacModule.requireRole).mockResolvedValue(pharmacyActorMock)
+
+    // Override validator to include pharmacy_id so ownership check passes
+    const { productSchema } = await import('@/lib/validators')
+    vi.mocked(productSchema.safeParse).mockReturnValueOnce({
+      success: true,
+      data: {
+        name: 'Produto Farmácia',
+        sku: 'SKU-PHARM',
+        status: 'active',
+        price_current: 100, // should be overridden to 0 by the service
+        pharmacy_cost: 60,
+        pharmacy_id: 'pharm-1',
+        featured: false,
+      },
+    } as ReturnType<typeof productSchema.safeParse>)
+
+    const insertedPayloads: unknown[] = []
+    const adminMock = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'pharmacy_members') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { pharmacy_id: 'pharm-1' }, error: null }),
+          }
+        }
+        // product_categories / pharmacies for SKU generation
+        if (table === 'product_categories' || table === 'pharmacies') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi
+              .fn()
+              .mockResolvedValue({ data: { name: 'Cat', trade_name: 'Far' }, error: null }),
+          }
+        }
+        // products table — count for SKU then insert
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockImplementation(() => ({
+            // count query resolves directly
+            then: (resolve: (v: unknown) => void) => resolve({ count: 0, error: null }),
+          })),
+          insert: vi.fn().mockImplementation((payload: unknown) => {
+            insertedPayloads.push(payload)
+            return {
+              select: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({ data: { id: 'prod-new' }, error: null }),
+            }
+          }),
+        }
+      }),
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    // validator mock returns price_current: 100 — should be overridden to 0
+    const result = await createProduct({
+      pharmacy_id: 'pharm-1',
+    } as Parameters<typeof createProduct>[0])
+
+    expect(result.error).toBeUndefined()
+    expect(result.id).toBe('prod-new')
+    expect(insertedPayloads[0]).toMatchObject({ price_current: 0 })
+  })
+
+  it('returns error when PHARMACY_ADMIN tries to create product for another pharmacy', async () => {
+    vi.mocked(rbacModule.requireRole).mockResolvedValue(pharmacyActorMock)
+
+    const adminMock = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'pharmacy_members') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi
+              .fn()
+              .mockResolvedValue({ data: { pharmacy_id: 'pharm-OTHER' }, error: null }),
+          }
+        }
+        return makeQueryBuilder(null, null)
+      }),
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await createProduct({
+      pharmacy_id: 'pharm-1',
+    } as Parameters<typeof createProduct>[0])
+
+    expect(result.error).toBe('Sem permissão para criar produto nesta farmácia')
+  })
+})
+
+describe('updatePharmacyCost — PHARMACY_ADMIN role', () => {
+  const pharmacyActorMock = {
+    ...actorMock,
+    id: 'pharm-user-1',
+    roles: ['PHARMACY_ADMIN'] as ['PHARMACY_ADMIN'],
+  }
+
+  it('allows PHARMACY_ADMIN to update cost of their own pharmacy product', async () => {
+    vi.mocked(rbacModule.requireRole).mockResolvedValue(pharmacyActorMock)
+
+    const adminMock = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'pharmacy_members') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { pharmacy_id: 'pharm-1' }, error: null }),
+          }
+        }
+        // products table
+        const qb = makeQueryBuilder({ pharmacy_cost: 60, pharmacy_id: 'pharm-1' }, null)
+        qb.single = vi.fn().mockResolvedValue({
+          data: { pharmacy_cost: 60, pharmacy_id: 'pharm-1' },
+          error: null,
+        })
+        return qb
+      }),
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await updatePharmacyCost('prod-1', 75, 'revisao de custo')
+    expect(result.error).toBeUndefined()
+  })
+
+  it('rejects PHARMACY_ADMIN trying to update cost of another pharmacy product', async () => {
+    vi.mocked(rbacModule.requireRole).mockResolvedValue(pharmacyActorMock)
+
+    const adminMock = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'pharmacy_members') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi
+              .fn()
+              .mockResolvedValue({ data: { pharmacy_id: 'pharm-OTHER' }, error: null }),
+          }
+        }
+        const qb = makeQueryBuilder({ pharmacy_cost: 60, pharmacy_id: 'pharm-1' }, null)
+        qb.single = vi.fn().mockResolvedValue({
+          data: { pharmacy_cost: 60, pharmacy_id: 'pharm-1' },
+          error: null,
+        })
+        return qb
+      }),
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await updatePharmacyCost('prod-1', 75, 'revisao de custo')
+    expect(result.error).toBe('Sem permissão para alterar custo deste produto')
+  })
+})
+
 describe('createProduct — validation failure', () => {
   it('returns error when schema validation fails', async () => {
     const { productSchema } = await import('@/lib/validators')
