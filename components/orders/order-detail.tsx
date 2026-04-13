@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { OrderRealtimeUpdater, LiveBadge } from '@/components/orders/order-realtime-updater'
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -78,6 +79,7 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
   const isAdmin = currentUser.roles.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
   const isPharmacy = currentUser.roles.includes('PHARMACY_ADMIN')
   const [removingItemId, setRemovingItemId] = useState<string | null>(null)
+  const [liveConnected, setLiveConnected] = useState(false)
 
   async function handleRemoveItem(itemId: string) {
     if (!confirm('Remover este item do pedido? Esta ação não pode ser desfeita.')) return
@@ -202,6 +204,9 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
 
   return (
     <div className="max-w-5xl space-y-5">
+      {/* Realtime subscription — invisible, updates all open sessions */}
+      <OrderRealtimeUpdater orderId={String(order.id)} onConnectionChange={setLiveConnected} />
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -218,6 +223,7 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <LiveBadge connected={liveConnected} />
           <span className="inline-block rounded-full bg-blue-100 px-3 py-1.5 text-sm font-medium text-blue-800">
             {ORDER_STATUS_LABELS[String(order.order_status)] ?? String(order.order_status)}
           </span>
