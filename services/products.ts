@@ -54,11 +54,23 @@ export async function createProduct(
   data: ProductFormData
 ): Promise<{ id?: string; error?: string; sku?: string }> {
   try {
-    const user = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const user = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PHARMACY_ADMIN'])
     const parsed = productSchema.safeParse(data)
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
 
     const adminClient = createAdminClient()
+
+    // PHARMACY_ADMIN can only create products for their own pharmacy
+    if (user.roles.includes('PHARMACY_ADMIN')) {
+      const { data: member } = await adminClient
+        .from('pharmacy_members')
+        .select('pharmacy_id')
+        .eq('user_id', user.id)
+        .single()
+      if (!member || member.pharmacy_id !== parsed.data.pharmacy_id) {
+        return { error: 'Sem permissão para criar produto nesta farmácia' }
+      }
+    }
 
     const slug = parsed.data.slug || slugify(parsed.data.name)
 
@@ -135,10 +147,26 @@ export async function updateProduct(
   data: Partial<ProductFormData>
 ): Promise<{ error?: string }> {
   try {
-    const user = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+    const user = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PHARMACY_ADMIN'])
     const adminClient = createAdminClient()
 
     const { data: existing } = await adminClient.from('products').select('*').eq('id', id).single()
+
+    // PHARMACY_ADMIN can only update products belonging to their own pharmacy
+    if (user.roles.includes('PHARMACY_ADMIN')) {
+      const { data: member } = await adminClient
+        .from('pharmacy_members')
+        .select('pharmacy_id')
+        .eq('user_id', user.id)
+        .single()
+      if (
+        !member ||
+        !existing ||
+        (existing as { pharmacy_id: string }).pharmacy_id !== member.pharmacy_id
+      ) {
+        return { error: 'Sem permissão para editar produto desta farmácia' }
+      }
+    }
 
     const updateData: Record<string, unknown> = { ...data, updated_at: new Date().toISOString() }
     delete updateData['price_current']

@@ -1,7 +1,7 @@
 import { requireRolePage } from '@/lib/rbac'
 import { createAdminClient } from '@/lib/db/admin'
+import { getCurrentUser } from '@/lib/auth/session'
 import { ProductForm } from '@/components/products/product-form'
-
 import type { ProductCategory, Pharmacy } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -9,18 +9,33 @@ export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Novo Produto | Clinipharma' }
 
 export default async function NewProductPage() {
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PHARMACY_ADMIN'])
 
   const supabase = createAdminClient()
+  const currentUser = await getCurrentUser()
+  const isPharmacy = currentUser?.roles.includes('PHARMACY_ADMIN') ?? false
+
+  // Resolve pharmacy membership for pre-selection
+  let myPharmacyId: string | undefined
+  if (isPharmacy && currentUser) {
+    const { data: membership } = await supabase
+      .from('pharmacy_members')
+      .select('pharmacy_id')
+      .eq('user_id', currentUser.id)
+      .single()
+    myPharmacyId = membership?.pharmacy_id ?? undefined
+  }
 
   const [{ data: categoriesRaw }, { data: pharmaciesRaw }, { data: settingRaw }] =
     await Promise.all([
       supabase.from('product_categories').select('*').order('name'),
-      supabase
-        .from('pharmacies')
-        .select('id, trade_name, status')
-        .eq('status', 'ACTIVE')
-        .order('trade_name'),
+      isPharmacy && myPharmacyId
+        ? supabase.from('pharmacies').select('id, trade_name, status').eq('id', myPharmacyId)
+        : supabase
+            .from('pharmacies')
+            .select('id, trade_name, status')
+            .eq('status', 'ACTIVE')
+            .order('trade_name'),
       supabase
         .from('app_settings')
         .select('value_json')
@@ -45,6 +60,7 @@ export default async function NewProductPage() {
           categories={categories}
           pharmacies={pharmacies}
           consultantRate={consultantRate}
+          defaultPharmacyId={myPharmacyId}
         />
       </div>
     </div>

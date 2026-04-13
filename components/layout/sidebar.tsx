@@ -52,7 +52,7 @@ const NAV_ITEMS: NavItem[] = [
     href: '/catalog',
     label: 'Catálogo',
     icon: ShoppingBag,
-    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN', 'DOCTOR', 'PHARMACY_ADMIN'],
+    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CLINIC_ADMIN', 'DOCTOR'],
   },
   {
     href: '/orders',
@@ -88,7 +88,7 @@ const NAV_ITEMS: NavItem[] = [
     href: '/products',
     label: 'Produtos',
     icon: Package,
-    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
+    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PHARMACY_ADMIN'],
   },
   {
     href: '/categories',

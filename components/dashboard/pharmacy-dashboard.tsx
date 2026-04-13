@@ -1,13 +1,21 @@
 import { Suspense } from 'react'
-import { createClient } from '@/lib/db/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Package, Truck, AlertTriangle, Clock } from 'lucide-react'
+import {
+  Package,
+  Truck,
+  AlertTriangle,
+  Clock,
+  FlaskConical,
+  FileSearch,
+  PackageCheck,
+} from 'lucide-react'
 import type { ProfileWithRoles } from '@/types'
 import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getDaysDiff, getStaleThreshold } from '@/lib/stale-orders'
+import { STATUS_LABELS } from '@/lib/orders/status-machine'
 
 async function PharmacyStaleOrders({ pharmacyId }: { pharmacyId: string }) {
   const admin = createAdminClient()
@@ -62,10 +70,10 @@ async function PharmacyStaleOrders({ pharmacyId }: { pharmacyId: string }) {
 }
 
 export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
-  const supabase = await createClient()
+  const admin = createAdminClient()
 
-  // Fetch pharmacy linked to this admin
-  const { data: memberRow } = await supabase
+  // Resolve pharmacy membership — use adminClient for reliability
+  const { data: memberRow } = await admin
     .from('pharmacy_members')
     .select('pharmacy_id')
     .eq('user_id', user.id)
@@ -73,29 +81,43 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
     .maybeSingle()
   const myPharmacyId = memberRow?.pharmacy_id ?? null
 
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('id, code, order_status, total_price, created_at')
-    .in('order_status', [
-      'RELEASED_FOR_EXECUTION',
-      'RECEIVED_BY_PHARMACY',
-      'IN_EXECUTION',
-      'READY',
-      'SHIPPED',
-    ])
-    .order('created_at', { ascending: false })
-    .limit(10)
+  // Scoped order query — always filter by pharmacy_id
+  const { data: orders } = myPharmacyId
+    ? await admin
+        .from('orders')
+        .select('id, code, order_status, total_price, created_at, clinics(trade_name)')
+        .eq('pharmacy_id', myPharmacyId)
+        .in('order_status', [
+          'READY_FOR_REVIEW',
+          'RELEASED_FOR_EXECUTION',
+          'RECEIVED_BY_PHARMACY',
+          'IN_EXECUTION',
+          'READY',
+          'SHIPPED',
+        ])
+        .order('created_at', { ascending: false })
+        .limit(20)
+    : { data: [] }
 
-  const released = orders?.filter((o) => o.order_status === 'RELEASED_FOR_EXECUTION') ?? []
-  const inExecution =
-    orders?.filter((o) => ['IN_EXECUTION', 'RECEIVED_BY_PHARMACY'].includes(o.order_status)) ?? []
-  const shipped = orders?.filter((o) => o.order_status === 'SHIPPED') ?? []
+  // Scoped transfer query — always filter by pharmacy_id
+  const { data: transfers } = myPharmacyId
+    ? await admin
+        .from('transfers')
+        .select('id, status, net_amount, created_at')
+        .eq('pharmacy_id', myPharmacyId)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    : { data: [] }
 
-  const { data: transfers } = await supabase
-    .from('transfers')
-    .select('id, status, net_amount, created_at')
-    .order('created_at', { ascending: false })
-    .limit(5)
+  const allOrders = orders ?? []
+  const allTransfers = transfers ?? []
+
+  const pendingReview = allOrders.filter((o) => o.order_status === 'READY_FOR_REVIEW')
+  const toStart = allOrders.filter((o) => o.order_status === 'RELEASED_FOR_EXECUTION')
+  const inProgress = allOrders.filter((o) =>
+    ['RECEIVED_BY_PHARMACY', 'IN_EXECUTION'].includes(o.order_status)
+  )
+  const inTransit = allOrders.filter((o) => ['READY', 'SHIPPED'].includes(o.order_status))
 
   return (
     <div className="space-y-6">
@@ -110,33 +132,67 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
         </Suspense>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* Status counters */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Link href="/orders" className="block">
+          <Card
+            className={`transition-shadow hover:shadow-md ${pendingReview.length > 0 ? 'border-amber-300 bg-amber-50' : ''}`}
+          >
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`rounded-lg p-2.5 ${pendingReview.length > 0 ? 'bg-amber-100' : 'bg-gray-100'}`}
+                >
+                  <FileSearch
+                    className={`h-5 w-5 ${pendingReview.length > 0 ? 'text-amber-600' : 'text-gray-400'}`}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs tracking-wide text-gray-500 uppercase">
+                    Revisar documentos
+                  </p>
+                  <p
+                    className={`text-2xl font-bold ${pendingReview.length > 0 ? 'text-amber-700' : 'text-gray-900'}`}
+                  >
+                    {pendingReview.length}
+                  </p>
+                </div>
+              </div>
+              {pendingReview.length > 0 && (
+                <p className="mt-2 text-xs font-medium text-amber-700">Ação necessária →</p>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
+
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-blue-50 p-2.5">
-                <Package className="h-5 w-5 text-blue-600" />
+                <PackageCheck className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-xs tracking-wide text-gray-500 uppercase">Para executar</p>
-                <p className="text-2xl font-bold text-gray-900">{released.length}</p>
+                <p className="text-xs tracking-wide text-gray-500 uppercase">Para iniciar</p>
+                <p className="text-2xl font-bold text-gray-900">{toStart.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-50 p-2.5">
-                <Package className="h-5 w-5 text-amber-600" />
+              <div className="rounded-lg bg-purple-50 p-2.5">
+                <FlaskConical className="h-5 w-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-xs tracking-wide text-gray-500 uppercase">Em execução</p>
-                <p className="text-2xl font-bold text-gray-900">{inExecution.length}</p>
+                <p className="text-xs tracking-wide text-gray-500 uppercase">Em manipulação</p>
+                <p className="text-2xl font-bold text-gray-900">{inProgress.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
@@ -144,8 +200,8 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
                 <Truck className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-xs tracking-wide text-gray-500 uppercase">Enviados</p>
-                <p className="text-2xl font-bold text-gray-900">{shipped.length}</p>
+                <p className="text-xs tracking-wide text-gray-500 uppercase">Em transporte</p>
+                <p className="text-2xl font-bold text-gray-900">{inTransit.length}</p>
               </div>
             </div>
           </CardContent>
@@ -161,26 +217,34 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
             </Link>
           </CardHeader>
           <CardContent>
-            {(orders?.length ?? 0) === 0 ? (
+            {allOrders.length === 0 ? (
               <p className="py-4 text-center text-sm text-gray-500">Sem pedidos no momento</p>
             ) : (
               <div className="divide-y divide-gray-100">
-                {orders?.map((order) => (
-                  <div key={order.id} className="flex items-center justify-between py-2.5">
-                    <div>
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="text-sm font-medium text-gray-900 hover:text-[hsl(196,91%,36%)]"
+                {allOrders.slice(0, 10).map((order) => {
+                  const clinic = (order.clinics as { trade_name?: string } | null)?.trade_name
+                  return (
+                    <div key={order.id} className="flex items-center justify-between py-2.5">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="text-sm font-medium text-gray-900 hover:text-[hsl(196,91%,36%)]"
+                        >
+                          {order.code}
+                        </Link>
+                        {clinic && <p className="truncate text-xs text-gray-500">{clinic}</p>}
+                      </div>
+                      <Badge
+                        variant={
+                          order.order_status === 'READY_FOR_REVIEW' ? 'destructive' : 'outline'
+                        }
+                        className="ml-2 shrink-0 text-xs"
                       >
-                        {order.code}
-                      </Link>
-                      <p className="text-xs text-gray-500">{formatCurrency(order.total_price)}</p>
+                        {STATUS_LABELS[order.order_status] ?? order.order_status}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {order.order_status.replace(/_/g, ' ')}
-                    </Badge>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>
@@ -194,11 +258,11 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
             </Link>
           </CardHeader>
           <CardContent>
-            {(transfers?.length ?? 0) === 0 ? (
+            {allTransfers.length === 0 ? (
               <p className="py-4 text-center text-sm text-gray-500">Sem repasses ainda</p>
             ) : (
               <div className="divide-y divide-gray-100">
-                {transfers?.map((t) => (
+                {allTransfers.map((t) => (
                   <div key={t.id} className="flex items-center justify-between py-2.5">
                     <div>
                       <p className="text-sm font-medium text-gray-900">

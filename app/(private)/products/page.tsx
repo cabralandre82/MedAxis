@@ -1,8 +1,8 @@
 import { Metadata } from 'next'
 import { createAdminClient } from '@/lib/db/admin'
 import { requireRolePage } from '@/lib/rbac'
+import { getCurrentUser } from '@/lib/auth/session'
 import { ButtonLink } from '@/components/ui/button-link'
-
 import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import { parsePage, paginationRange, formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
@@ -27,14 +27,27 @@ interface Props {
 }
 
 export default async function ProductsPage({ searchParams }: Props) {
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PHARMACY_ADMIN'])
   const { page: pageRaw } = await searchParams
   const supabase = createAdminClient()
+  const currentUser = await getCurrentUser()
+  const isPharmacy = currentUser?.roles.includes('PHARMACY_ADMIN') ?? false
+
+  // Resolve pharmacy membership for scoping
+  let pharmacyId: string | undefined
+  if (isPharmacy && currentUser) {
+    const { data: membership } = await supabase
+      .from('pharmacy_members')
+      .select('pharmacy_id')
+      .eq('user_id', currentUser.id)
+      .single()
+    pharmacyId = membership?.pharmacy_id ?? undefined
+  }
 
   const page = parsePage(pageRaw)
   const { from, to } = paginationRange(page, PAGE_SIZE)
 
-  const { data: products, count } = await supabase
+  let q = supabase
     .from('products')
     .select(
       `id, name, sku, concentration, presentation, price_current,
@@ -43,7 +56,10 @@ export default async function ProductsPage({ searchParams }: Props) {
       { count: 'exact' }
     )
     .order('name')
-    .range(from, to)
+
+  if (isPharmacy && pharmacyId) q = q.eq('pharmacy_id', pharmacyId)
+
+  const { data: products, count } = await q.range(from, to)
 
   return (
     <div className="space-y-5">

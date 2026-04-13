@@ -29,9 +29,17 @@ interface ProductFormProps {
   categories: ProductCategory[]
   pharmacies: Pharmacy[]
   consultantRate: number
+  /** Pre-select pharmacy and lock the selector (used for PHARMACY_ADMIN creating new products) */
+  defaultPharmacyId?: string
 }
 
-export function ProductForm({ product, categories, pharmacies, consultantRate }: ProductFormProps) {
+export function ProductForm({
+  product,
+  categories,
+  pharmacies,
+  consultantRate,
+  defaultPharmacyId,
+}: ProductFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const isEditing = !!product
@@ -69,6 +77,7 @@ export function ProductForm({ product, categories, pharmacies, consultantRate }:
           active: true,
           status: 'active' as const,
           featured: false,
+          pharmacy_id: defaultPharmacyId,
           pharmacy_cost: 0,
           characteristics_json: {},
           requires_prescription: false,
@@ -219,9 +228,9 @@ export function ProductForm({ product, categories, pharmacies, consultantRate }:
           <div className="space-y-2">
             <Label htmlFor="pharmacy_id">Farmácia *</Label>
             <Select
-              defaultValue={product?.pharmacy_id}
+              defaultValue={product?.pharmacy_id ?? defaultPharmacyId}
               onValueChange={(v) => setValue('pharmacy_id', v as string)}
-              disabled={isEditing}
+              disabled={isEditing || !!defaultPharmacyId}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione..." />
