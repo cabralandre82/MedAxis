@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { OrderDetail } from '@/components/orders/order-detail'
 import { ReorderButton } from '@/components/orders/reorder-button'
 import { SaveTemplateModal } from '@/components/orders/templates/save-template-modal'
+import { getPrescriptionState } from '@/lib/prescription-rules'
 
 export const metadata: Metadata = {
   title: 'Detalhe do pedido',
@@ -72,6 +73,9 @@ export default async function OrderPage({ params }: OrderPageProps) {
 
   const trackingUrl = token ? `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/track/${token}` : null
 
+  // Fetch prescription state server-side (empty if no controlled products)
+  const prescriptionState = await getPrescriptionState(id)
+
   const canReorder = ['DELIVERED', 'COMPLETED', 'CANCELLED'].includes((order as any).order_status)
   const orderItems = ((order as any).order_items ?? []).map((i: any) => ({
     product_id: i.product_id,
@@ -106,7 +110,7 @@ export default async function OrderPage({ params }: OrderPageProps) {
           </>
         )}
       </div>
-      <OrderDetail order={order} currentUser={user!} />
+      <OrderDetail order={order} currentUser={user!} prescriptionItems={prescriptionState.items} />
     </div>
   )
 }

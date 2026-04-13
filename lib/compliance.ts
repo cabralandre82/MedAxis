@@ -84,6 +84,10 @@ export async function validateCNPJ(cnpj: string): Promise<CNPJValidationResult> 
 export interface ComplianceCheckResult {
   allowed: boolean
   reason?: string
+  /** True if ANY item in the order requires a prescription upload. Informational only — order is still created. */
+  requiresPrescription?: boolean
+  /** True if any product uses per-unit prescription (max_units_per_prescription is set). */
+  requiresPerUnitPrescription?: boolean
 }
 
 /**
@@ -153,10 +157,13 @@ export async function canPlaceOrder(
   }
 
   // 4. Check product (if provided)
+  let requiresPrescription = false
+  let requiresPerUnitPrescription = false
+
   if (productId) {
     const { data: product } = await admin
       .from('products')
-      .select('id, active, pharmacy_id')
+      .select('id, active, pharmacy_id, requires_prescription, max_units_per_prescription')
       .eq('id', productId)
       .single()
 
@@ -165,9 +172,12 @@ export async function canPlaceOrder(
     if (product.pharmacy_id !== pharmacyId) {
       return { allowed: false, reason: 'Produto não pertence à farmácia selecionada' }
     }
+
+    requiresPrescription = product.requires_prescription ?? false
+    requiresPerUnitPrescription = requiresPrescription && product.max_units_per_prescription != null
   }
 
-  return { allowed: true }
+  return { allowed: true, requiresPrescription, requiresPerUnitPrescription }
 }
 
 /**

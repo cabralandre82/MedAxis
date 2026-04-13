@@ -2,6 +2,71 @@
 
 ---
 
+## [6.1.0] — 2026-04-13 — Controle de receitas médicas por produto e por unidade
+
+### Contexto
+
+Produtos controlados (Portaria 344/98, antimicrobianos, etc.) exigem receita médica para serem
+dispensados. A plataforma não tinha nenhum enforcement real — o alerta na UI era cosmético.
+Esta versão implementa enforcement completo em dois modelos coexistentes:
+
+- **Modelo A (Simple)** — Um documento de receita no pedido cobre todas as unidades do produto.
+- **Modelo B (Por unidade)** — Cada unidade exige uma receita distinta
+  (`max_units_per_prescription = 1`). Uma receita pode cobrir N unidades se o campo for > 1.
+
+### Migration `030_prescriptions.sql`
+
+- **`products`**: 3 novas colunas:
+  - `requires_prescription boolean NOT NULL DEFAULT false` — gate principal
+  - `prescription_type text CHECK (IN ('SIMPLE','SPECIAL_CONTROL','ANTIMICROBIAL'))` — categoria regulatória
+  - `max_units_per_prescription integer` — `NULL` = Modelo A; `N` = Modelo B
+- **`order_item_prescriptions`**: nova tabela que vincula receitas a `order_items` individuais,
+  com `units_covered`, `patient_name`, `prescription_number` opcionais.
+  Imutável após inserção (sem `UPDATE`/`DELETE` via RLS) — trilha de auditoria completa.
+
+### `lib/prescription-rules.ts` (novo)
+
+- `getPrescriptionState(orderId)` — função pura que retorna estado completo por item:
+  progresso de unidades cobertas, quantidade faltante, motivo legível.
+- `isPrescriptionRequirementMet(orderId)` — wrapper booleano para guards de transição.
+- Sem estado global, sem HTTP — testável e reutilizável.
+
+### API Routes (novos endpoints)
+
+- `POST /api/orders/[id]/prescriptions` — upload de receita vinculado a `order_item_id`.
+  Valida pertencimento ao pedido, verifica se mais receitas são necessárias, sanitiza filename.
+- `GET /api/orders/[id]/prescription-state` — estado de prescrição do pedido (usado pela UI via refresh).
+- `POST /api/orders/[id]/advance` — gate único para todas as transições de status.
+  Bloqueia `AWAITING_DOCUMENTS → *` se `isPrescriptionRequirementMet()` retornar `false`.
+  Cancellation (`CANCELED`) ignora o gate. Mesmo admins são bloqueados — risco regulatório recai na plataforma.
+
+### `lib/compliance.ts`
+
+- `canPlaceOrder()` agora retorna `requiresPrescription` e `requiresPerUnitPrescription`
+  (informacional — não bloqueia criação, só informa o caller para exibir UI adequada).
+- Produto agora inclui `requires_prescription` e `max_units_per_prescription` na query.
+
+### UI
+
+- **`components/orders/prescription-manager.tsx`** (novo) — renderiza por item:
+  - Barra de progresso `unidades cobertas / quantidade`
+  - Badge com tipo de receita (`Controle Especial`, `Antimicrobiano`, etc.)
+  - Upload por item com validação de arquivo (PDF/JPG/PNG, 10 MB)
+  - Feedback de "todas as unidades cobertas" quando satisfeito
+- **`components/orders/order-detail.tsx`** — renderiza `PrescriptionManager` antes do `DocumentManager`
+  quando o pedido contém itens com Modelo B. Modelo A continua no `DocumentManager` existente.
+- **`app/(private)/orders/[id]/page.tsx`** — busca `prescriptionState` server-side e passa como prop.
+
+### Testes — 16 novos casos
+
+- `tests/unit/lib/prescription-rules.test.ts` — 9 casos (TC-RX-01 a TC-RX-09):
+  produto sem receita, Modelo A sem upload, Modelo A com upload, Modelo B 0/2/3 uploads,
+  `max_units_per_prescription=2` com `ceil()`, erro de DB, wrapper booleano.
+- `tests/unit/api/prescription-advance.test.ts` — 7 casos (TC-ADV-01 a TC-ADV-07):
+  401, 403, transição inválida, gate de receita bloqueando, gate passando, cancelamento bypass, 404.
+
+---
+
 ## [6.0.3] — 2026-04-12 — Correções de gaps identificados na auditoria interna de IA
 
 ### Fixes em `lib/ai.ts`

@@ -8,6 +8,8 @@ import { Separator } from '@/components/ui/separator'
 import { ButtonLink } from '@/components/ui/button-link'
 import { PharmacyOrderActions } from '@/components/orders/pharmacy-order-actions'
 import { DocumentManager } from '@/components/orders/document-manager'
+import { PrescriptionManager } from '@/components/orders/prescription-manager'
+import type { OrderItemPrescriptionState } from '@/lib/prescription-rules'
 import { PaymentOptions } from '@/components/orders/payment-options'
 import {
   ChevronLeft,
@@ -56,9 +58,11 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
 interface OrderDetailProps {
   order: Record<string, unknown>
   currentUser: ProfileWithRoles
+  /** Prescription state fetched server-side — null if no products need prescriptions */
+  prescriptionItems?: OrderItemPrescriptionState[]
 }
 
-export function OrderDetail({ order, currentUser }: OrderDetailProps) {
+export function OrderDetail({ order, currentUser, prescriptionItems = [] }: OrderDetailProps) {
   const isAdmin = currentUser.roles.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
   const isPharmacy = currentUser.roles.includes('PHARMACY_ADMIN')
 
@@ -281,6 +285,27 @@ export function OrderDetail({ order, currentUser }: OrderDetailProps) {
               </table>
             </CardContent>
           </Card>
+
+          {/* Per-unit prescriptions (Model B) */}
+          {prescriptionItems.some(
+            (i) => i.requires_prescription && i.max_units_per_prescription !== null
+          ) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Pill className="h-4 w-4" />
+                  Receitas por unidade
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PrescriptionManager
+                  orderId={String(order.id)}
+                  items={prescriptionItems}
+                  canUpload={!['COMPLETED', 'CANCELED'].includes(String(order.order_status))}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Documents */}
           <Card>

@@ -52,6 +52,18 @@
 - ~~Sem reorder/templates~~ ✅ **v1.4.0**: templates por clínica + botão "Repetir pedido".
 - ~~Sem rastreamento público~~ ✅ **v1.4.0**: `/track/[token]` sem login, timeline visual.
 
+## Receitas Médicas
+
+- ~~Sem enforcement de receita médica~~ ✅ **v6.1.0**: enforcement completo implementado.
+  - Produtos com `requires_prescription=true` bloqueiam transição `AWAITING_DOCUMENTS → READY_FOR_REVIEW` sem receita enviada.
+  - **Modelo A (Simple)**: uma receita no nível do pedido cobre todas as unidades.
+  - **Modelo B (Por unidade)**: `max_units_per_prescription=1` exige uma receita por unidade; campo genérico `N` exige `ceil(quantity/N)` receitas.
+  - Upload de receitas por item via `POST /api/orders/[id]/prescriptions`.
+  - Gate único via `POST /api/orders/[id]/advance` — mesmo admins são bloqueados.
+  - **⚠️ PENDENTE:** Os produtos existentes no catálogo têm `requires_prescription=false` por padrão. O SUPER_ADMIN deve atualizar manualmente os produtos controlados no painel de administração (ou via SQL direto no Supabase).
+  - **⚠️ NÃO IMPLEMENTADO:** Validação de _conteúdo_ da receita (nome do paciente, CRM do médico, data de validade) — fica sob responsabilidade da farmácia manipuladora.
+  - **⚠️ NÃO IMPLEMENTADO:** OCR automático de receitas para extração de dados (previsto como feature de IA — `prescription_number` e `patient_name` são campos opcionais preenchidos manualmente pela clínica).
+
 ## Relatórios
 
 - ~~Sem BI avançado~~ ✅ **v1.4.0**: comparação de períodos, ranking clínicas, funil, margem por produto (além dos gráficos v1.2.0)
