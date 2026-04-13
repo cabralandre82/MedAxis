@@ -2,6 +2,8 @@
 
 > Gerado em: 2026-04-13 | Versão da plataforma: **6.5.1** | **872 testes** | cobertura atualizada
 >
+> **v6.5.2:** Varredura completa de RLS bootstrap — corrigidas 11 pages da área privada que usavam `createClient()` (RLS) e retornavam listas vazias: `/doctors`, `/clinics`, `/pharmacies`, `/products`, `/payments`, `/consultants`, `/audit` (afetavam `SUPER_ADMIN`/`PLATFORM_ADMIN`). Todas as pages da área privada agora usam `adminClient` com filtro de escopo explícito.
+>
 > **v6.5.1:** Varredura e correção de RLS bootstrap em 4 páginas — `/orders` (lista vazia para `CLINIC_ADMIN`), `/catalog` (farmácias vazias no filtro), `/catalog/[slug]` (produto podia 404 por join com `pharmacies`), `/transfers` (`PHARMACY_ADMIN` via lista vazia; `CLINIC_ADMIN` isolado com filtro explícito). Todas as pages agora usam `adminClient` com filtro de escopo explícito, padrão já adotado em `/orders/new` e `/orders/[id]`.
 >
 > **v6.5.0:** Fluxo de revisão de documentos pela farmácia — migration 033 (`order_documents.status/rejection_reason`, `order_items.doc_status`, `orders.docs_deadline`); endpoint `/api/documents/[id]/download` (URL assinada, 5 min); `services/document-review.ts` com `reviewDocument`, `evaluateOrderDocuments` (avanço automático para `AWAITING_PAYMENT` ou bloqueio para `AWAITING_DOCUMENTS` com prazo de 3 dias úteis) e `removeOrderItem` (clínica remove item rejeitado, pedido recalculado, cancelado se ficar vazio); cron `/api/cron/expire-doc-deadlines` (cancela pedidos com prazo expirado); UI `DocumentManager` com download, badges de status, controles de aprovar/rejeitar por documento; `order-detail` com badge `doc_status` por item e botão de remoção para `CLINIC_ADMIN`. 7 novos testes unitários.

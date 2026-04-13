@@ -87,7 +87,9 @@ Ao clicar em "Cadastrar novo médico" dentro do formulário de pedido, os itens 
 
 Todas as pages da área privada que servem `CLINIC_ADMIN`, `PHARMACY_ADMIN` ou `DOCTOR` usam `createAdminClient()` (service role) com filtro de escopo explícito (`clinic_id` ou `pharmacy_id`), em vez do client de usuário com RLS. Isso evita o problema de bootstrap onde o RLS falha silenciosamente e retorna listas vazias para usuários recém-adicionados.
 
-Pages corrigidas: `/orders`, `/orders/[id]`, `/orders/new`, `/catalog`, `/catalog/[slug]`, `/transfers`.
+Pages corrigidas: `/orders`, `/orders/[id]`, `/orders/new`, `/catalog`, `/catalog/[slug]`, `/transfers`, `/doctors`, `/clinics`, `/pharmacies`, `/products`, `/payments`, `/consultants`, `/audit`.
+
+Regra geral: **nenhuma page da área privada deve usar `createClient()` para queries em tabelas com RLS baseada em membership**. Sempre usar `createAdminClient()` com filtro explícito de escopo.
 
 **Documentos no pedido:**
 
