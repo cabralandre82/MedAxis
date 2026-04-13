@@ -71,6 +71,7 @@
 - **Sem frete**: prazo é o estimado pela farmácia no cadastro do produto.
 - ~~Sem reorder/templates~~ ✅ **v1.4.0**: templates por clínica + botão "Repetir pedido".
 - ~~Sem rastreamento público~~ ✅ **v1.4.0**: `/track/[token]` sem login, timeline visual.
+- ~~**Clínica exibia dropdown desnecessário e médico sempre obrigatório**~~ ✅ **v6.4.0**: clínica auto-detectada pelo papel do usuário logado (sem seleção manual para `CLINIC_ADMIN`). Campo de médico solicitante é condicional: oculto quando a clínica não tem médicos vinculados, opcional quando tem, obrigatório apenas quando o carrinho contém produto com `requires_prescription = true`. `orders.doctor_id` é nullable (migration 032). Lógica extraída para `lib/orders/doctor-field-rules.ts` com 5 testes unitários.
 
 ## Receitas Médicas
 
@@ -155,6 +156,7 @@
 - ~~Migration 028~~ ✅ Aplicada em produção (`used_count` em coupons, trigger atômico)
 - ~~Migration 029~~ ✅ Aplicada em produção (`ai_classified` em support_tickets, `sentiment` em support_messages, `product_associations`)
 - ~~`OPENAI_API_KEY`~~ ✅ Configurada no Vercel (Production + Preview) — 2026-04-12
+- **Migration 032 pendente em produção**: `orders.doctor_id DROP NOT NULL` — aplicar via `supabase db push --linked` ou SQL direto antes de usar o novo fluxo de pedidos em produção.
 - **Staging não provisionado**: `clinipharma-staging` no Supabase ainda não criado. Ver `docs/staging-environment.md`.
 - **Cloudflare WAF não ativo**: OWASP Core Ruleset + rate limit 100 req/min em `/api/` — configuração manual no painel Cloudflare.
 
