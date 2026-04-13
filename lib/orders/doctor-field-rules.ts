@@ -15,3 +15,21 @@ export function resolveDoctorFieldState(
   const required = cartItems.some((item) => item.requires_prescription)
   return { show: true, required }
 }
+
+/**
+ * Parses the ?cart=id:qty,id:qty query param used to preserve the cart
+ * when navigating away from /orders/new (e.g. to /doctors/new).
+ *
+ * Returns an array of { productId, quantity } entries.
+ * Malformed or zero-quantity entries are silently dropped.
+ */
+export function parseCartParam(
+  cartParam: string | undefined
+): { productId: string; quantity: number }[] {
+  if (!cartParam) return []
+  return cartParam.split(',').flatMap((entry) => {
+    const [productId, qtyStr] = entry.split(':')
+    const quantity = parseInt(qtyStr ?? '1', 10)
+    return productId && quantity > 0 ? [{ productId, quantity }] : []
+  })
+}

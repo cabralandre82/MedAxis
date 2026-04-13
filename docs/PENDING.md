@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.4.3** | **851 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.4.4** | **851 testes** | cobertura atualizada
+>
+> **v6.4.4:** Fix carrinho perdido ao navegar para `/doctors/new` — carrinho serializado como `?cart=id:qty,id:qty` na URL; restaurado ao voltar para `/orders/new`. `parseCartParam` extraído para `lib/orders/doctor-field-rules.ts` com 7 testes unitários.
 >
 > **v6.4.3:** Fix redirect pós-cadastro de médico — `CLINIC_ADMIN` era jogado para `/unauthorized` ao salvar médico (página de detalhe exigia `SUPER_ADMIN`). `/doctors/[id]` aberto para `CLINIC_ADMIN`. `DoctorForm` aceita `redirectTo` prop; para `CLINIC_ADMIN` redireciona para `/orders/new` após cadastro. Página de novo médico informa que o médico será vinculado automaticamente.
 >
@@ -190,6 +192,7 @@ Itens do roadmap que dependem de CNPJ ativo para implementar:
 | 6.4.1  | Refactor: `lib/orders/doctor-field-rules.ts` — lógica extraída do componente, 5 testes unitários            | ✅     |
 | 6.4.2  | Fix RLS bootstrap, CLINIC_ADMIN cadastra médico com auto-vínculo, atalhos no form de pedido, 2 novos testes | ✅     |
 | 6.4.3  | Fix redirect pós-cadastro de médico: `/doctors/[id]` aberto para `CLINIC_ADMIN`, volta para `/orders/new`   | ✅     |
+| 6.4.4  | Fix carrinho perdido: `?cart=` serializado na URL, `parseCartParam` com 7 testes unitários                  | ✅     |
 
 **O que está 100% pronto:** plataforma técnica, autenticação, pedidos, pagamentos sandbox, notificações (push/email/SMS/push), LGPD portal, auditoria, compliance CNPJ, suporte por tickets com IA, cupons de desconto, gerenciamento de categorias, SKU automático, Política de Privacidade, Termos de Uso, E2E tests, CI/CD, documentação, **8 features de IA em produção**, **enforcement completo de receitas médicas com controle por produto e por unidade**.
 

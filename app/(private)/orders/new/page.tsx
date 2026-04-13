@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/session'
 import { NewOrderForm, type NewOrderFormProduct } from '@/components/orders/new-order-form'
+import { parseCartParam } from '@/lib/orders/doctor-field-rules'
 
 export const metadata: Metadata = { title: 'Novo pedido | Clinipharma' }
 
@@ -17,13 +18,7 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
   if (!user) redirect('/login')
 
   // Parse ?cart=id:qty,id:qty (set when navigating away to /doctors/new)
-  const initialCart = params.cart
-    ? params.cart.split(',').flatMap((entry) => {
-        const [productId, qtyStr] = entry.split(':')
-        const quantity = parseInt(qtyStr ?? '1', 10)
-        return productId && quantity > 0 ? [{ productId, quantity }] : []
-      })
-    : undefined
+  const initialCart = parseCartParam(params.cart)
 
   if (user.registration_status && user.registration_status !== 'APPROVED') {
     redirect('/dashboard')
@@ -131,7 +126,7 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
         adminClinics={adminClinics}
         doctors={linkedDoctors}
         isClinicAdmin={user.roles.includes('CLINIC_ADMIN')}
-        initialCart={initialCart}
+        initialCart={initialCart.length > 0 ? initialCart : undefined}
       />
     </div>
   )
