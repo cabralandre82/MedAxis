@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.17** | **872 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.18** | **872 testes** | cobertura atualizada
+>
+> **v6.5.18:** Auditoria de vazamento de dados financeiros — 3 info-leaks corrigidos para `PHARMACY_ADMIN`: (1) `/products/[id]`: `MarginBreakdown` (margem da plataforma %, comissão consultor %, lucro c/s consultor) ocultado; histórico de preços ocultado; buscas de `consultant_commission_rate` e `product_price_history` suprimidas no servidor quando viewer é farmácia. (2) `/transfers`: colunas "Bruto" (`gross_amount`) e "Comissão" (`commission_amount`) ocultadas — farmácia vê apenas valor líquido, pedido, status e data. `CLINIC_ADMIN` sem vazamentos confirmados por varredura completa.
 >
 > **v6.5.17:** Fix acesso negado em `/products/[id]` para `PHARMACY_ADMIN` — página de detalhe só aceitava `SUPER_ADMIN`/`PLATFORM_ADMIN` enquanto a lista `/products` já permitia `PHARMACY_ADMIN` (inconsistência da v6.5.10). Adicionado `PHARMACY_ADMIN` ao `requireRolePage` + ownership check (`notFound` se produto não pertencer à farmácia do usuário).
 >
@@ -245,6 +247,7 @@ Itens do roadmap que dependem de CNPJ ativo para implementar:
 | 6.5.15  | Realtime de pedidos: `OrderRealtimeUpdater`, `LiveBadge`, toast de status, migration 034                    | ✅     |
 | 6.5.16  | Fix Realtime: auth race + polling fallback 20 s + cleanup com refs + tratamento `CHANNEL_ERROR`/`TIMED_OUT` | ✅     |
 | 6.5.17  | Fix acesso negado em `/products/[id]` para `PHARMACY_ADMIN` — `requireRolePage` + ownership check           | ✅     |
+| 6.5.18  | Fix info-leak: margem/comissão/lucro ocultos de `PHARMACY_ADMIN` em produtos e repasses; varredura completa | ✅     |
 
 **O que está 100% pronto:** plataforma técnica, autenticação, pedidos, pagamentos sandbox, notificações (push/email/SMS/push), LGPD portal, auditoria, compliance CNPJ, suporte por tickets com IA, cupons de desconto, gerenciamento de categorias, SKU automático, Política de Privacidade, Termos de Uso, E2E tests, CI/CD, documentação, **8 features de IA em produção**, **enforcement completo de receitas médicas com controle por produto e por unidade**, **atualizações em tempo real via Supabase Realtime** (status do pedido sincronizado automaticamente entre clínica, farmácia e admin).
 
