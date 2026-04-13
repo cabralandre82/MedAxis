@@ -92,6 +92,8 @@ Todas as pages da área privada usam `createAdminClient()` (service role) com fi
 
 Todas as pages da área privada (listagem, detalhe, edição e criação) têm `export const dynamic = 'force-dynamic'` e usam `createAdminClient()`.
 
+> ⚠️ **Posicionamento obrigatório:** a diretiva `export const dynamic` deve estar **após o último `import`** no arquivo. O Next.js ignora silenciosamente a diretiva quando ela aparece no meio de um bloco `import {` (comportamento do prettier auto-formatter). Resultado: a página cai em SSG sem aviso e retorna 404 em produção.
+
 **Isolamento de tenant (segurança):**
 
 Ao usar `adminClient` (que bypassa RLS), o isolamento entre tenants passa a ser responsabilidade do código. As regras aplicadas são:
