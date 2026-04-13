@@ -17,6 +17,7 @@ import {
 import type { ProfileWithRoles } from '@/types'
 import Link from 'next/link'
 import { StaleOrdersWidget } from '@/components/dashboard/stale-orders-widget'
+import { DashboardRealtimeRefresher } from '@/components/dashboard/dashboard-realtime-refresher'
 
 interface AdminDashboardProps {
   user: ProfileWithRoles
@@ -29,6 +30,7 @@ export async function AdminDashboard({ user }: AdminDashboardProps) {
 
   return (
     <div className="space-y-6">
+      <DashboardRealtimeRefresher />
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
           Bom dia, {user.full_name.split(' ')[0]}

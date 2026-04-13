@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.23** | **881 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.24** | **881 testes** | cobertura atualizada
+>
+> **v6.5.24:** Dashboard admin em tempo real — `DashboardRealtimeRefresher` (componente cliente invisível) subscreve `postgres_changes` (`event: '*'`) nas 4 tabelas que alimentam os KPI cards (`products`, `orders`, `payments`, `transfers`). Quando qualquer mudança chega, chama server action `revalidateDashboard()` (invalida `revalidateTag('dashboard')` no servidor) seguido de `router.refresh()` para re-render imediato com dados frescos. Mesmo padrão anti-auth-race do `OrderRealtimeUpdater`: `auth.getSession()` antes de subscrever. Fallback polling silencioso de 60 s como safety-net. `lib/actions/revalidate.ts` — server action reutilizável.
 >
 > **v6.5.23:** Card "Revisar preço" no dashboard admin — coluna `needs_price_review boolean DEFAULT false` adicionada à tabela `products` (migration 036 + índice parcial). `updatePharmacyCost`: seta `needs_price_review=true` quando `price_current > 0` (qualquer alteração de repasse exige revisão do preço ao cliente). `updateProductPrice`: zera `needs_price_review=false` quando admin atualiza o preço + `revalidateTag('dashboard')`. Dashboard: novo card "Revisar preço" laranja com alerta vermelho quando count > 0, verde quando zerado. Cor `orange` adicionada ao `COLOR_CLASSES` do `KpiCard`.
 >
