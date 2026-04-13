@@ -1,12 +1,13 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
 import { productSchema, priceUpdateSchema } from '@/lib/validators'
 import type { ProductFormData, PriceUpdateFormData } from '@/lib/validators'
 import { slugify } from '@/lib/utils'
+import { createNotificationForRole } from '@/lib/notifications'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
@@ -70,8 +71,9 @@ export async function createProduct(
       if (!member || member.pharmacy_id !== parsed.data.pharmacy_id) {
         return { error: 'Sem permissão para criar produto nesta farmácia' }
       }
-      // Platform sets price_current — pharmacy always creates with 0
+      // Platform sets price_current — pharmacy always creates with 0 and inactive
       parsed.data.price_current = 0
+      parsed.data.status = 'inactive'
     }
 
     const slug = parsed.data.slug || slugify(parsed.data.name)
@@ -119,8 +121,12 @@ export async function createProduct(
           action: AuditAction.CREATE,
           newValues: { ...parsed.data, sku: fallbackSku } as Record<string, unknown>,
         })
+        if (user.roles.includes('PHARMACY_ADMIN')) {
+          await notifyAdminsNewProduct(retryProduct.id, parsed.data.name, fallbackSku)
+        }
         revalidatePath('/products')
         revalidatePath('/catalog')
+        revalidateTag('dashboard')
         return { id: retryProduct.id, sku: fallbackSku }
       }
       return { error: 'Erro ao criar produto' }
@@ -135,8 +141,13 @@ export async function createProduct(
       newValues: { ...parsed.data, sku } as Record<string, unknown>,
     })
 
+    if (user.roles.includes('PHARMACY_ADMIN')) {
+      await notifyAdminsNewProduct(product.id, parsed.data.name, sku)
+    }
+
     revalidatePath('/products')
     revalidatePath('/catalog')
+    revalidateTag('dashboard')
     return { id: product.id, sku }
   } catch (err) {
     if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
@@ -342,5 +353,31 @@ export async function toggleProductActive(
     return {}
   } catch {
     return { error: 'Erro interno' }
+  }
+}
+
+/**
+ * Sends an in-app notification to all SUPER_ADMIN and PLATFORM_ADMIN users
+ * when a pharmacy creates a product that needs pricing before going live.
+ */
+async function notifyAdminsNewProduct(
+  productId: string,
+  productName: string,
+  sku: string
+): Promise<void> {
+  const payload = {
+    type: 'PRODUCT_AWAITING_PRICE' as const,
+    title: 'Novo produto aguardando precificação',
+    body: `${productName} (${sku}) foi cadastrado por uma farmácia e precisa de preço antes de ir ao catálogo.`,
+    link: `/products/${productId}`,
+    push: true,
+  }
+  try {
+    await Promise.all([
+      createNotificationForRole('SUPER_ADMIN', payload),
+      createNotificationForRole('PLATFORM_ADMIN', payload),
+    ])
+  } catch {
+    // Notification failure must never block product creation
   }
 }

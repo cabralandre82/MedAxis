@@ -411,6 +411,65 @@ describe('createProduct — PHARMACY_ADMIN role', () => {
     expect(insertedPayloads[0]).toMatchObject({ price_current: 0 })
   })
 
+  it('forces status=inactive (active=false) so product does not go live without a price', async () => {
+    vi.mocked(rbacModule.requireRole).mockResolvedValue(pharmacyActorMock)
+
+    const { productSchema } = await import('@/lib/validators')
+    vi.mocked(productSchema.safeParse).mockReturnValueOnce({
+      success: true,
+      data: {
+        name: 'Produto Farmácia',
+        sku: 'SKU-PHARM',
+        status: 'active', // pharmacy sends active=true — must be overridden
+        price_current: 100,
+        pharmacy_cost: 60,
+        pharmacy_id: 'pharm-1',
+        featured: false,
+      },
+    } as ReturnType<typeof productSchema.safeParse>)
+
+    const insertedPayloads: unknown[] = []
+    const adminMock = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'pharmacy_members') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { pharmacy_id: 'pharm-1' }, error: null }),
+          }
+        }
+        if (table === 'product_categories' || table === 'pharmacies') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi
+              .fn()
+              .mockResolvedValue({ data: { name: 'Cat', trade_name: 'Far' }, error: null }),
+          }
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockImplementation(() => ({
+            then: (resolve: (v: unknown) => void) => resolve({ count: 0, error: null }),
+          })),
+          insert: vi.fn().mockImplementation((payload: unknown) => {
+            insertedPayloads.push(payload)
+            return {
+              select: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({ data: { id: 'prod-new' }, error: null }),
+            }
+          }),
+        }
+      }),
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    await createProduct({ pharmacy_id: 'pharm-1' } as Parameters<typeof createProduct>[0])
+    expect(insertedPayloads[0]).toMatchObject({ status: 'inactive', active: false })
+  })
+
   it('returns error when PHARMACY_ADMIN tries to create product for another pharmacy', async () => {
     vi.mocked(rbacModule.requireRole).mockResolvedValue(pharmacyActorMock)
 

@@ -11,6 +11,7 @@ import {
   Building2,
   Pill,
   TrendingUp,
+  Tag,
 } from 'lucide-react'
 import type { ProfileWithRoles } from '@/types'
 import Link from 'next/link'
@@ -74,13 +75,22 @@ export async function AdminDashboard({ user }: AdminDashboardProps) {
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard
           title="Produtos ativos"
           value={data.activeProductsCount.toString()}
           icon={ShoppingBag}
           color="indigo"
           href="/products"
+          small
+        />
+        <KpiCard
+          title="Aguardando preço"
+          value={data.awaitingPricingCount.toString()}
+          icon={Tag}
+          color={data.awaitingPricingCount > 0 ? 'amber' : 'green'}
+          href="/products"
+          alert={data.awaitingPricingCount > 0}
           small
         />
         <KpiCard

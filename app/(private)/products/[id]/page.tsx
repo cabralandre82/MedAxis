@@ -9,7 +9,7 @@ import { PriceUpdateForm } from '@/components/products/price-update-form'
 import { PharmacyCostUpdateForm } from '@/components/products/pharmacy-cost-update-form'
 import { ToggleProductActive } from '@/components/products/toggle-product-active'
 import { Badge } from '@/components/ui/badge'
-import { Package } from 'lucide-react'
+import { Package, AlertTriangle } from 'lucide-react'
 import type { ProductWithRelations, ProductCategory, Pharmacy, ProductPriceHistory } from '@/types'
 import { getCurrentUser } from '@/lib/auth/session'
 
@@ -155,8 +155,27 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
     profiles: { full_name: string } | null
   }>
 
+  const awaitingPrice = !isPharmacy && product.price_current === 0
+
   return (
     <div className="space-y-6">
+      {/* Banner: platform admin sees this when product needs pricing */}
+      {awaitingPrice && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">Produto aguardando precificação</p>
+            <p className="mt-0.5 text-sm text-amber-700">
+              Este produto foi cadastrado pela farmácia mas ainda não tem preço ao cliente. Ele está
+              inativo e não aparece no catálogo até você definir o preço.
+            </p>
+          </div>
+          {isSuperAdmin && (
+            <PriceUpdateForm productId={id} currentPrice={0} label="Definir preço" highlight />
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500">

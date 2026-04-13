@@ -19,6 +19,7 @@ export type NotificationType =
   | 'COUPON_ASSIGNED'
   | 'REORDER_ALERT'
   | 'CHURN_RISK'
+  | 'PRODUCT_AWAITING_PRICE'
   | 'GENERIC'
 
 /** Types the user can silence. Critical types are always delivered. */
@@ -28,6 +29,7 @@ export const SILENCEABLE_TYPES: NotificationType[] = [
   'PRODUCT_INTEREST',
   'REGISTRATION_REQUEST',
   'STALE_ORDER',
+  'PRODUCT_AWAITING_PRICE',
 ]
 
 /** Critical types are NEVER silenced by user preferences. */

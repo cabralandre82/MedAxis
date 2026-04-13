@@ -24,9 +24,13 @@ import { TrendingUp } from 'lucide-react'
 interface Props {
   productId: string
   currentPrice: number
+  /** Custom button label (default: "Atualizar preço") */
+  label?: string
+  /** When true renders the trigger as a filled amber button */
+  highlight?: boolean
 }
 
-export function PriceUpdateForm({ productId, currentPrice }: Props) {
+export function PriceUpdateForm({ productId, currentPrice, label, highlight = false }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -56,9 +60,21 @@ export function PriceUpdateForm({ productId, currentPrice }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+      <DialogTrigger
+        render={
+          <Button
+            variant={highlight ? 'default' : 'outline'}
+            size="sm"
+            className={
+              highlight
+                ? 'border-0 bg-amber-500 whitespace-nowrap text-white hover:bg-amber-600'
+                : undefined
+            }
+          />
+        }
+      >
         <TrendingUp className="mr-2 h-4 w-4" />
-        Atualizar preço
+        {label ?? 'Atualizar preço'}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

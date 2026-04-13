@@ -55,6 +55,7 @@ export default async function ProductsPage({ searchParams }: Props) {
        product_categories (name), pharmacies (trade_name)`,
       { count: 'exact' }
     )
+    .order('price_current', { ascending: true }) // unpriced (0) float to top
     .order('name')
 
   if (isPharmacy && pharmacyId) q = q.eq('pharmacy_id', pharmacyId)
@@ -134,13 +135,19 @@ export default async function ProductsPage({ searchParams }: Props) {
                       <span className="text-sm text-gray-600">{p.estimated_deadline_days}d</span>
                     </TableCell>
                     <TableCell>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          p.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {p.active ? 'Ativo' : 'Inativo'}
-                      </span>
+                      {p.price_current === 0 ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          ⏳ Aguardando preço
+                        </span>
+                      ) : (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            p.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {p.active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Link
