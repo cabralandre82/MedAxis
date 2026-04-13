@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.11** | **872 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.12** | **872 testes** | cobertura atualizada
+>
+> **v6.5.12:** Fix modal de confirmação de pagamento travado — `confirmPayment` tentava definir `payments.status = 'PROCESSING'` como guarda atômica de concorrência, mas a tabela `payments` tem CHECK constraint que só aceita `PENDING | UNDER_REVIEW | CONFIRMED | FAILED | REFUNDED`; o valor `PROCESSING` existe apenas em `consultant_commissions` (migrations 019/020). O UPDATE falhava silenciosamente (0 linhas retornadas), o serviço retornava `{ error: 'Pagamento já está sendo processado' }`, o toast de erro aparecia e o modal nunca fechava. Fix: removido o passo `PROCESSING` do `confirmPayment` (a checagem `status !== 'PENDING'` já é proteção suficiente para ação manual de admin); adicionado guard `if (loading) return` no modal para duplos cliques; teste atualizado para cobrir o path real (rejeitar status ≠ PENDING).
 >
 > **v6.5.11:** "Minha Farmácia" para PHARMACY_ADMIN — nova rota `/my-pharmacy` com perfil completo da farmácia (CNPJ, responsável, email, telefone, endereço, dados bancários, produtos, repasses recentes, pedidos ativos). Rota `/my-pharmacy/edit` com `PharmacyForm` — CNPJ bloqueado para edição, campos de contato/endereço/banco editáveis; `services/pharmacies.updatePharmacy` aberto para `PHARMACY_ADMIN` com ownership check + strip de `cnpj`/`status` para impedir alterações não autorizadas. `PharmacyForm` recebe `disableCnpj` e `redirectAfterSave` props. Sidebar: "Minha Farmácia" (ícone Store) adicionado como primeiro item específico de PHARMACY_ADMIN.
 >
