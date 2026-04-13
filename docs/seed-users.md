@@ -110,6 +110,8 @@ Ao usar `adminClient` (que bypassa RLS), o isolamento entre tenants passa a ser 
 
 Regra geral: **nenhuma page da área privada deve usar `createClient()`, todas devem ter `force-dynamic`, e toda ação que recebe um ID externo deve verificar se o usuário tem acesso ao recurso antes de retornar ou modificar dados**.
 
+> ⚠️ **Zod v4 e UUID:** nunca usar `z.string().uuid()` para validar IDs de banco. O Zod v4 (`^4.x`) exige version bits `[1-8]` no terceiro grupo e variant bits `[89ab]` no quarto, o que rejeita os IDs seed (`b1000000-...`) e alguns UUIDs reais do `gen_random_uuid()`. Usar sempre `uuidLoose` — regex `8-4-4-4-12 hex` sem restrição de versão/variante. O helper está definido em `services/orders.ts` e `lib/validators/index.ts`.
+
 > ⚠️ **Joins embutidos PostgREST:** evitar `.select('*, outra_tabela(campos)')` em páginas de detalhe. Se o relacionamento FK não for resolvido pelo PostgREST em produção, a query retorna `error` com `data: null` silenciosamente, disparando `notFound()`. Usar sempre duas queries independentes: `select('*')` na tabela principal + query separada por `foreign_key_id`.
 
 **Documentos no pedido:**
