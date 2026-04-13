@@ -90,9 +90,23 @@ Todas as pages da área privada usam `createAdminClient()` (service role) com fi
 1. **RLS bootstrap** — o RLS falha silenciosamente e retorna listas vazias para usuários recém-adicionados.
 2. **SSG cache** — sem `export const dynamic = 'force-dynamic'`, o Next.js gera HTML estático no build (quando o banco está vazio) e serve esse cache indefinidamente em produção.
 
-Todas as 20 pages da área privada têm `export const dynamic = 'force-dynamic'` e usam `createAdminClient()`.
+Todas as pages da área privada (listagem, detalhe, edição e criação) têm `export const dynamic = 'force-dynamic'` e usam `createAdminClient()`.
 
-Regra geral: **nenhuma page da área privada deve usar `createClient()` para queries em tabelas com RLS baseada em membership, e todas devem ter `force-dynamic`**.
+**Isolamento de tenant (segurança):**
+
+Ao usar `adminClient` (que bypassa RLS), o isolamento entre tenants passa a ser responsabilidade do código. As regras aplicadas são:
+
+| Página / Action                | Papel            | Verificação                                                              |
+| ------------------------------ | ---------------- | ------------------------------------------------------------------------ |
+| `/orders/[id]`                 | `CLINIC_ADMIN`   | `clinic_members` — pedido deve pertencer à clínica do usuário            |
+| `/orders/[id]`                 | `PHARMACY_ADMIN` | `pharmacy_members` — pedido deve pertencer à farmácia do usuário         |
+| `/doctors/[id]`                | `CLINIC_ADMIN`   | `doctor_clinic_links` — médico deve estar vinculado à clínica do usuário |
+| `createOrder`                  | `CLINIC_ADMIN`   | `clinic_members` — `clinic_id` enviado deve pertencer ao usuário         |
+| `removeOrderItem`              | `CLINIC_ADMIN`   | `clinic_members` — pedido deve pertencer à clínica do usuário            |
+| `reviewDocument`               | `PHARMACY_ADMIN` | `pharmacy_members` — pedido deve pertencer à farmácia do usuário         |
+| `/api/documents/[id]/download` | todos            | membership em clínica ou farmácia do pedido                              |
+
+Regra geral: **nenhuma page da área privada deve usar `createClient()`, todas devem ter `force-dynamic`, e toda ação que recebe um ID externo deve verificar se o usuário tem acesso ao recurso antes de retornar ou modificar dados**.
 
 **Documentos no pedido:**
 

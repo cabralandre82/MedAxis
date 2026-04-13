@@ -1,6 +1,10 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.3** | **872 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.5** | **872 testes** | cobertura atualizada
+>
+> **v6.5.5:** Correção de gaps de segurança introduzidos pela migração para `adminClient` — ao remover o RLS como segunda camada de defesa, o isolamento entre tenants passou a ser responsabilidade do código. Três gaps foram identificados e corrigidos: (1) `/orders/[id]`: `CLINIC_ADMIN` podia acessar pedido de outra clínica via UUID; (2) `/doctors/[id]`: `CLINIC_ADMIN` podia acessar médico não vinculado à sua clínica; (3) `createOrder` (service): `CLINIC_ADMIN` podia criar pedido com `clinic_id` de outra clínica. Todos os três agora fazem verificação de membership pós-fetch ou pré-insert. Testes de `orders.test.ts` atualizados para refletir o novo check de membership.
+>
+> **v6.5.4:** Varredura completa de páginas de detalhe e criação — todas as páginas `[id]/page.tsx`, `[id]/edit/page.tsx` e `new/page.tsx` da área privada que ainda usavam `createServerClient`/`createClient` (RLS) foram migradas para `adminClient` + `force-dynamic`. Páginas corrigidas: `clinics/[id]`, `clinics/[id]/edit`, `doctors/[id]`, `doctors/[id]/edit`, `pharmacies/[id]`, `pharmacies/[id]/edit`, `products/[id]`, `products/[id]/edit`, `products/new`, `consultants/[id]`, `consultants/[id]/edit`, `support/[id]`, `users/[id]`, `users/new`, `categories`, `consultant-transfers`, `settings`, `support`, `orders/new`.
 >
 > **v6.5.3:** Fix SSG cache em páginas privadas — todas as 20 páginas de listagem da área privada receberam `export const dynamic = 'force-dynamic'`. Sem essa diretiva o Next.js gerava HTML estático no build (quando o banco está vazio) e servia esse cache em produção indefinidamente. Causa raiz do problema de listas vazias em `/clinics` e `/doctors` após deploy. `createAdminClient` agora lança erro explícito se `SUPABASE_SERVICE_ROLE_KEY` estiver ausente.
 >
