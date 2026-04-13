@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/session'
 import { Shell } from '@/components/layout/shell'
+import { PushInitializer } from '@/components/push/push-initializer'
 import { logger } from '@/lib/logger'
 
 export default async function PrivateLayout({ children }: { children: React.ReactNode }) {
@@ -30,5 +31,10 @@ export default async function PrivateLayout({ children }: { children: React.Reac
     redirect('/unauthorized')
   }
 
-  return <Shell user={user}>{children}</Shell>
+  return (
+    <>
+      <PushInitializer />
+      <Shell user={user}>{children}</Shell>
+    </>
+  )
 }

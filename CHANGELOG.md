@@ -2,6 +2,27 @@
 
 ---
 
+## [6.3.0] — 2026-04-13 — Push FCM frontend + guia de produção SMS/WhatsApp
+
+### Push Notifications — Frontend completo
+
+- **`components/push/push-initializer.tsx`**: Novo componente client que solicita permissão de Notification, obtém token FCM via `requestPushPermission`, registra em `POST /api/push/subscribe` e escuta mensagens em foreground exibindo toasts (Sonner).
+- **`app/(private)/layout.tsx`**: `<PushInitializer />` montado no layout privado — ativo para todos os usuários autenticados.
+- **`public/icons/icon-192x192.png`**, **`public/icons/icon-512x512.png`**: Ícones PWA gerados (referenciados em `manifest.json`).
+- **`public/icon-192.png`**: Ícone de notificação push (referenciado em `lib/push.ts`).
+
+### Documentação de Infraestrutura
+
+- **`docs/infra/evolution-api-setup.md`**: Guia completo de ativação da Evolution API em produção — docker-compose, criação de instância, QR code, webhook, e atualização das variáveis no Vercel. Inclui checklist de ativação e instruções para migrar Twilio para número BR real.
+
+### Testes — `tests/unit/push-subscribe.test.ts` (13 novos TCs)
+
+- TC-PUSH-01 a TC-PUSH-08: `POST /api/push/subscribe` (auth, token missing, upsert, db error) e `DELETE` (auth, delete). `lib/firebase/client` no-op em Node.js.
+- TC-WA-01 a TC-WA-03: guard `isConfigured` do WhatsApp (PENDING_DEPLOY, empty phone, short phone).
+- TC-SMS-01 a TC-SMS-02: guard Twilio (sem SID, empty phone).
+
+---
+
 ## [6.2.0] — 2026-04-13 — Correção de gaps: infraestrutura vs. funcionalidade real
 
 ### Segurança — CRÍTICO

@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.2.0** | **833 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.3.0** | **846 testes** | cobertura atualizada
+>
+> **v6.3.0:** Push FCM frontend completo — `PushInitializer` component montado no layout privado (solicita permissão, registra token, exibe toasts em foreground). Ícones PWA criados (`public/icons/`). Guia de produção Evolution API/WhatsApp em `docs/infra/evolution-api-setup.md`. 13 novos testes.
 >
 > **v6.2.0:** Varredura e correção de 5 gaps "infraestrutura presente, funcionalidade incompleta": (1) pharmacy-order-actions migrado para /advance (gate de prescrição garante todos os agentes); (2) página admin de Risco de Churn com score persistido em `clinic_churn_scores`; (3) SMS nos fluxos principais (aprovação, pedido, stale); (4) Push notifications wired nos eventos de pedido; (5) WhatsApp nos eventos de aprovação/rejeição/pedido. Migration 031 aplicada. 26 novos testes.
 >
@@ -56,11 +58,11 @@ Não bloqueiam o primeiro cliente, mas impactam operação, conversão e complia
 
 ### Notificações
 
-| #   | Pendência                                                                          | Onde documentado                   |
-| --- | ---------------------------------------------------------------------------------- | ---------------------------------- |
-| 14  | **Twilio → Produção** — test credentials não entregam SMS reais                    | `docs/go-live-checklist.md` item 4 |
-| 15  | **WhatsApp Evolution API** — adquirir número + deploy Docker + conectar QR         | `docs/go-live-checklist.md` item 3 |
-| 16  | **Clicksign webhook** — registrar `X-Clicksign-Secret` no painel Clicksign Sandbox | `docs/go-live-checklist.md`        |
+| #   | Pendência                                                                          | Onde documentado                    |
+| --- | ---------------------------------------------------------------------------------- | ----------------------------------- |
+| 14  | **Twilio → Produção** — test credentials não entregam SMS reais                    | `docs/go-live-checklist.md` item 4  |
+| 15  | **WhatsApp Evolution API** — adquirir número + deploy Docker + conectar QR         | `docs/infra/evolution-api-setup.md` |
+| 16  | **Clicksign webhook** — registrar `X-Clicksign-Secret` no painel Clicksign Sandbox | `docs/go-live-checklist.md`         |
 
 ### Observabilidade
 
@@ -87,14 +89,14 @@ Sem impacto no go-live mas reduzem risco operacional e dívida técnica.
 
 ### Produto / UX
 
-| #   | Pendência                          | Detalhe                                                                                 |
-| --- | ---------------------------------- | --------------------------------------------------------------------------------------- |
-| 24  | **Ícones PWA**                     | Criar `public/icons/icon-192x192.png` e `icon-512x512.png` (design pendente)            |
-| 25  | **Auditoria WCAG 2.1**             | Instalar `axe-core` + corrigir issues de contraste, labels, ARIA, navegação por teclado |
-| 26  | **Service Worker (cache offline)** | Avaliar `next-pwa` ou Workbox para cache de assets estáticos                            |
-| 27  | **OpenAPI / Swagger**              | Documentação interna via `zod-to-openapi` — útil para integrações futuras               |
-| 28  | **2FA**                            | Autenticação em dois fatores não implementada                                           |
-| 29  | **Google OAuth**                   | Preparado no Supabase, não ativado (requer Google Cloud Console)                        |
+| #      | Pendência                          | Detalhe                                                                                 |
+| ------ | ---------------------------------- | --------------------------------------------------------------------------------------- |
+| ~~24~~ | ~~**Ícones PWA**~~                 | ✅ **v6.3.0**: `public/icons/icon-192x192.png` e `icon-512x512.png` criados             |
+| 25     | **Auditoria WCAG 2.1**             | Instalar `axe-core` + corrigir issues de contraste, labels, ARIA, navegação por teclado |
+| 26     | **Service Worker (cache offline)** | Avaliar `next-pwa` ou Workbox para cache de assets estáticos                            |
+| 27     | **OpenAPI / Swagger**              | Documentação interna via `zod-to-openapi` — útil para integrações futuras               |
+| 28     | **2FA**                            | Autenticação em dois fatores não implementada                                           |
+| 29     | **Google OAuth**                   | Preparado no Supabase, não ativado (requer Google Cloud Console)                        |
 
 ### Cobertura de testes
 

@@ -19,7 +19,7 @@
 - ~~Sem notificações push~~ ✅ **Implementado na v1.3.0**: Firebase FCM com service worker.
   - VAPID key configurada: `BNrMF4L9UwGqH3dHkIZp9-plConcw5YXpcTbfL-mF6_XTv6oIlV10Buw1sgCqd-YVveXECTWcxvWxXgbgf_VQ-U` ✅
   - ~~Push não disparado nos eventos de negócio~~ ✅ **v6.2.0**: `push: true` wired em status de pedido (criação, READY, SHIPPED, DELIVERED, CANCELED) e novos pedidos para admins.
-  - **⚠️ PENDENTE FRONTEND:** service worker + Firebase SDK no cliente ainda não implementados. Push chega ao servidor mas não à tela do usuário até o frontend ser configurado (Firebase `NEXT_PUBLIC_FIREBASE_*` vars + `public/firebase-messaging-sw.js`).
+  - ~~**⚠️ PENDENTE FRONTEND:** service worker + Firebase SDK no cliente ainda não implementados.~~ ✅ **v6.3.0**: `PushInitializer` component montado no layout privado — solicita permissão, registra token via `POST /api/push/subscribe`, e exibe toasts para mensagens em foreground. Ícones PWA (`public/icons/icon-192x192.png`, `icon-512x512.png`) criados.
 
 - ~~Sem SMS~~ ✅ **Implementado na v1.3.0**: Twilio integrado.
   - ~~SMS não disparado nos fluxos principais~~ ✅ **v6.2.0**: SMS agora enviado em: aprovação/rejeição/docs pendentes de cadastro; criação de pedido; transições READY, SHIPPED, DELIVERED, CANCELED.
@@ -27,7 +27,7 @@
 
 - **WhatsApp não ativo**: infraestrutura e templates prontos (Evolution API).
   - ~~WhatsApp só ativo em 2 eventos~~ ✅ **v6.2.0**: WhatsApp agora disparado em aprovação/rejeição de cadastros e nas transições READY, SHIPPED, DELIVERED de pedidos.
-  - **⚠️ PENDENTE:** adquirir número WhatsApp dedicado + deploy Evolution API em Docker (Render plano pago ou Railway) + atualizar `EVOLUTION_API_URL` no Vercel.
+  - **⚠️ PENDENTE PRODUÇÃO:** adquirir número WhatsApp dedicado + deploy Evolution API em Docker (Render plano pago ou Railway) + atualizar `EVOLUTION_API_URL` no Vercel. Guia completo em `docs/infra/evolution-api-setup.md`.
 
 - ~~Sem preferências de notificação por usuário~~ ✅ **v1.2.0**: toggles em `/profile`
 - ~~Sem alertas de pedidos parados~~ ✅ **v1.2.0**: widget + Vercel Cron diário + email digest
