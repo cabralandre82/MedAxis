@@ -1,6 +1,10 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.12** | **872 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.14** | **872 testes** | cobertura atualizada
+>
+> **v6.5.14:** Fluxo de execução de pedidos na farmácia redesenhado — `PharmacyOrderActions` substituído por um stepper visual de 6 etapas (Liberado → Recebido → Manipulação → Pronto → Enviado → Entregue) que exibe o progresso completo do pedido com ícones coloridos (verde = concluído, azul = etapa atual, cinza = próximas). Cada botão de ação agora tem descrição contextual clara. Stepper posicionado em largura total acima do grid principal para máxima visibilidade. Validação de `pharmacy_cost = 0` no formulário de produto: aviso âmbar exibido quando o repasse à farmácia está zerado e o preço está preenchido, prevenindo pedidos onde a farmácia recebe R$ 0,00.
+>
+> **v6.5.13:** Fix `order/[id]/page.tsx` sem `force-dynamic` — página de detalhe do pedido podia servir versão em cache após confirmação de pagamento e conclusão de repasse, exibindo a timeline desatualizada. Adicionado `export const dynamic = 'force-dynamic'`. Fix do script CI: `npm run test:coverage` inexistente causava falha em todos os pushes; adicionado script `"test:coverage": "vitest run --coverage"` ao `package.json`.
 >
 > **v6.5.12:** Fix modal de confirmação de pagamento travado — `confirmPayment` tentava definir `payments.status = 'PROCESSING'` como guarda atômica de concorrência, mas a tabela `payments` tem CHECK constraint que só aceita `PENDING | UNDER_REVIEW | CONFIRMED | FAILED | REFUNDED`; o valor `PROCESSING` existe apenas em `consultant_commissions` (migrations 019/020). O UPDATE falhava silenciosamente (0 linhas retornadas), o serviço retornava `{ error: 'Pagamento já está sendo processado' }`, o toast de erro aparecia e o modal nunca fechava. Fix: removido o passo `PROCESSING` do `confirmPayment` (a checagem `status !== 'PENDING'` já é proteção suficiente para ação manual de admin); adicionado guard `if (loading) return` no modal para duplos cliques; teste atualizado para cobrir o path real (rejeitar status ≠ PENDING).
 >

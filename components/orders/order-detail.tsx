@@ -221,14 +221,16 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
           <span className="inline-block rounded-full bg-blue-100 px-3 py-1.5 text-sm font-medium text-blue-800">
             {ORDER_STATUS_LABELS[String(order.order_status)] ?? String(order.order_status)}
           </span>
-          {isPharmacy && (
-            <PharmacyOrderActions
-              orderId={String(order.id)}
-              currentStatus={String(order.order_status) as OrderStatus}
-            />
-          )}
         </div>
       </div>
+
+      {/* Pharmacy execution stepper — full width, prominent */}
+      {isPharmacy && (
+        <PharmacyOrderActions
+          orderId={String(order.id)}
+          currentStatus={String(order.order_status) as OrderStatus}
+        />
+      )}
 
       <div className="grid grid-cols-3 gap-5">
         {/* Main content */}

@@ -344,6 +344,13 @@ export function ProductForm({
             {errors.pharmacy_cost && (
               <p className="text-sm text-red-500">{errors.pharmacy_cost.message}</p>
             )}
+            {pharmacyCostValue === 0 && priceValue > 0 && (
+              <p className="flex items-center gap-1.5 text-sm font-medium text-amber-600">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                Repasse R$ 0,00 — a farmácia não receberá nada por este produto. Verifique se está
+                correto.
+              </p>
+            )}
             <p className="text-xs text-slate-500">
               Valor fixo que a plataforma deve repassar à farmácia por unidade vendida
             </p>
