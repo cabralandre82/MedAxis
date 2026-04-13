@@ -7,6 +7,7 @@ import { PaginationWrapper } from '@/components/ui/pagination-wrapper'
 import { parsePage, paginationRange } from '@/lib/utils'
 import { Plus } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Médicos | Clinipharma' }
 
 const PAGE_SIZE = 20
