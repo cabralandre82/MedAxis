@@ -24,6 +24,7 @@ import {
   Tags,
   LifeBuoy,
   Ticket,
+  TrendingDown,
 } from 'lucide-react'
 
 interface NavItem {
@@ -136,6 +137,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Interesses',
     icon: Bell,
     roles: ['SUPER_ADMIN'],
+  },
+  {
+    href: '/churn',
+    label: 'Risco de Churn',
+    icon: TrendingDown,
+    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SALES_CONSULTANT'],
   },
   {
     href: '/reports',

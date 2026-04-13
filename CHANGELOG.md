@@ -2,6 +2,52 @@
 
 ---
 
+## [6.2.0] — 2026-04-13 — Correção de gaps: infraestrutura vs. funcionalidade real
+
+### Segurança — CRÍTICO
+
+- **`components/orders/pharmacy-order-actions.tsx`**: Farmácia agora usa `POST /api/orders/[id]/advance` em vez de `updateOrderStatus` diretamente — garante que o gate de prescrição se aplica a todos os agentes, eliminando bypass arquitetural.
+
+### Feature — Churn Admin Page
+
+- **`app/(private)/churn/page.tsx`**: Nova página admin com lista de clínicas em risco ordenada por score, filtros por nível de risco, indicador de contato e botão "Marcar como contatado".
+- **`components/churn/churn-contact-button.tsx`**: Componente client para registrar/remover contato com notas.
+- **`app/api/admin/churn/route.ts`**: `GET` lista scores; `POST` registra contato (com notas) ou limpa.
+- **`lib/jobs/churn-detection.ts`**: Job agora persiste scores em `clinic_churn_scores` (upsert) antes de notificar, permitindo visualização histórica. Links de notificação atualizados para `/churn`.
+- **`supabase/migrations/031_churn_scores.sql`**: Nova tabela `clinic_churn_scores` com RLS (apenas admin/consultant podem ver/atualizar).
+- **`components/layout/sidebar.tsx`**: Item "Risco de Churn" adicionado ao sidebar para `SUPER_ADMIN`, `PLATFORM_ADMIN`, `SALES_CONSULTANT`.
+
+### SMS — Novos templates e wiring
+
+- **`lib/sms.ts`**: Adicionados templates `orderShipped`, `orderCanceled`, `registrationApproved`, `registrationRejected`, `pendingDocs`, `prescriptionRequired`.
+- **`services/orders.ts`**: SMS enviado na criação do pedido (`orderCreated`) e em transições chave: `READY`, `SHIPPED`, `DELIVERED`, `CANCELED`. Também adiciona push (`push: true`) à notificação in-app nessas transições.
+- **`app/api/registration/[id]/route.ts`**: SMS enviado em aprovação, rejeição e solicitação de documentos adicionais.
+- **`app/api/orders/[id]/advance/route.ts`**: SMS enviado pelo mesmo gate de avanço nas transições `READY`, `SHIPPED`, `DELIVERED` (path da farmácia).
+
+### WhatsApp — Novos pontos de disparo
+
+- **`app/api/registration/[id]/route.ts`**: WhatsApp enviado em aprovação (`WA.registrationApproved`) e rejeição (`WA.registrationRejected`) de cadastros.
+- **`services/orders.ts`**: WhatsApp em `READY`, `SHIPPED`, `DELIVERED`.
+- **`app/api/orders/[id]/advance/route.ts`**: WhatsApp nas mesmas transições pelo path da farmácia.
+
+### Push notifications — Wiring nos eventos de negócio
+
+- **`services/orders.ts`**: `push: true` adicionado à `createNotification` de status de pedido e à `createNotificationForRole` de novo pedido (admins).
+- **`app/api/orders/[id]/advance/route.ts`**: `push: true` na notificação pós-transição da clínica.
+- Infraestrutura de push (`lib/push.ts`, `fcm_tokens`, `api/push/subscribe`) já existia — agora é chamada nos eventos corretos.
+
+### Testes — `tests/unit/gaps-fixes.test.ts` (26 novos TCs)
+
+- TC-GAP-01..03b: `/api/orders/[id]/advance` — auth, RBAC, gate de prescrição.
+- TC-GAP-04..08b: `/api/admin/churn` — auth, listagem, filtro por risco, marcar contato.
+- TC-GAP-09..14c: Templates SMS.
+- TC-GAP-15..20: Templates WhatsApp.
+- TC-GAP-21..22: Push flag em `createNotification`.
+
+**Total: 833 testes passando (61 arquivos).**
+
+---
+
 ## [6.1.1] — 2026-04-13 — Campo de receita médica no formulário de edição de produto
 
 ### UI — `components/products/product-form.tsx`

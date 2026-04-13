@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/db/admin'
 import { Resend } from 'resend'
 import { logger } from '@/lib/logger'
 import { inngest } from '@/lib/inngest'
+import { sendSms, SMS } from '@/lib/sms'
+import { sendWhatsApp, WA } from '@/lib/whatsapp'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const APP_URL = 'https://clinipharma.com.br'
@@ -182,6 +184,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // Send welcome email with password link
       await sendWelcomeEmail(email, fullName, origin)
 
+      // SMS + WhatsApp notification (non-blocking)
+      const formPhone = (request.form_data as Record<string, string>).phone
+      if (formPhone) {
+        sendSms(formPhone, SMS.registrationApproved(fullName)).catch(() => null)
+        sendWhatsApp(formPhone, WA.registrationApproved(fullName)).catch(() => null)
+      }
+
       // Auto-send contract via Inngest (async — does not block the response)
       if (entityId && (request.type === 'CLINIC' || request.type === 'DOCTOR')) {
         inngest
@@ -247,6 +256,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           </div>
         </div>`,
       })
+
+      // SMS + WhatsApp notification (non-blocking)
+      const rejectPhone = (request.form_data as Record<string, string>).phone
+      if (rejectPhone) {
+        sendSms(rejectPhone, SMS.registrationRejected(fullName)).catch(() => null)
+        sendWhatsApp(
+          rejectPhone,
+          WA.registrationRejected(fullName, admin_notes ?? 'Sem motivo informado')
+        ).catch(() => null)
+      }
 
       return NextResponse.json({ success: true })
     }
@@ -316,6 +335,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           body: 'A plataforma solicitou documentos adicionais para seu cadastro',
           link: '/dashboard',
         })
+      }
+
+      // SMS notification (non-blocking)
+      const pendingPhone = (request.form_data as Record<string, string>).phone
+      if (pendingPhone) {
+        sendSms(pendingPhone, SMS.pendingDocs(fullName)).catch(() => null)
       }
 
       return NextResponse.json({ success: true })

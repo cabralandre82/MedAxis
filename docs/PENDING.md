@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.1.1** | **786 testes** | cobertura atualizada
+> Gerado em: 2026-04-13 | Versão da plataforma: **6.2.0** | **833 testes** | cobertura atualizada
+>
+> **v6.2.0:** Varredura e correção de 5 gaps "infraestrutura presente, funcionalidade incompleta": (1) pharmacy-order-actions migrado para /advance (gate de prescrição garante todos os agentes); (2) página admin de Risco de Churn com score persistido em `clinic_churn_scores`; (3) SMS nos fluxos principais (aprovação, pedido, stale); (4) Push notifications wired nos eventos de pedido; (5) WhatsApp nos eventos de aprovação/rejeição/pedido. Migration 031 aplicada. 26 novos testes.
 >
 > **v6.1.1:** Campos de receita médica expostos no formulário de produto (seção "Receita Médica"). `Product` type + `productSchema` atualizados. Produtos do catálogo inicial classificados em produção via API.
 > **v6.1.0:** Enforcement completo de receitas médicas — migration 030, `lib/prescription-rules.ts`, `POST /api/orders/[id]/advance` (gate único), `POST /api/orders/[id]/prescriptions` (upload por item), `PrescriptionManager` UI. 16 novos testes. 786 testes passando.

@@ -5,6 +5,9 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { isValidTransition } from '@/lib/orders/status-machine'
 import { isPrescriptionRequirementMet, getPrescriptionState } from '@/lib/prescription-rules'
 import { createAuditLog, AuditEntity, AuditAction } from '@/lib/audit'
+import { createNotification } from '@/lib/notifications'
+import { sendSms, SMS } from '@/lib/sms'
+import { sendWhatsApp, WA } from '@/lib/whatsapp'
 import { logger } from '@/lib/logger'
 import type { OrderStatus } from '@/lib/orders/status-machine'
 
@@ -128,6 +131,54 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     action: AuditAction.UPDATE,
     newValues: { old_status: order.order_status, new_status: newStatus, reason },
   })
+
+  // ── Post-transition notifications ─────────────────────────────────────────
+  // Notify the clinic on key status changes triggered by pharmacy
+  const KEY_STATUSES: Record<string, string> = {
+    READY: 'pronto para entrega',
+    SHIPPED: 'enviado',
+    DELIVERED: 'entregue',
+  }
+  if (KEY_STATUSES[newStatus]) {
+    try {
+      const { data: fullOrder } = await admin
+        .from('orders')
+        .select(
+          `code, created_by_user_id,
+           clinics ( phone )`
+        )
+        .eq('id', orderId)
+        .single()
+
+      const clinicPhone = (fullOrder?.clinics as { phone?: string } | null)?.phone
+      const code = fullOrder?.code ?? orderId
+
+      if (clinicPhone) {
+        if (newStatus === 'READY') {
+          sendSms(clinicPhone, SMS.orderReady(code)).catch(() => null)
+          sendWhatsApp(clinicPhone, WA.orderReady(code)).catch(() => null)
+        } else if (newStatus === 'SHIPPED') {
+          sendSms(clinicPhone, SMS.orderShipped(code)).catch(() => null)
+          sendWhatsApp(clinicPhone, WA.orderShipped(code)).catch(() => null)
+        } else if (newStatus === 'DELIVERED') {
+          sendSms(clinicPhone, SMS.orderDelivered(code)).catch(() => null)
+          sendWhatsApp(clinicPhone, WA.orderDelivered(code)).catch(() => null)
+        }
+      }
+
+      if (fullOrder?.created_by_user_id) {
+        await createNotification({
+          userId: fullOrder.created_by_user_id,
+          type: 'ORDER_STATUS',
+          title: `Pedido ${code}: ${KEY_STATUSES[newStatus]}`,
+          link: `/orders/${orderId}`,
+          push: true,
+        })
+      }
+    } catch (notifyErr) {
+      logger.warn('[advance] post-transition notification failed', { notifyErr })
+    }
+  }
 
   return NextResponse.json({ success: true, status: newStatus })
 }

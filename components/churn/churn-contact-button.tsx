@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -10,65 +11,35 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { OrderStatus } from '@/types'
-import { Truck, PlayCircle, CheckCircle } from 'lucide-react'
-
-const pharmacyTransitions: Partial<
-  Record<
-    OrderStatus,
-    { next: OrderStatus; label: string; icon: React.ComponentType<{ className?: string }> }
-  >
-> = {
-  RELEASED_FOR_EXECUTION: {
-    next: 'IN_EXECUTION',
-    label: 'Iniciar Execução',
-    icon: PlayCircle,
-  },
-  IN_EXECUTION: {
-    next: 'SHIPPED',
-    label: 'Marcar como Enviado',
-    icon: Truck,
-  },
-  SHIPPED: {
-    next: 'DELIVERED',
-    label: 'Confirmar Entrega',
-    icon: CheckCircle,
-  },
-}
+import { Phone, RotateCcw } from 'lucide-react'
 
 interface Props {
-  orderId: string
-  currentStatus: OrderStatus
+  clinicId: string
+  clinicName: string
+  alreadyContacted: boolean
 }
 
-export function PharmacyOrderActions({ orderId, currentStatus }: Props) {
+export function ChurnContactButton({ clinicId, clinicName, alreadyContacted }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const transition = pharmacyTransitions[currentStatus]
-
-  if (!transition) return null
-
-  const Icon = transition.icon
-
-  async function handleAction() {
+  async function handleSubmit(clear = false) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/orders/${orderId}/advance`, {
+      const res = await fetch('/api/admin/churn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newStatus: transition!.next, reason: notes || undefined }),
+        body: JSON.stringify({ clinicId, notes: notes || undefined, clear }),
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error ?? 'Erro ao atualizar status')
+        toast.error(data.error ?? 'Erro ao salvar')
       } else {
-        toast.success(`Status atualizado: ${transition!.next}`)
+        toast.success(clear ? 'Contato removido' : 'Contato registrado')
         setOpen(false)
         setNotes('')
         router.refresh()
@@ -79,18 +50,34 @@ export function PharmacyOrderActions({ orderId, currentStatus }: Props) {
     setLoading(false)
   }
 
+  if (alreadyContacted) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => handleSubmit(true)}
+        disabled={loading}
+        title="Remover registro de contato"
+      >
+        <RotateCcw className="h-3 w-3" />
+      </Button>
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>
-        <Icon className="mr-2 h-4 w-4" />
-        {transition.label}
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+        <Phone className="mr-1 h-3 w-3" />
+        Contatar
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{transition.label}</DialogTitle>
+          <DialogTitle>Registrar contato — {clinicName}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">Confirme a atualização do status deste pedido.</p>
+          <p className="text-sm text-gray-600">
+            Registre que esta clínica foi contactada. Ela será movida para o histórico de contatos.
+          </p>
           <div className="space-y-2">
             <Label htmlFor="notes">Observações (opcional)</Label>
             <Textarea
@@ -98,11 +85,11 @@ export function PharmacyOrderActions({ orderId, currentStatus }: Props) {
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Informe código de rastreio, observações, etc."
+              placeholder="Ex: Falei com a Dra. Silva, interessada em retomar pedidos em 2 semanas."
             />
           </div>
           <div className="flex gap-3">
-            <Button onClick={handleAction} disabled={loading}>
+            <Button onClick={() => handleSubmit(false)} disabled={loading}>
               {loading ? 'Salvando...' : 'Confirmar'}
             </Button>
             <Button variant="outline" onClick={() => setOpen(false)}>

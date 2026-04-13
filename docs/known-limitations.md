@@ -18,11 +18,15 @@
 
 - ~~Sem notificações push~~ ✅ **Implementado na v1.3.0**: Firebase FCM com service worker.
   - VAPID key configurada: `BNrMF4L9UwGqH3dHkIZp9-plConcw5YXpcTbfL-mF6_XTv6oIlV10Buw1sgCqd-YVveXECTWcxvWxXgbgf_VQ-U` ✅
+  - ~~Push não disparado nos eventos de negócio~~ ✅ **v6.2.0**: `push: true` wired em status de pedido (criação, READY, SHIPPED, DELIVERED, CANCELED) e novos pedidos para admins.
+  - **⚠️ PENDENTE FRONTEND:** service worker + Firebase SDK no cliente ainda não implementados. Push chega ao servidor mas não à tela do usuário até o frontend ser configurado (Firebase `NEXT_PUBLIC_FIREBASE_*` vars + `public/firebase-messaging-sw.js`).
 
 - ~~Sem SMS~~ ✅ **Implementado na v1.3.0**: Twilio integrado.
+  - ~~SMS não disparado nos fluxos principais~~ ✅ **v6.2.0**: SMS agora enviado em: aprovação/rejeição/docs pendentes de cadastro; criação de pedido; transições READY, SHIPPED, DELIVERED, CANCELED.
   - **⚠️ PENDENTE PRODUÇÃO:** test credentials ativas (SMS não chegam ao destinatário). Fazer upgrade para conta real Twilio → adquirir número BR → atualizar `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` no Vercel.
 
 - **WhatsApp não ativo**: infraestrutura e templates prontos (Evolution API).
+  - ~~WhatsApp só ativo em 2 eventos~~ ✅ **v6.2.0**: WhatsApp agora disparado em aprovação/rejeição de cadastros e nas transições READY, SHIPPED, DELIVERED de pedidos.
   - **⚠️ PENDENTE:** adquirir número WhatsApp dedicado + deploy Evolution API em Docker (Render plano pago ou Railway) + atualizar `EVOLUTION_API_URL` no Vercel.
 
 - ~~Sem preferências de notificação por usuário~~ ✅ **v1.2.0**: toggles em `/profile`
@@ -44,6 +48,12 @@
 - **Farmácia não altera produtos**: toda atualização de catálogo passa pelo SUPER_ADMIN.
 - ~~Sem variações de produto~~ ✅ **v1.4.0**: `product_variants` com atributos livres, preço e custo por variante.
 - **Estoque manual**: status `unavailable` gerenciado manualmente, sem integração com estoque real.
+
+## Churn e Retenção
+
+- ~~Sem página admin para visualizar risco de churn~~ ✅ **v6.2.0**: `/churn` criada com lista ordenada por score, filtros por nível, marcação de contato com notas. Scores persistidos em `clinic_churn_scores` (migration 031).
+- ~~Score calculado mas não persistido~~ ✅ **v6.2.0**: job faz upsert em `clinic_churn_scores` preservando `contacted_at` e notas de contatos anteriores.
+- ~~Farmácia podia bypassar gate de prescrição via `updateOrderStatus`~~ ✅ **v6.2.0**: `pharmacy-order-actions` migrado para `POST /api/orders/[id]/advance` — gate único para todos os agentes.
 
 ## Pedidos
 

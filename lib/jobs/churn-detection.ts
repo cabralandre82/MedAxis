@@ -142,6 +142,39 @@ export const churnDetectionJob = inngest.createFunction(
       return results
     })
 
+    // Persist scores to DB (upsert — keeps contacted_at/notes if already set)
+    await step.run('persist-churn-scores', async () => {
+      const admin = createAdminClient()
+      const now = new Date().toISOString()
+
+      for (const signal of atRisk) {
+        const riskLevel: 'HIGH' | 'MODERATE' | 'LOW' =
+          signal.score >= 60 ? 'HIGH' : signal.score >= 30 ? 'MODERATE' : 'LOW'
+
+        await admin
+          .from('clinic_churn_scores')
+          .upsert(
+            {
+              clinic_id: signal.clinic_id,
+              score: signal.score,
+              risk_level: riskLevel,
+              days_since_last_order: signal.days_since_last_order,
+              avg_cycle_days: signal.avg_cycle_days,
+              open_tickets: signal.open_tickets,
+              failed_payments: signal.failed_payments,
+              computed_at: now,
+            },
+            {
+              onConflict: 'clinic_id',
+              // Do NOT overwrite contacted_at / contact_notes if already set
+              ignoreDuplicates: false,
+            }
+          )
+          // Preserve contacted_at/notes: only update score columns
+          .select()
+      }
+    })
+
     if (atRisk.length === 0) {
       logger.info('[churn] No at-risk clinics today')
       return { processed: 0 }
@@ -152,7 +185,7 @@ export const churnDetectionJob = inngest.createFunction(
       const admin = createAdminClient()
 
       for (const signal of atRisk) {
-        const riskLevel = signal.score >= 60 ? 'ALTO' : 'MODERADO'
+        const riskLabel = signal.score >= 60 ? 'ALTO' : 'MODERADO'
         const message =
           `${signal.clinic_name} — ${signal.days_since_last_order} dias sem pedido ` +
           `(ciclo médio: ${signal.avg_cycle_days} dias). Score de risco: ${signal.score}/100.`
@@ -162,9 +195,9 @@ export const churnDetectionJob = inngest.createFunction(
           await createNotification({
             userId: signal.consultant_user_id,
             type: 'CHURN_RISK',
-            title: `⚠️ Risco de churn ${riskLevel}: ${signal.clinic_name}`,
+            title: `⚠️ Risco de churn ${riskLabel}: ${signal.clinic_name}`,
             body: message,
-            link: `/clinics/${signal.clinic_id}`,
+            link: `/churn`,
           })
         }
 
@@ -172,9 +205,9 @@ export const churnDetectionJob = inngest.createFunction(
         if (signal.score >= 60) {
           await createNotificationForRole('SUPER_ADMIN', {
             type: 'CHURN_RISK',
-            title: `🔴 Churn ${riskLevel}: ${signal.clinic_name}`,
+            title: `🔴 Churn ${riskLabel}: ${signal.clinic_name}`,
             message,
-            link: `/clinics/${signal.clinic_id}`,
+            link: `/churn`,
           })
         }
       }

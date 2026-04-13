@@ -14,6 +14,8 @@ import { z } from 'zod'
 import { isValidTransition } from '@/lib/orders/status-machine'
 import { canPlaceOrder } from '@/lib/compliance'
 import { getActiveCouponsForOrder } from '@/services/coupons'
+import { sendSms, SMS } from '@/lib/sms'
+import { sendWhatsApp, WA } from '@/lib/whatsapp'
 
 const createOrderSchema = z.object({
   clinic_id: z.string().uuid(),
@@ -250,19 +252,31 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         await sendEmail({ to: pharmacy.email, ...tmpl })
       }
 
-      // In-app notification for admins
+      // In-app + push notification for admins
       await createNotificationForRole('SUPER_ADMIN', {
         type: 'ORDER_CREATED',
         title: `Novo pedido ${order.code}`,
         body: `${clinic?.trade_name ?? '—'} · ${productNames} · ${formatCurrency(finalTotal)}`,
         link: `/orders/${order.id}`,
+        push: true,
       })
       await createNotificationForRole('PLATFORM_ADMIN', {
         type: 'ORDER_CREATED',
         title: `Novo pedido ${order.code}`,
         body: `${clinic?.trade_name ?? '—'} · ${productNames}`,
         link: `/orders/${order.id}`,
+        push: true,
       })
+
+      // SMS confirmation to clinic on order creation
+      const { data: clinicData } = await adminClient
+        .from('clinics')
+        .select('phone')
+        .eq('id', clinic_id)
+        .single()
+      if (clinicData?.phone) {
+        sendSms(clinicData.phone, SMS.orderCreated(order.code)).catch(() => null)
+      }
     } catch {
       // email/notification failure must not affect order creation
     }
@@ -362,11 +376,13 @@ export async function updateOrderStatus(
       try {
         const { data: fullOrder } = await adminClient
           .from('orders')
-          .select('code, clinic_id, clinics(email), order_items(products(name))')
+          .select('code, clinic_id, clinics(email, phone), order_items(products(name))')
           .eq('id', orderId)
           .single()
 
-        const clinicEmail = (fullOrder?.clinics as { email?: string } | null)?.email
+        const clinic = fullOrder?.clinics as { email?: string; phone?: string } | null
+        const clinicEmail = clinic?.email
+        const clinicPhone = clinic?.phone
         const itemsRaw = fullOrder?.order_items as Array<{
           products: { name: string }[] | null
         }> | null
@@ -391,6 +407,23 @@ export async function updateOrderStatus(
           await sendEmail({ to: clinicEmail, ...tmpl })
         }
 
+        // SMS + WhatsApp on key transitions
+        const orderCode = fullOrder?.code ?? orderId
+        if (clinicPhone) {
+          if (newStatus === 'READY') {
+            sendSms(clinicPhone, SMS.orderReady(orderCode)).catch(() => null)
+            sendWhatsApp(clinicPhone, WA.orderReady(orderCode)).catch(() => null)
+          } else if (newStatus === 'SHIPPED') {
+            sendSms(clinicPhone, SMS.orderShipped(orderCode)).catch(() => null)
+            sendWhatsApp(clinicPhone, WA.orderShipped(orderCode)).catch(() => null)
+          } else if (newStatus === 'DELIVERED') {
+            sendSms(clinicPhone, SMS.orderDelivered(orderCode)).catch(() => null)
+            sendWhatsApp(clinicPhone, WA.orderDelivered(orderCode)).catch(() => null)
+          } else if (newStatus === 'CANCELED') {
+            sendSms(clinicPhone, SMS.orderCanceled(orderCode)).catch(() => null)
+          }
+        }
+
         // In-app notification for order creator
         await createNotification({
           userId: order.created_by_user_id,
@@ -398,6 +431,7 @@ export async function updateOrderStatus(
           title: `Pedido ${fullOrder?.code ?? orderId}: ${NOTIFY_STATUSES[newStatus]}`,
           body: productNames,
           link: `/orders/${orderId}`,
+          push: true,
         })
       } catch {
         // email/notification failure must not affect status update
