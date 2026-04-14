@@ -88,6 +88,7 @@ export const pharmacySchema = z.object({
   bank_account: z.string().optional(),
   pix_key: z.string().optional(),
   notes: z.string().optional(),
+  entity_type: z.enum(['PHARMACY', 'DISTRIBUTOR']).optional(),
 })
 
 export type PharmacyFormData = z.infer<typeof pharmacySchema>
@@ -115,6 +116,7 @@ export const productSchema = z.object({
   requires_prescription: z.boolean().optional(),
   prescription_type: z.enum(['SIMPLE', 'SPECIAL_CONTROL', 'ANTIMICROBIAL']).nullable().optional(),
   max_units_per_prescription: z.number().int().min(1).nullable().optional(),
+  is_manipulated: z.boolean().optional(),
 })
 
 export type ProductFormData = z.infer<typeof productSchema>

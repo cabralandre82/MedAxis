@@ -75,6 +75,7 @@ export function ProductForm({
           requires_prescription: product.requires_prescription ?? false,
           prescription_type: product.prescription_type ?? null,
           max_units_per_prescription: product.max_units_per_prescription ?? null,
+          is_manipulated: product.is_manipulated ?? false,
         }
       : {
           active: true,
@@ -87,6 +88,7 @@ export function ProductForm({
           requires_prescription: false,
           prescription_type: null,
           max_units_per_prescription: null,
+          is_manipulated: false,
         },
   })
 
@@ -95,6 +97,11 @@ export function ProductForm({
   const priceValue = watch('price_current') ?? 0
   const pharmacyCostValue = watch('pharmacy_cost') ?? 0
   const requiresPrescription = watch('requires_prescription') ?? false
+  const selectedPharmacyId = watch('pharmacy_id') ?? defaultPharmacyId
+
+  const selectedPharmacy = pharmacies.find((p) => p.id === selectedPharmacyId)
+  const isDistributor = selectedPharmacy?.entity_type === 'DISTRIBUTOR'
+  const isManipulated = watch('is_manipulated') ?? false
 
   // Live margin calculations
   const platformMargin = Math.max(0, priceValue - pharmacyCostValue)
@@ -548,7 +555,38 @@ export function ProductForm({
         </div>
       </section>
 
-      {/* Receita Médica */}
+      <section>
+        <h3 className="mb-4 text-sm font-semibold tracking-wider text-gray-700 uppercase">
+          Tipo de Produto
+        </h3>
+
+        {isDistributor ? (
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">
+            Distribuidoras trabalham exclusivamente com produtos industrializados.
+          </div>
+        ) : (
+          <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    Produto manipulado (magistral)
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Formulação produzida sob demanda na farmácia
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="is_manipulated"
+                checked={isManipulated}
+                onCheckedChange={(v) => setValue('is_manipulated', v)}
+              />
+            </div>
+          </div>
+        )}
+      </section>
+
       <section>
         <h3 className="mb-4 text-sm font-semibold tracking-wider text-gray-700 uppercase">
           Receita Médica

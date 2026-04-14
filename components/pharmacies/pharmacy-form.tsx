@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { pharmacySchema, type PharmacyFormData } from '@/lib/validators'
 import { createPharmacy, updatePharmacy } from '@/services/pharmacies'
-import type { Pharmacy } from '@/types'
+import type { EntityType, Pharmacy } from '@/types'
 
 interface PharmacyFormProps {
   pharmacy?: Pharmacy
@@ -19,12 +19,23 @@ interface PharmacyFormProps {
   disableCnpj?: boolean
   /** Where to navigate after a successful save (default: /pharmacies/:id) */
   redirectAfterSave?: string
+  /** Controls entity_type on creation. Defaults to PHARMACY. */
+  entityType?: EntityType
+  /** Where to redirect the list page after creation */
+  listPath?: string
 }
 
-export function PharmacyForm({ pharmacy, disableCnpj, redirectAfterSave }: PharmacyFormProps) {
+export function PharmacyForm({
+  pharmacy,
+  disableCnpj,
+  redirectAfterSave,
+  entityType = 'PHARMACY',
+  listPath = '/pharmacies',
+}: PharmacyFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const isEditing = !!pharmacy
+  const isDistributor = entityType === 'DISTRIBUTOR'
 
   const {
     register,
@@ -63,16 +74,24 @@ export function PharmacyForm({ pharmacy, disableCnpj, redirectAfterSave }: Pharm
           toast.error(result.error)
           return
         }
-        toast.success('Farmácia atualizada com sucesso!')
-        router.push(redirectAfterSave ?? `/pharmacies/${pharmacy.id}`)
+        toast.success(
+          isDistributor
+            ? 'Distribuidora atualizada com sucesso!'
+            : 'Farmácia atualizada com sucesso!'
+        )
+        router.push(redirectAfterSave ?? `${listPath}/${pharmacy.id}`)
       } else {
-        const result = await createPharmacy(data)
+        const result = await createPharmacy({ ...data, entity_type: entityType })
         if (result.error) {
           toast.error(result.error)
           return
         }
-        toast.success('Farmácia cadastrada com sucesso!')
-        router.push(`/pharmacies/${result.id}`)
+        toast.success(
+          isDistributor
+            ? 'Distribuidora cadastrada com sucesso!'
+            : 'Farmácia cadastrada com sucesso!'
+        )
+        router.push(`${listPath}/${result.id}`)
       }
       router.refresh()
     } finally {
@@ -197,7 +216,13 @@ export function PharmacyForm({ pharmacy, disableCnpj, redirectAfterSave }: Pharm
 
       <div className="flex gap-3">
         <Button type="submit" disabled={loading}>
-          {loading ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Cadastrar farmácia'}
+          {loading
+            ? 'Salvando...'
+            : isEditing
+              ? 'Salvar alterações'
+              : isDistributor
+                ? 'Cadastrar distribuidora'
+                : 'Cadastrar farmácia'}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
           Cancelar

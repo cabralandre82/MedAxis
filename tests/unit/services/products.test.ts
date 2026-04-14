@@ -175,17 +175,27 @@ describe('createProduct', () => {
   it('retries with random suffix on 23505 collision and succeeds', async () => {
     let insertCallCount = 0
     const adminMock = {
-      from: vi.fn().mockImplementation(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          insertCallCount++
-          if (insertCallCount === 1)
-            return Promise.resolve({ data: null, error: { code: '23505', message: 'sku dup' } })
-          return Promise.resolve({ data: { id: 'prod-retry' }, error: null })
-        }),
-      })),
+      from: vi.fn().mockImplementation((table: string) => {
+        // pharmacy entity_type lookup — return PHARMACY so is_manipulated is not reset
+        if (table === 'pharmacies') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { entity_type: 'PHARMACY' }, error: null }),
+          }
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          insert: vi.fn().mockReturnThis(),
+          single: vi.fn().mockImplementation(() => {
+            insertCallCount++
+            if (insertCallCount === 1)
+              return Promise.resolve({ data: null, error: { code: '23505', message: 'sku dup' } })
+            return Promise.resolve({ data: { id: 'prod-retry' }, error: null })
+          }),
+        }
+      }),
     }
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
       adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
@@ -210,6 +220,109 @@ describe('createProduct', () => {
     vi.mocked(rbacModule.requireRole).mockRejectedValue(new Error('FORBIDDEN'))
     const result = await createProduct({} as Parameters<typeof createProduct>[0])
     expect(result.error).toBe('Sem permissão')
+  })
+})
+
+describe('createProduct — distributor is_manipulated enforcement', () => {
+  it('forces is_manipulated=false when pharmacy is a DISTRIBUTOR', async () => {
+    let insertedData: Record<string, unknown> | null = null
+    const adminMock = {
+      from: vi.fn().mockImplementation((table: string) => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockImplementation((data: Record<string, unknown>) => {
+          insertedData = data
+          return {
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: 'prod-dist-1' }, error: null }),
+          }
+        }),
+        single: vi
+          .fn()
+          .mockResolvedValue(
+            table === 'pharmacies'
+              ? { data: { entity_type: 'DISTRIBUTOR' }, error: null }
+              : { data: null, error: null }
+          ),
+      })),
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    // Override validator mock to submit is_manipulated=true
+    const validators = await import('@/lib/validators')
+    vi.mocked(
+      (validators as Record<string, unknown>).productSchema as {
+        safeParse: ReturnType<typeof vi.fn>
+      }
+    ).safeParse.mockReturnValueOnce({
+      success: true,
+      data: {
+        name: 'Produto',
+        sku: 'SKU-D1',
+        status: 'active',
+        price_current: 100,
+        pharmacy_cost: 60,
+        featured: false,
+        pharmacy_id: 'dist-ph-1',
+        is_manipulated: true, // attacker tries to set true
+      },
+    })
+
+    await createProduct({} as Parameters<typeof createProduct>[0])
+    expect(insertedData).not.toBeNull()
+    expect((insertedData as Record<string, unknown>).is_manipulated).toBe(false)
+  })
+
+  it('preserves is_manipulated=true when pharmacy is a PHARMACY', async () => {
+    let insertedData: Record<string, unknown> | null = null
+    const adminMock = {
+      from: vi.fn().mockImplementation((table: string) => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockImplementation((data: Record<string, unknown>) => {
+          insertedData = data
+          return {
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: 'prod-ph-1' }, error: null }),
+          }
+        }),
+        single: vi
+          .fn()
+          .mockResolvedValue(
+            table === 'pharmacies'
+              ? { data: { entity_type: 'PHARMACY' }, error: null }
+              : { data: null, error: null }
+          ),
+      })),
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const validators = await import('@/lib/validators')
+    vi.mocked(
+      (validators as Record<string, unknown>).productSchema as {
+        safeParse: ReturnType<typeof vi.fn>
+      }
+    ).safeParse.mockReturnValueOnce({
+      success: true,
+      data: {
+        name: 'Produto Magistral',
+        sku: 'SKU-M1',
+        status: 'active',
+        price_current: 200,
+        pharmacy_cost: 100,
+        featured: false,
+        pharmacy_id: 'real-ph-1',
+        is_manipulated: true,
+      },
+    })
+
+    await createProduct({} as Parameters<typeof createProduct>[0])
+    expect(insertedData).not.toBeNull()
+    expect((insertedData as Record<string, unknown>).is_manipulated).toBe(true)
   })
 })
 

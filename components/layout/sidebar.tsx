@@ -11,6 +11,7 @@ import {
   Building2,
   UserCheck,
   Pill,
+  Truck,
   Package,
   CreditCard,
   ArrowLeftRight,
@@ -83,6 +84,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/pharmacies',
     label: 'Farmácias',
     icon: Pill,
+    roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
+  },
+  {
+    href: '/distributors',
+    label: 'Distribuidoras',
+    icon: Truck,
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
   },
   {

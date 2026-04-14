@@ -34,6 +34,7 @@ export async function createPharmacy(
       .from('pharmacies')
       .insert({
         ...parsed.data,
+        entity_type: parsed.data.entity_type ?? 'PHARMACY',
         status: 'PENDING',
         cnpj_validated_at: parsed.data.cnpj ? new Date().toISOString() : null,
         cnpj_situation: parsed.data.cnpj ? 'ATIVA' : null,

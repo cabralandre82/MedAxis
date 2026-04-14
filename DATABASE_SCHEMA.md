@@ -132,10 +132,13 @@ bank_branch        text
 bank_account       text
 pix_key            text
 status             text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACTIVE','BLOCKED'))
+entity_type        text NOT NULL DEFAULT 'PHARMACY' CHECK (entity_type IN ('PHARMACY','DISTRIBUTOR'))
 notes              text
 created_at         timestamptz DEFAULT now()
 updated_at         timestamptz DEFAULT now()
 ```
+
+`entity_type` discrimina farmácias de manipulação (`PHARMACY`) de distribuidoras de produtos industrializados (`DISTRIBUTOR`). Ambos os tipos compartilham a mesma tabela, o mesmo fluxo de pedidos/pagamentos/repasses e o mesmo role `PHARMACY_ADMIN`. A única diferença de negócio é que distribuidoras não podem ter produtos com `is_manipulated = true` (ver tabela `products`).
 
 ## Tabela: pharmacy_members
 
@@ -182,9 +185,12 @@ estimated_deadline_days int NOT NULL
 active                 boolean DEFAULT true  -- derivado de status (status != 'inactive')
 status                 text NOT NULL DEFAULT 'active' CHECK (status IN ('active','unavailable','inactive'))
 featured               boolean DEFAULT false
+is_manipulated         boolean NOT NULL DEFAULT false
 created_at             timestamptz DEFAULT now()
 updated_at             timestamptz DEFAULT now()
 ```
+
+`is_manipulated = true` indica produto magistral/composto (produzido sob demanda na farmácia). Distribuidoras (`pharmacies.entity_type = 'DISTRIBUTOR'`) não podem ter produtos com este flag — o serviço de criação de produtos força `is_manipulated = false` ao detectar uma distribuidora como proprietária.
 
 **Status possíveis:**
 | Valor | Descrição |

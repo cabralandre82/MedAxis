@@ -125,6 +125,61 @@ describe('createPharmacy', () => {
   })
 })
 
+describe('createPharmacy — entity_type', () => {
+  it('creates a distributor when entity_type is DISTRIBUTOR', async () => {
+    const validators = await import('@/lib/validators')
+    vi.mocked(
+      (validators as Record<string, unknown>).pharmacySchema as {
+        safeParse: ReturnType<typeof vi.fn>
+      }
+    ).safeParse.mockReturnValueOnce({
+      success: true,
+      data: {
+        trade_name: 'Dist Teste',
+        cnpj: '11222333000181',
+        email: 'd@test.com',
+        entity_type: 'DISTRIBUTOR',
+      },
+    })
+
+    const qb = makeQueryBuilder({ id: 'dist-1' }, null)
+    qb.single = vi.fn().mockResolvedValue({ data: { id: 'dist-1' }, error: null })
+    const fromMock = vi.fn().mockReturnValue(qb)
+    vi.mocked(adminModule.createAdminClient).mockReturnValue({
+      from: fromMock,
+    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+
+    const result = await createPharmacy({
+      trade_name: 'Dist Teste',
+      cnpj: '11222333000181',
+      email: 'd@test.com',
+    } as Parameters<typeof createPharmacy>[0])
+
+    expect(result.id).toBe('dist-1')
+    expect(result.error).toBeUndefined()
+    const insertCall = qb.insert as ReturnType<typeof vi.fn>
+    expect(insertCall).toHaveBeenCalledWith(expect.objectContaining({ entity_type: 'DISTRIBUTOR' }))
+  })
+
+  it('defaults entity_type to PHARMACY when not provided', async () => {
+    const qb = makeQueryBuilder({ id: 'ph-2' }, null)
+    qb.single = vi.fn().mockResolvedValue({ data: { id: 'ph-2' }, error: null })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue(qb),
+    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+
+    const result = await createPharmacy({
+      trade_name: 'F',
+      cnpj: '11222333000181',
+      email: 'f@test.com',
+    } as Parameters<typeof createPharmacy>[0])
+
+    expect(result.id).toBe('ph-2')
+    const insertCall = qb.insert as ReturnType<typeof vi.fn>
+    expect(insertCall).toHaveBeenCalledWith(expect.objectContaining({ entity_type: 'PHARMACY' }))
+  })
+})
+
 describe('updatePharmacy', () => {
   it('updates pharmacy successfully', async () => {
     const qb = makeQueryBuilder({ id: 'ph-1', trade_name: 'Old' }, null)

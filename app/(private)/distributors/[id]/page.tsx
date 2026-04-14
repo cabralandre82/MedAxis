@@ -1,0 +1,227 @@
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import { requireRolePage } from '@/lib/rbac'
+import { createAdminClient } from '@/lib/db/admin'
+import { formatCNPJ, formatPhone, formatDate, formatCurrency } from '@/lib/utils'
+
+import { EntityStatusBadge } from '@/components/shared/status-badge'
+import { ButtonLink } from '@/components/ui/button-link'
+import { PharmacyStatusActions } from '@/components/pharmacies/pharmacy-status-actions'
+import type { Pharmacy, EntityStatus } from '@/types'
+
+export const dynamic = 'force-dynamic'
+
+export const metadata = { title: 'Detalhe da Distribuidora | Clinipharma' }
+
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
+export default async function DistributorDetailPage({ params }: PageProps) {
+  const { id } = await params
+  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+
+  const supabase = createAdminClient()
+  const { data: distributor } = await supabase
+    .from('pharmacies')
+    .select('*')
+    .eq('id', id)
+    .eq('entity_type', 'DISTRIBUTOR')
+    .single()
+
+  if (!distributor) notFound()
+
+  const typedDistributor = distributor as unknown as Pharmacy
+
+  const { data: productsRaw } = await supabase
+    .from('products')
+    .select('id, name, sku, price_current, active')
+    .eq('pharmacy_id', id)
+    .order('name')
+
+  const products = productsRaw as unknown as Array<{
+    id: string
+    name: string
+    sku: string
+    price_current: number
+    active: boolean
+  }>
+
+  const { data: transfersRaw } = await supabase
+    .from('transfers')
+    .select('id, net_amount, status, created_at')
+    .eq('pharmacy_id', id)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  const transfers = transfersRaw as unknown as Array<{
+    id: string
+    net_amount: number
+    status: string
+    created_at: string
+  }>
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Link href="/distributors" className="hover:text-primary">
+              Distribuidoras
+            </Link>
+            <span>/</span>
+            <span>{typedDistributor.trade_name}</span>
+          </div>
+          <h1 className="mt-1 text-2xl font-bold text-gray-900">{typedDistributor.trade_name}</h1>
+          <p className="text-sm text-gray-500">{typedDistributor.corporate_name}</p>
+        </div>
+        <div className="flex gap-2">
+          <PharmacyStatusActions
+            pharmacyId={id}
+            currentStatus={typedDistributor.status as EntityStatus}
+          />
+          <ButtonLink href={`/distributors/${id}/edit`} variant="outline">
+            Editar
+          </ButtonLink>
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-4 rounded-lg border bg-white p-6">
+          <h2 className="font-semibold text-gray-900">Informações</h2>
+          <dl className="space-y-3">
+            <div className="flex justify-between">
+              <dt className="text-sm text-gray-500">Status</dt>
+              <dd>
+                <EntityStatusBadge status={typedDistributor.status as EntityStatus} />
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-sm text-gray-500">CNPJ</dt>
+              <dd className="text-sm font-medium">{formatCNPJ(typedDistributor.cnpj)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-sm text-gray-500">Responsável</dt>
+              <dd className="text-sm font-medium">{typedDistributor.responsible_person}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-sm text-gray-500">Email</dt>
+              <dd className="text-sm font-medium">{typedDistributor.email}</dd>
+            </div>
+            {typedDistributor.phone && (
+              <div className="flex justify-between">
+                <dt className="text-sm text-gray-500">Telefone</dt>
+                <dd className="text-sm font-medium">{formatPhone(typedDistributor.phone)}</dd>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <dt className="text-sm text-gray-500">Cadastrada em</dt>
+              <dd className="text-sm font-medium">{formatDate(typedDistributor.created_at)}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="space-y-4 rounded-lg border bg-white p-6">
+          <h2 className="font-semibold text-gray-900">Dados Bancários</h2>
+          <dl className="space-y-3">
+            {typedDistributor.bank_name && (
+              <div className="flex justify-between">
+                <dt className="text-sm text-gray-500">Banco</dt>
+                <dd className="text-sm font-medium">{typedDistributor.bank_name}</dd>
+              </div>
+            )}
+            {typedDistributor.bank_branch && (
+              <div className="flex justify-between">
+                <dt className="text-sm text-gray-500">Agência</dt>
+                <dd className="text-sm font-medium">{typedDistributor.bank_branch}</dd>
+              </div>
+            )}
+            {typedDistributor.bank_account && (
+              <div className="flex justify-between">
+                <dt className="text-sm text-gray-500">Conta</dt>
+                <dd className="text-sm font-medium">{typedDistributor.bank_account}</dd>
+              </div>
+            )}
+            {typedDistributor.pix_key && (
+              <div className="flex justify-between">
+                <dt className="text-sm text-gray-500">Chave PIX</dt>
+                <dd className="max-w-[200px] truncate text-sm font-medium">
+                  {typedDistributor.pix_key}
+                </dd>
+              </div>
+            )}
+            {!typedDistributor.bank_name && !typedDistributor.pix_key && (
+              <p className="text-sm text-gray-400">Nenhum dado bancário cadastrado</p>
+            )}
+          </dl>
+        </div>
+
+        {products && products.length > 0 && (
+          <div className="space-y-4 rounded-lg border bg-white p-6 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Produtos ({products.length})</h2>
+              <ButtonLink href={`/products?pharmacy=${id}`} variant="outline" size="sm">
+                Ver todos
+              </ButtonLink>
+            </div>
+            <div className="divide-y">
+              {products.slice(0, 5).map((product) => (
+                <div key={product.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <Link
+                      href={`/catalog/${product.id}`}
+                      className="hover:text-primary text-sm font-medium"
+                    >
+                      {product.name}
+                    </Link>
+                    <p className="text-xs text-gray-500">SKU: {product.sku}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-primary text-sm font-semibold">
+                      {formatCurrency(product.price_current)}
+                    </span>
+                    <span
+                      className={`text-xs ${product.active ? 'text-green-600' : 'text-gray-400'}`}
+                    >
+                      {product.active ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {transfers && transfers.length > 0 && (
+          <div className="space-y-4 rounded-lg border bg-white p-6 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Últimos Repasses</h2>
+              <ButtonLink href="/transfers" variant="outline" size="sm">
+                Ver todos
+              </ButtonLink>
+            </div>
+            <div className="divide-y">
+              {transfers.map((transfer) => (
+                <div key={transfer.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="text-sm font-medium">{formatCurrency(transfer.net_amount)}</p>
+                    <p className="text-xs text-gray-500">{formatDate(transfer.created_at)}</p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-medium ${
+                      transfer.status === 'COMPLETED'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}
+                  >
+                    {transfer.status === 'COMPLETED' ? 'Pago' : 'Pendente'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

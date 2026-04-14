@@ -1,3 +1,5 @@
+export type EntityType = 'PHARMACY' | 'DISTRIBUTOR'
+
 export type UserRole =
   | 'SUPER_ADMIN'
   | 'PLATFORM_ADMIN'
@@ -174,6 +176,7 @@ export interface Pharmacy {
   bank_account?: string | null
   pix_key?: string | null
   status: EntityStatus
+  entity_type: EntityType
   notes?: string | null
   created_at: string
   updated_at: string
@@ -209,6 +212,7 @@ export interface Product {
   active: boolean
   status: 'active' | 'unavailable' | 'inactive'
   featured: boolean
+  is_manipulated: boolean
   created_at: string
   updated_at: string
   requires_prescription: boolean

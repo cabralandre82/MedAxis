@@ -30,10 +30,13 @@ export default async function NewProductPage() {
     await Promise.all([
       supabase.from('product_categories').select('*').order('name'),
       isPharmacy && myPharmacyId
-        ? supabase.from('pharmacies').select('id, trade_name, status').eq('id', myPharmacyId)
+        ? supabase
+            .from('pharmacies')
+            .select('id, trade_name, status, entity_type')
+            .eq('id', myPharmacyId)
         : supabase
             .from('pharmacies')
-            .select('id, trade_name, status')
+            .select('id, trade_name, status, entity_type')
             .eq('status', 'ACTIVE')
             .order('trade_name'),
       supabase

@@ -76,6 +76,16 @@ export async function createProduct(
       parsed.data.status = 'inactive'
     }
 
+    // Distributors cannot create manipulated products — enforce server-side
+    const { data: pharmacyRow } = await adminClient
+      .from('pharmacies')
+      .select('entity_type')
+      .eq('id', parsed.data.pharmacy_id)
+      .single()
+    if (pharmacyRow?.entity_type === 'DISTRIBUTOR') {
+      parsed.data.is_manipulated = false
+    }
+
     const slug = parsed.data.slug || slugify(parsed.data.name)
 
     // Auto-generate SKU if not provided

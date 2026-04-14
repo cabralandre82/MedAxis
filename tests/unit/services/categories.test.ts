@@ -9,6 +9,7 @@ import {
   toggleCategoryActive,
   reorderCategory,
 } from '@/services/categories'
+// Note: toggleCategoryManipulated was removed — is_manipulated lives on products now
 
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/rbac', () => ({ requireRole: vi.fn() }))
