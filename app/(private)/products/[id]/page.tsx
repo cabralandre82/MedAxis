@@ -403,7 +403,8 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
               <thead>
                 <tr className="border-b text-left text-gray-500">
                   <th className="pb-3 font-medium">Data</th>
-                  <th className="pb-3 font-medium">Preço</th>
+                  <th className="pb-3 font-medium">De</th>
+                  <th className="pb-3 font-medium">Para</th>
                   <th className="pb-3 font-medium">Alterado por</th>
                   <th className="pb-3 font-medium">Motivo</th>
                 </tr>
@@ -412,7 +413,12 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
                 {priceHistory.map((entry) => (
                   <tr key={entry.id}>
                     <td className="py-3 text-gray-500">{formatDate(entry.created_at)}</td>
-                    <td className="py-3 font-medium">{formatCurrency(entry.price)}</td>
+                    <td className="py-3 text-gray-400 line-through">
+                      {formatCurrency(entry.old_price)}
+                    </td>
+                    <td className="py-3 font-medium text-gray-900">
+                      {formatCurrency(entry.new_price)}
+                    </td>
                     <td className="py-3">{entry.profiles?.full_name ?? '—'}</td>
                     <td className="py-3 text-gray-600">{entry.reason ?? '—'}</td>
                   </tr>

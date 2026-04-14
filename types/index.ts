@@ -303,7 +303,8 @@ export interface ProductInterest {
 export interface ProductPriceHistory {
   id: string
   product_id: string
-  price: number
+  old_price: number
+  new_price: number
   changed_by_user_id: string | null
   reason: string | null
   created_at: string
