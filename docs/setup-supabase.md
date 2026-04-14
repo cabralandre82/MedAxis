@@ -14,7 +14,7 @@
 | Migration 035 — Realtime notifications         | ✅ Concluído (manual via SQL Editor) |
 | Migration 036 — needs_price_review             | ✅ Concluído (manual via SQL Editor) |
 | Migration 037 — CANCELED em payments/transfers | ✅ Concluído (manual via SQL Editor) |
-| Migration 038 — needs_manual_refund/reversal   | ⏳ Pendente (rodar via SQL Editor)   |
+| Migration 038 — needs_manual_refund/reversal   | ✅ Concluído (manual via SQL Editor) |
 | Buckets de storage criados                     | ✅ Concluído                         |
 | Seed de categorias/produtos                    | ✅ Concluído                         |
 | Usuários iniciais criados                      | ✅ Concluído                         |

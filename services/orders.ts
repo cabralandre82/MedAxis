@@ -537,10 +537,14 @@ async function handleOrderCancellationFinancials(
 
   if (payment) {
     if (['PENDING', 'UNDER_REVIEW'].includes(payment.status)) {
-      await adminClient
+      const { error: paymentCancelErr } = await adminClient
         .from('payments')
         .update({ status: 'CANCELED', updated_at: now })
         .eq('id', payment.id)
+      if (paymentCancelErr)
+        throw new Error(
+          `[handleOrderCancellationFinancials] payment update failed: ${paymentCancelErr.message}`
+        )
 
       await createAuditLog({
         actorUserId,
@@ -582,10 +586,14 @@ async function handleOrderCancellationFinancials(
 
   if (transfer) {
     if (['NOT_READY', 'PENDING'].includes(transfer.status)) {
-      await adminClient
+      const { error: transferCancelErr } = await adminClient
         .from('transfers')
         .update({ status: 'CANCELED', updated_at: now })
         .eq('id', transfer.id)
+      if (transferCancelErr)
+        throw new Error(
+          `[handleOrderCancellationFinancials] transfer update failed: ${transferCancelErr.message}`
+        )
 
       await createAuditLog({
         actorUserId,
