@@ -2,6 +2,23 @@
 
 ---
 
+## [6.7.6] — 2026-04-14 — fix: status terminais inconsistentes em toda a plataforma
+
+### Fixed
+
+- `lib/jobs/stale-orders.ts`: query usava `CANCELLED` (grafia errada — plataforma usa `CANCELED`) e `REJECTED` (status inexistente no schema). Corrigido para o conjunto padrão `COMPLETED`, `DELIVERED`, `CANCELED`, `DRAFT`.
+- `app/(private)/my-pharmacy/page.tsx`: contador "Pedidos ativos" excluía `COMPLETED/CANCELED/DRAFT` mas não `DELIVERED`, fazendo pedidos entregues aparecerem como ativos.
+- `components/dashboard/pharmacy-dashboard.tsx` (`PharmacyStaleOrders`): mesma omissão de `DELIVERED`.
+
+### Audited (already correct)
+
+- `lib/dashboard.ts` (admin): `DELIVERED` já presente.
+- `components/dashboard/stale-orders-widget.tsx`: `DELIVERED` já presente.
+- `app/api/cron/stale-orders/route.ts`: `DELIVERED` já presente.
+- Dashboards de clínica e médico: sem contador de "ativos", apenas listagem — sem impacto.
+
+---
+
 ## [6.7.4] — 2026-04-14 — fix: histórico de preço exibia R$ NaN
 
 ### Fixed
