@@ -2,6 +2,16 @@
 
 ---
 
+## [6.7.3] — 2026-04-14 — fix: relatórios — pedidos concluídos e em aberto
+
+### Fixed
+
+- `app/(private)/reports/page.tsx`: `completedOrders` agora conta `DELIVERED` + `COMPLETED` (ambos são estados terminais de sucesso). Antes contava apenas `COMPLETED`, resultando em 0 para pedidos entregues.
+- `openOrders` agora exclui `DELIVERED` além de `COMPLETED` e `CANCELED`. Antes, pedidos `DELIVERED` eram contados como "em aberto".
+- Comparação de período anterior no BI Avançado corrigida com a mesma lógica.
+
+---
+
 ## [6.7.2] — 2026-04-14 — UX: botão de voltar em todas as páginas filhas
 
 ### Added
