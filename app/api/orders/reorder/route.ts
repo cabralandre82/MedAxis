@@ -43,35 +43,51 @@ export async function POST(req: NextRequest) {
     unit_price: number
     pharmacy_cost_per_unit: number
   }> = []
-  let clinicId: string
+  let clinicId: string | null = null
   let pharmacyId: string
   let doctorId: string | null = null
+  let buyerType: 'CLINIC' | 'DOCTOR' = 'CLINIC'
+  let deliveryAddressId: string | null = null
 
   if (orderId) {
     const { data: order } = await admin
       .from('orders')
       .select(
-        'clinic_id, pharmacy_id, doctor_id, order_items(product_id, variant_id, quantity, unit_price, pharmacy_cost_per_unit)'
+        'buyer_type, clinic_id, pharmacy_id, doctor_id, delivery_address_id, order_items(product_id, variant_id, quantity, unit_price, pharmacy_cost_per_unit)'
       )
       .eq('id', orderId)
       .single()
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    // Verify user belongs to the source order's clinic (or is admin)
+    buyerType = ((order as any).buyer_type ?? 'CLINIC') as 'CLINIC' | 'DOCTOR'
+
+    // Verify user belongs to the source order (clinic member or same doctor)
     if (!isAdmin) {
-      const { data: membership } = await admin
-        .from('clinic_members')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .eq('clinic_id', (order as any).clinic_id)
-        .maybeSingle()
-      if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      if (buyerType === 'CLINIC') {
+        const { data: membership } = await admin
+          .from('clinic_members')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .eq('clinic_id', (order as any).clinic_id)
+          .maybeSingle()
+        if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      } else {
+        const { data: myDoctor } = await admin
+          .from('doctors')
+          .select('id')
+          .or(`user_id.eq.${user.id},email.eq.${user.email}`)
+          .maybeSingle()
+        if (!myDoctor || myDoctor.id !== (order as any).doctor_id) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+      }
     }
 
-    clinicId = (order as any).clinic_id
+    clinicId = (order as any).clinic_id ?? null
     pharmacyId = (order as any).pharmacy_id
     doctorId = (order as any).doctor_id ?? null
+    deliveryAddressId = (order as any).delivery_address_id ?? null
     items = ((order as any).order_items ?? []).map((i: any) => ({
       product_id: i.product_id,
       variant_id: i.variant_id ?? null,
@@ -100,7 +116,7 @@ export async function POST(req: NextRequest) {
       if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    clinicId = (template as any).clinic_id
+    clinicId = (template as any).clinic_id ?? null
     const templateItems = (template as any).items as Array<{
       product_id: string
       variant_id?: string
@@ -126,20 +142,32 @@ export async function POST(req: NextRequest) {
   if (!pharmacyId!)
     return NextResponse.json({ error: 'Pharmacy not found in source' }, { status: 400 })
 
-  // doctor_id is required by schema — if missing use clinic's primary doctor
-  if (!doctorId) {
+  // For CLINIC orders: doctor_id is optional but try to fill from linked doctors
+  if (buyerType === 'CLINIC' && !doctorId && clinicId) {
     const { data: docLink } = await admin
       .from('doctor_clinic_links')
       .select('doctor_id')
-      .eq('clinic_id', clinicId!)
+      .eq('clinic_id', clinicId)
       .eq('is_primary', true)
       .limit(1)
       .maybeSingle()
     doctorId = docLink?.doctor_id ?? null
   }
-  if (!doctorId) {
+
+  // For DOCTOR solo orders: ensure delivery_address_id is valid (use default if missing)
+  if (buyerType === 'DOCTOR' && doctorId && !deliveryAddressId) {
+    const { data: defaultAddr } = await admin
+      .from('doctor_addresses')
+      .select('id')
+      .eq('doctor_id', doctorId)
+      .eq('is_default', true)
+      .maybeSingle()
+    deliveryAddressId = defaultAddr?.id ?? null
+  }
+
+  if (buyerType === 'DOCTOR' && !deliveryAddressId) {
     return NextResponse.json(
-      { error: 'Médico não encontrado para esta clínica. Abra o pedido manualmente.' },
+      { error: 'Endereço de entrega não encontrado. Abra o pedido manualmente.' },
       { status: 422 }
     )
   }
@@ -151,9 +179,11 @@ export async function POST(req: NextRequest) {
     .from('orders')
     .insert({
       code: '', // trigger generates it
-      clinic_id: clinicId!,
+      buyer_type: buyerType,
+      clinic_id: buyerType === 'CLINIC' ? clinicId : null,
       pharmacy_id: pharmacyId!,
       doctor_id: doctorId,
+      delivery_address_id: buyerType === 'DOCTOR' ? deliveryAddressId : null,
       order_status: 'DRAFT',
       total_price: totalAmount,
       payment_status: 'PENDING',

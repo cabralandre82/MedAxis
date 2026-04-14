@@ -1,4 +1,5 @@
 export type EntityType = 'PHARMACY' | 'DISTRIBUTOR'
+export type BuyerType = 'CLINIC' | 'DOCTOR'
 
 export type UserRole =
   | 'SUPER_ADMIN'
@@ -145,7 +146,24 @@ export interface Doctor {
   specialty?: string | null
   email: string
   phone?: string | null
+  cpf?: string | null
+  user_id?: string | null
+  crm_validated_at?: string | null
   status: EntityStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface DoctorAddress {
+  id: string
+  doctor_id: string
+  label: string
+  address_line_1: string
+  address_line_2?: string | null
+  city: string
+  state: string
+  zip_code: string
+  is_default: boolean
   created_at: string
   updated_at: string
 }
@@ -307,9 +325,11 @@ export interface OrderItem {
 export interface Order {
   id: string
   code: string
-  clinic_id: string
-  doctor_id: string
+  buyer_type: BuyerType
+  clinic_id: string | null
+  doctor_id: string | null
   pharmacy_id: string
+  delivery_address_id?: string | null
   total_price: number
   payment_status: PaymentStatus
   transfer_status: TransferStatus
@@ -322,8 +342,8 @@ export interface Order {
 }
 
 export interface OrderWithRelations extends Order {
-  clinic: Clinic
-  doctor: Doctor
+  clinic: Clinic | null
+  doctor: Doctor | null
   pharmacy: Pharmacy
   product: Product
   documents: OrderDocument[]

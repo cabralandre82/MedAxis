@@ -23,19 +23,37 @@ const uuidLoose = z
   .string()
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'ID inválido')
 
-const createOrderSchema = z.object({
-  clinic_id: uuidLoose,
-  doctor_id: uuidLoose.optional().nullable(),
-  notes: z.string().optional(),
-  items: z
-    .array(
-      z.object({
-        product_id: uuidLoose,
-        quantity: z.number().int().positive(),
+const createOrderSchema = z
+  .object({
+    buyer_type: z.enum(['CLINIC', 'DOCTOR']).default('CLINIC'),
+    clinic_id: uuidLoose.optional().nullable(),
+    doctor_id: uuidLoose.optional().nullable(),
+    delivery_address_id: uuidLoose.optional().nullable(),
+    notes: z.string().optional(),
+    items: z
+      .array(
+        z.object({
+          product_id: uuidLoose,
+          quantity: z.number().int().positive(),
+        })
+      )
+      .min(1, 'Adicione ao menos um produto'),
+  })
+  .superRefine((d, ctx) => {
+    if (d.buyer_type === 'CLINIC' && !d.clinic_id) {
+      ctx.addIssue({ code: 'custom', path: ['clinic_id'], message: 'Clínica é obrigatória' })
+    }
+    if (d.buyer_type === 'DOCTOR' && !d.doctor_id) {
+      ctx.addIssue({ code: 'custom', path: ['doctor_id'], message: 'Médico é obrigatório' })
+    }
+    if (d.buyer_type === 'DOCTOR' && !d.delivery_address_id) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['delivery_address_id'],
+        message: 'Endereço de entrega é obrigatório',
       })
-    )
-    .min(1, 'Adicione ao menos um produto'),
-})
+    }
+  })
 
 export type OrderDocument = {
   file: File
@@ -68,20 +86,51 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
     }
 
-    const { clinic_id, doctor_id = null, notes, items } = parsed.data
+    const {
+      buyer_type,
+      clinic_id = null,
+      doctor_id = null,
+      delivery_address_id = null,
+      notes,
+      items,
+    } = parsed.data
     const supabase = await createClient()
     const adminClient = createAdminClient()
 
-    // CLINIC_ADMIN must belong to the clinic they are ordering for
     const isAdmin = user.roles.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
-    if (!isAdmin) {
-      const { data: membership } = await adminClient
-        .from('clinic_members')
-        .select('clinic_id')
-        .eq('user_id', user.id)
-        .eq('clinic_id', clinic_id)
+
+    if (buyer_type === 'CLINIC') {
+      // CLINIC_ADMIN must belong to the clinic they are ordering for
+      if (!isAdmin) {
+        const { data: membership } = await adminClient
+          .from('clinic_members')
+          .select('clinic_id')
+          .eq('user_id', user.id)
+          .eq('clinic_id', clinic_id!)
+          .maybeSingle()
+        if (!membership) return { error: 'Sem permissão para criar pedido para esta clínica' }
+      }
+    } else {
+      // DOCTOR buyer — must be the logged-in doctor themselves
+      const { data: myDoctor } = await adminClient
+        .from('doctors')
+        .select('id, cpf')
+        .or(`user_id.eq.${user.id},email.eq.${user.email}`)
         .maybeSingle()
-      if (!membership) return { error: 'Sem permissão para criar pedido para esta clínica' }
+      if (!myDoctor) return { error: 'Perfil de médico não encontrado' }
+      if (myDoctor.id !== doctor_id)
+        return { error: 'Sem permissão para criar pedido para este médico' }
+      if (!myDoctor.cpf)
+        return { error: 'CPF não cadastrado. Atualize seu perfil antes de fazer uma compra solo.' }
+
+      // Validate that delivery address belongs to this doctor
+      const { data: addr } = await adminClient
+        .from('doctor_addresses')
+        .select('id')
+        .eq('id', delivery_address_id!)
+        .eq('doctor_id', myDoctor.id)
+        .maybeSingle()
+      if (!addr) return { error: 'Endereço de entrega inválido' }
     }
 
     // Validate all products and get pharmacy (all items must be from same pharmacy)
@@ -99,8 +148,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 
     const pharmacy_id = pharmacyIds[0]
 
-    // Compliance check: clinic and pharmacy must be active; pharmacy CNPJ revalidated if stale
-    const compliance = await canPlaceOrder(clinic_id, pharmacy_id)
+    // Compliance check — clinic buyer: clinic + pharmacy must be active
+    //                   doctor buyer: only pharmacy is validated (clinic skipped)
+    const compliance = await canPlaceOrder(clinic_id, pharmacy_id, undefined, buyer_type)
     if (!compliance.allowed)
       return { error: compliance.reason ?? 'Pedido bloqueado por regra de compliance' }
 
@@ -111,15 +161,21 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       return sum + (p?.price_current ?? 0) * item.quantity
     }, 0)
 
-    // Auto-detect active coupons for this clinic — trigger will apply math
-    const couponMap = await getActiveCouponsForOrder(clinic_id, productIds)
+    // Auto-detect active coupons — clinic coupons for CLINIC buyer, doctor coupons for DOCTOR buyer
+    const couponMap = await getActiveCouponsForOrder(
+      buyer_type === 'CLINIC' ? clinic_id : null,
+      productIds,
+      buyer_type === 'DOCTOR' ? doctor_id : null
+    )
 
     // Create order header
     const { data: order, error: orderError } = await adminClient
       .from('orders')
       .insert({
-        clinic_id,
+        buyer_type,
+        clinic_id: buyer_type === 'CLINIC' ? clinic_id : null,
         doctor_id,
+        delivery_address_id: buyer_type === 'DOCTOR' ? delivery_address_id : null,
         pharmacy_id,
         total_price: estimatedTotal,
         order_status: 'AWAITING_DOCUMENTS',
@@ -253,7 +309,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       action: AuditAction.CREATE,
       newValues: {
         code: order.code,
-        clinic_id,
+        buyer_type,
+        clinic_id: clinic_id ?? null,
         doctor_id,
         pharmacy_id,
         item_count: items.length,
@@ -269,15 +326,18 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         .eq('id', pharmacy_id)
         .single()
 
-      const { data: clinic } = await adminClient
-        .from('clinics')
-        .select('trade_name')
-        .eq('id', clinic_id)
-        .single()
+      const { data: clinic } =
+        buyer_type === 'CLINIC' && clinic_id
+          ? await adminClient.from('clinics').select('trade_name').eq('id', clinic_id).single()
+          : { data: null }
 
       const { data: doctor } = doctor_id
         ? await adminClient.from('doctors').select('full_name').eq('id', doctor_id).single()
         : { data: null }
+
+      // Buyer display name: clinic trade name or doctor name
+      const buyerName =
+        buyer_type === 'CLINIC' ? (clinic?.trade_name ?? '—') : (doctor?.full_name ?? '—')
 
       const productNames = items
         .map((i) => `${productMap[i.product_id]?.name ?? '—'} (×${i.quantity})`)
@@ -294,7 +354,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           productName: productNames,
           quantity: items.reduce((s, i) => s + i.quantity, 0),
           totalPrice: formatCurrency(finalTotal),
-          clinicName: clinic?.trade_name ?? '—',
+          clinicName: buyerName,
           doctorName: doctor?.full_name ?? '—',
           deadline: `${maxDeadline} dias`,
         })
@@ -305,26 +365,28 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       await createNotificationForRole('SUPER_ADMIN', {
         type: 'ORDER_CREATED',
         title: `Novo pedido ${order.code}`,
-        body: `${clinic?.trade_name ?? '—'} · ${productNames} · ${formatCurrency(finalTotal)}`,
+        body: `${buyerName} · ${productNames} · ${formatCurrency(finalTotal)}`,
         link: `/orders/${order.id}`,
         push: true,
       })
       await createNotificationForRole('PLATFORM_ADMIN', {
         type: 'ORDER_CREATED',
         title: `Novo pedido ${order.code}`,
-        body: `${clinic?.trade_name ?? '—'} · ${productNames}`,
+        body: `${buyerName} · ${productNames}`,
         link: `/orders/${order.id}`,
         push: true,
       })
 
-      // SMS confirmation to clinic on order creation
-      const { data: clinicData } = await adminClient
-        .from('clinics')
-        .select('phone')
-        .eq('id', clinic_id)
-        .single()
-      if (clinicData?.phone) {
-        sendSms(clinicData.phone, SMS.orderCreated(order.code)).catch(() => null)
+      // SMS confirmation to buyer (clinic or doctor)
+      if (buyer_type === 'CLINIC' && clinic_id) {
+        const { data: clinicData } = await adminClient
+          .from('clinics')
+          .select('phone')
+          .eq('id', clinic_id)
+          .single()
+        if (clinicData?.phone) {
+          sendSms(clinicData.phone, SMS.orderCreated(order.code)).catch(() => null)
+        }
       }
     } catch {
       // email/notification failure must not affect order creation

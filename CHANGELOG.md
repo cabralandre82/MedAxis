@@ -2,6 +2,35 @@
 
 ---
 
+## [6.7.0] — 2026-04-14 — feat: compra solo de médico (buyer_type = 'DOCTOR')
+
+### Feature
+
+- **Migration `041`** (`041_solo_doctor_purchase.sql`):
+  - `doctors.cpf text UNIQUE` — CPF obrigatório para compra solo; `doctors.user_id uuid` — FK explícita para auth; `doctors.crm_validated_at` — registro de validação CFM.
+  - Nova tabela `doctor_addresses` — livro de endereços estilo Amazon com `is_default` constraint única por médico.
+  - `orders.buyer_type text NOT NULL DEFAULT 'CLINIC'` + `orders.delivery_address_id` + `clinic_id` tornado anulável com CHECK constraint de consistência.
+  - `coupons.clinic_id` tornado anulável + `coupons.doctor_id uuid` — cupons agora podem ser direcionados a médico ou clínica.
+- **`types/index.ts`**: `BuyerType`, `DoctorAddress`, `Doctor.cpf/user_id/crm_validated_at`, `Order.buyer_type/delivery_address_id` com `clinic_id` nullable.
+- **`lib/compliance.ts`**: `canPlaceOrder()` recebe `buyerType`; se `'DOCTOR'` pula validação CNPJ/status da clínica.
+- **`lib/validators/index.ts`**: `orderSchema` com `buyer_type` + `superRefine`; novo `doctorAddressSchema`.
+- **`services/doctor-addresses.ts`** (novo): `getDoctorAddresses`, `upsertDoctorAddress`, `setDefaultDoctorAddress`, `deleteDoctorAddress`.
+- **`services/orders.ts`**: suporte completo a `buyer_type`; validação server-side de CPF, `delivery_address_id` e ownership do médico.
+- **`services/coupons.ts`**: `getActiveCouponsForOrder` aceita `doctorId | null`; `createCoupon` suporta `clinic_id` ou `doctor_id`; `activateCoupon` suporta médico; `getAdminCoupons` retorna `recipient_name`.
+- **`components/orders/new-order-form.tsx`**: seletor "Comprar como: Pessoa Física / Clínica vinculada" para médicos; exibição de endereços salvos com seleção visual; novos props `myDoctorId`, `myAddresses`, `myDoctorClinics`.
+- **`app/(private)/orders/new/page.tsx`**: resolve `myDoctorId`, `myAddresses` e `myDoctorClinics` do médico logado.
+- **`app/(private)/orders/[id]/page.tsx`**: DOCTOR com pedido solo tem acesso via `doctor_id` match (não mais apenas por `clinic_members`).
+- **`components/doctors/doctor-address-book.tsx`** (novo): CRUD visual do livro de endereços com ações inline.
+- **`app/(private)/profile/addresses/page.tsx`** (novo): página do livro de endereços do médico.
+- **`app/api/registration/[id]/route.ts`**: na aprovação de médico, chama API CFM para auto-validar CRM; persiste `cpf` e `user_id` no registro `doctors`.
+- **`app/(auth)/registro/registration-form.tsx`**: campo CPF obrigatório no formulário de cadastro de médico.
+- **`components/coupons/admin-coupon-panel.tsx`**: seletor de destinatário (Clínica / Médico), coluna "Destinatário" na tabela, prop `doctors`.
+- **`app/(private)/coupons/page.tsx`**: busca lista de médicos ativos para o painel admin.
+- **`app/api/orders/reorder/route.ts`**: copia `buyer_type`, `delivery_address_id` do pedido original; suporte a reorder de pedido solo.
+- **`BUSINESS_RULES.md`**: RN-27 adicionada (regras completas de compra solo).
+
+---
+
 ## [6.6.2] — 2026-04-14 — UX: classificação visível no detalhe do produto + radio cards de receita
 
 ### Melhorias

@@ -100,21 +100,26 @@ export interface ComplianceCheckResult {
  *  4. Product is active and belongs to the pharmacy
  */
 export async function canPlaceOrder(
-  clinicId: string,
+  clinicId: string | null,
   pharmacyId: string,
-  productId?: string
+  productId?: string,
+  buyerType: 'CLINIC' | 'DOCTOR' = 'CLINIC'
 ): Promise<ComplianceCheckResult> {
   const admin = createAdminClient()
 
-  // 1. Check clinic
-  const { data: clinic } = await admin
-    .from('clinics')
-    .select('id, status')
-    .eq('id', clinicId)
-    .single()
+  // 1. Check clinic — skipped for solo doctor purchases
+  if (buyerType === 'CLINIC') {
+    if (!clinicId) return { allowed: false, reason: 'Clínica não informada' }
 
-  if (!clinic) return { allowed: false, reason: 'Clínica não encontrada' }
-  if (clinic.status !== 'ACTIVE') return { allowed: false, reason: 'Clínica não está ativa' }
+    const { data: clinic } = await admin
+      .from('clinics')
+      .select('id, status')
+      .eq('id', clinicId)
+      .single()
+
+    if (!clinic) return { allowed: false, reason: 'Clínica não encontrada' }
+    if (clinic.status !== 'ACTIVE') return { allowed: false, reason: 'Clínica não está ativa' }
+  }
 
   // 2. Check pharmacy
   const { data: pharmacy } = await admin

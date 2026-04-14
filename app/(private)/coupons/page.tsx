@@ -50,12 +50,21 @@ export default async function CouponsPage() {
   if (isAdminUser) {
     const admin = createAdminClient()
 
-    const [{ coupons = [], error }, { data: productsRaw }, { data: clinicsRaw }] =
-      await Promise.all([
-        getAdminCoupons(),
-        admin.from('products').select('id, name, sku').eq('active', true).order('name'),
-        admin.from('clinics').select('id, trade_name').eq('status', 'ACTIVE').order('trade_name'),
-      ])
+    const [
+      { coupons = [], error },
+      { data: productsRaw },
+      { data: clinicsRaw },
+      { data: doctorsRaw },
+    ] = await Promise.all([
+      getAdminCoupons(),
+      admin.from('products').select('id, name, sku').eq('active', true).order('name'),
+      admin.from('clinics').select('id, trade_name').eq('status', 'ACTIVE').order('trade_name'),
+      admin
+        .from('doctors')
+        .select('id, full_name, crm, crm_state')
+        .eq('status', 'ACTIVE')
+        .order('full_name'),
+    ])
 
     const products: SelectOption[] = (productsRaw ?? []).map((p) => ({
       id: p.id,
@@ -68,12 +77,19 @@ export default async function CouponsPage() {
       label: c.trade_name,
     }))
 
+    const doctors: SelectOption[] = (doctorsRaw ?? []).map((d) => ({
+      id: d.id,
+      label: d.full_name,
+      sublabel: `CRM ${d.crm}/${d.crm_state}`,
+    }))
+
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cupons de desconto</h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            Gerencie cupons por produto e clínica. O desconto é absorvido pela plataforma.
+            Gerencie cupons por produto e destinatário (clínica ou médico). O desconto é absorvido
+            pela plataforma.
           </p>
         </div>
 
@@ -83,7 +99,12 @@ export default async function CouponsPage() {
           </div>
         )}
 
-        <AdminCouponPanel coupons={coupons} products={products} clinics={clinics} />
+        <AdminCouponPanel
+          coupons={coupons}
+          products={products}
+          clinics={clinics}
+          doctors={doctors}
+        />
       </div>
     )
   }

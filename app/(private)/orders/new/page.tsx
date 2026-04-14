@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/session'
 import { NewOrderForm, type NewOrderFormProduct } from '@/components/orders/new-order-form'
 import { parseCartParam } from '@/lib/orders/doctor-field-rules'
+import type { DoctorAddress } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,6 +46,9 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
   // login after being added, the RLS check would fail with the user client.
   let resolvedClinic: { id: string; trade_name: string } | null = null
   let adminClinics: { id: string; trade_name: string }[] | null = null
+  let myDoctorId: string | undefined
+  let myAddresses: DoctorAddress[] = []
+  let myDoctorClinics: { id: string; trade_name: string }[] = []
 
   if (user.roles.includes('CLINIC_ADMIN')) {
     const { data: membership } = await admin
@@ -56,27 +60,34 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
     resolvedClinic =
       (membership?.clinics as unknown as { id: string; trade_name: string } | null) ?? null
   } else if (user.roles.includes('DOCTOR')) {
+    // Resolve doctor record — prefer user_id FK, fall back to email match
     const { data: doctorRecord } = await admin
       .from('doctors')
-      .select('id')
-      .eq('email', user.email)
+      .select('id, cpf')
+      .or(`user_id.eq.${user.id},email.eq.${user.email}`)
       .maybeSingle()
 
     if (doctorRecord) {
+      myDoctorId = doctorRecord.id
+
+      // Fetch saved delivery addresses
+      const { data: addrData } = await admin
+        .from('doctor_addresses')
+        .select('*')
+        .eq('doctor_id', doctorRecord.id)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true })
+      myAddresses = (addrData ?? []) as DoctorAddress[]
+
+      // Fetch linked clinics (for "Comprar como Clínica" option)
       const { data: linked } = await admin
         .from('doctor_clinic_links')
         .select('clinics(id, trade_name)')
         .eq('doctor_id', doctorRecord.id)
 
-      const doctorClinics = (linked ?? [])
+      myDoctorClinics = (linked ?? [])
         .map((l) => l.clinics as unknown as { id: string; trade_name: string })
         .filter(Boolean)
-
-      if (doctorClinics.length === 1) {
-        resolvedClinic = doctorClinics[0]
-      } else {
-        adminClinics = doctorClinics
-      }
     }
   } else {
     // SUPER_ADMIN / PLATFORM_ADMIN see all clinics
@@ -88,28 +99,35 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
     adminClinics = data ?? []
   }
 
-  // Fetch doctors linked to the resolved clinic via adminClient (bypasses RLS).
+  // Fetch doctors linked to the resolved clinic (only for non-doctor flows)
   let linkedDoctors: { id: string; full_name: string; crm: string; crm_state: string }[] = []
 
-  if (resolvedClinic) {
-    const { data } = await admin
-      .from('doctor_clinic_links')
-      .select('doctors(id, full_name, crm, crm_state)')
-      .eq('clinic_id', resolvedClinic.id)
+  if (!myDoctorId) {
+    if (resolvedClinic) {
+      const { data } = await admin
+        .from('doctor_clinic_links')
+        .select('doctors(id, full_name, crm, crm_state)')
+        .eq('clinic_id', resolvedClinic.id)
 
-    linkedDoctors = (data ?? [])
-      .map(
-        (l) =>
-          l.doctors as unknown as { id: string; full_name: string; crm: string; crm_state: string }
-      )
-      .filter(Boolean)
-  } else {
-    const { data } = await admin
-      .from('doctors')
-      .select('id, full_name, crm, crm_state')
-      .eq('status', 'ACTIVE')
-      .order('full_name')
-    linkedDoctors = data ?? []
+      linkedDoctors = (data ?? [])
+        .map(
+          (l) =>
+            l.doctors as unknown as {
+              id: string
+              full_name: string
+              crm: string
+              crm_state: string
+            }
+        )
+        .filter(Boolean)
+    } else {
+      const { data } = await admin
+        .from('doctors')
+        .select('id, full_name, crm, crm_state')
+        .eq('status', 'ACTIVE')
+        .order('full_name')
+      linkedDoctors = data ?? []
+    }
   }
 
   return (
@@ -128,6 +146,9 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
         doctors={linkedDoctors}
         isClinicAdmin={user.roles.includes('CLINIC_ADMIN')}
         initialCart={initialCart.length > 0 ? initialCart : undefined}
+        myDoctorId={myDoctorId}
+        myAddresses={myAddresses}
+        myDoctorClinics={myDoctorClinics}
       />
     </div>
   )

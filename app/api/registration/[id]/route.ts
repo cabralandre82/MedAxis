@@ -120,6 +120,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             })
         }
       } else {
+        // ── CFM auto-validation ──────────────────────────────────────────────
+        // Try to validate the CRM against the CFM public API.
+        // Auto-approve only when CFM confirms the doctor exists; otherwise
+        // the admin still approves manually (current flow).
+        let crmValidatedAt: string | null = null
+        try {
+          const cfmRes = await fetch(
+            `https://ws.cfm.org.br/v1/medico/crm/${formData.crm}/uf/${formData.crm_state}`,
+            { signal: AbortSignal.timeout(6_000) }
+          )
+          if (cfmRes.ok) {
+            const cfmData = await cfmRes.json()
+            // CFM returns situacao field: 'A' = ativo
+            if (cfmData?.situacao === 'A') {
+              crmValidatedAt = new Date().toISOString()
+            }
+          }
+        } catch {
+          // CFM API unavailable — proceed without validation
+        }
+
         const { data: doctor, error: doctorErr } = await admin
           .from('doctors')
           .insert({
@@ -129,6 +150,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             specialty: formData.specialty ?? null,
             email: formData.email,
             phone: formData.phone ?? null,
+            cpf: formData.cpf ?? null,
+            user_id: request.user_id ?? null,
+            crm_validated_at: crmValidatedAt,
           })
           .select('id')
           .single()

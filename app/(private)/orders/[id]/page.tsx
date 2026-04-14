@@ -65,6 +65,14 @@ export default async function OrderPage({ params }: OrderPageProps) {
         .eq('user_id', user.id)
         .single()
       if (!membership || (order as any).pharmacy_id !== membership.pharmacy_id) notFound()
+    } else if (user.roles.includes('DOCTOR')) {
+      // DOCTOR can see orders they placed (either as solo buyer or linked to a clinic)
+      const { data: myDoctor } = await admin
+        .from('doctors')
+        .select('id')
+        .or(`user_id.eq.${user.id},email.eq.${user.email}`)
+        .maybeSingle()
+      if (!myDoctor || (order as any).doctor_id !== myDoctor.id) notFound()
     } else {
       const { data: membership } = await admin
         .from('clinic_members')

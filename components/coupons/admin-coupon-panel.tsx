@@ -18,9 +18,10 @@ import { cn } from '@/lib/utils'
 import type { CouponRow } from '@/services/coupons'
 import { SearchableSelect, type SelectOption } from './searchable-select'
 
-type AdminCoupon = CouponRow & { product_name: string; clinic_name: string }
+type AdminCoupon = CouponRow & { product_name: string; recipient_name: string }
 
 type StatusFilter = 'all' | 'active' | 'pending' | 'expired' | 'inactive'
+type RecipientType = 'clinic' | 'doctor'
 
 const PAGE_SIZE = 20
 
@@ -28,6 +29,7 @@ interface Props {
   coupons: AdminCoupon[]
   products: SelectOption[]
   clinics: SelectOption[]
+  doctors: SelectOption[]
 }
 
 function resolveCouponStatus(c: {
@@ -87,7 +89,7 @@ const STATUS_LABELS: Record<StatusFilter, string> = {
   inactive: 'Cancelados',
 }
 
-export function AdminCouponPanel({ coupons, products, clinics }: Props) {
+export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props) {
   const router = useRouter()
 
   // ── list state ────────────────────────────────────────────────────────────
@@ -99,9 +101,11 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [recipientType, setRecipientType] = useState<RecipientType>('clinic')
   const [form, setForm] = useState({
     product_id: '',
     clinic_id: '',
+    doctor_id: '',
     discount_type: 'PERCENT' as 'PERCENT' | 'FIXED',
     discount_value: '',
     max_discount_amount: '',
@@ -121,7 +125,7 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
       const q = search.toLowerCase()
       list = list.filter(
         (c) =>
-          c.clinic_name.toLowerCase().includes(q) ||
+          c.recipient_name.toLowerCase().includes(q) ||
           c.product_name.toLowerCase().includes(q) ||
           c.code.toLowerCase().includes(q)
       )
@@ -153,14 +157,16 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!form.product_id) return setFormError('Selecione um produto')
-    if (!form.clinic_id) return setFormError('Selecione uma clínica')
+    if (recipientType === 'clinic' && !form.clinic_id) return setFormError('Selecione uma clínica')
+    if (recipientType === 'doctor' && !form.doctor_id) return setFormError('Selecione um médico')
     setSubmitting(true)
     setFormError(null)
 
     try {
       const payload = {
         product_id: form.product_id,
-        clinic_id: form.clinic_id,
+        clinic_id: recipientType === 'clinic' ? form.clinic_id : null,
+        doctor_id: recipientType === 'doctor' ? form.doctor_id : null,
         discount_type: form.discount_type,
         discount_value: parseFloat(form.discount_value),
         max_discount_amount: form.max_discount_amount
@@ -181,6 +187,7 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
         setForm({
           product_id: '',
           clinic_id: '',
+          doctor_id: '',
           discount_type: 'PERCENT',
           discount_value: '',
           max_discount_amount: '',
@@ -198,9 +205,7 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
   // ── deactivate ────────────────────────────────────────────────────────────
   async function handleDeactivate(id: string, code: string) {
     if (
-      !confirm(
-        `Desativar o cupom ${code}?\n\nA clínica não receberá mais o desconto em novos pedidos.`
-      )
+      !confirm(`Desativar o cupom ${code}?\n\nO desconto não será mais aplicado em novos pedidos.`)
     )
       return
     setDeactivating(id)
@@ -277,17 +282,43 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
               />
             </div>
 
-            {/* Clínica */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-700">
-                Clínica <span className="text-red-500">*</span>
+            {/* Destinatário — Clínica ou Médico */}
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-gray-700">
+                Destinatário <span className="text-red-500">*</span>
               </label>
-              <SearchableSelect
-                options={clinics}
-                value={form.clinic_id}
-                onChange={(id) => setForm((f) => ({ ...f, clinic_id: id }))}
-                placeholder="Selecionar clínica..."
-              />
+              <div className="flex overflow-hidden rounded-lg border border-gray-300">
+                {(['clinic', 'doctor'] as RecipientType[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setRecipientType(t)}
+                    className={cn(
+                      'flex-1 py-2 text-sm font-medium transition-colors',
+                      recipientType === t
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    )}
+                  >
+                    {t === 'clinic' ? 'Clínica' : 'Médico (CPF)'}
+                  </button>
+                ))}
+              </div>
+              {recipientType === 'clinic' ? (
+                <SearchableSelect
+                  options={clinics}
+                  value={form.clinic_id}
+                  onChange={(id) => setForm((f) => ({ ...f, clinic_id: id }))}
+                  placeholder="Selecionar clínica..."
+                />
+              ) : (
+                <SearchableSelect
+                  options={doctors}
+                  value={form.doctor_id}
+                  onChange={(id) => setForm((f) => ({ ...f, doctor_id: id }))}
+                  placeholder="Selecionar médico..."
+                />
+              )}
             </div>
 
             {/* Tipo de desconto */}
@@ -409,7 +440,7 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
                 className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
               >
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                Criar e notificar clínica
+                Criar e notificar destinatário
               </button>
             </div>
           </form>
@@ -466,7 +497,7 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
                   {[
                     'Código',
                     'Produto',
-                    'Clínica',
+                    'Destinatário',
                     'Desconto',
                     'Usos',
                     'Válido até',
@@ -504,7 +535,8 @@ export function AdminCouponPanel({ coupons, products, clinics }: Props) {
                         <p className="truncate font-medium text-gray-900">{c.product_name}</p>
                       </td>
                       <td className="max-w-[180px] px-4 py-3">
-                        <p className="truncate text-gray-700">{c.clinic_name}</p>
+                        <p className="truncate text-gray-700">{c.recipient_name}</p>
+                        {c.doctor_id && <p className="text-[10px] text-gray-400">Médico</p>}
                       </td>
                       <td className="px-4 py-3 font-semibold whitespace-nowrap text-indigo-600">
                         {discountLabel}

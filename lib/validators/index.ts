@@ -141,14 +141,46 @@ export const orderItemSchema = z.object({
   quantity: z.number().int().positive('Quantidade deve ser positiva'),
 })
 
-export const orderSchema = z.object({
-  clinic_id: uuidLoose,
-  doctor_id: uuidLoose,
-  notes: z.string().optional(),
-  items: z.array(orderItemSchema).min(1, 'Adicione ao menos um produto'),
-})
+export const orderSchema = z
+  .object({
+    buyer_type: z.enum(['CLINIC', 'DOCTOR']).default('CLINIC'),
+    clinic_id: uuidLoose.optional().nullable(),
+    doctor_id: uuidLoose.optional().nullable(),
+    delivery_address_id: uuidLoose.optional().nullable(),
+    notes: z.string().optional(),
+    items: z.array(orderItemSchema).min(1, 'Adicione ao menos um produto'),
+  })
+  .superRefine((d, ctx) => {
+    if (d.buyer_type === 'CLINIC' && !d.clinic_id) {
+      ctx.addIssue({ code: 'custom', path: ['clinic_id'], message: 'Clínica é obrigatória' })
+    }
+    if (d.buyer_type === 'DOCTOR' && !d.doctor_id) {
+      ctx.addIssue({ code: 'custom', path: ['doctor_id'], message: 'Médico é obrigatório' })
+    }
+    if (d.buyer_type === 'DOCTOR' && !d.delivery_address_id) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['delivery_address_id'],
+        message: 'Endereço de entrega é obrigatório para compra solo',
+      })
+    }
+  })
 
 export type OrderFormData = z.infer<typeof orderSchema>
+
+// --- Doctor address ---
+
+export const doctorAddressSchema = z.object({
+  label: z.string().min(1, 'Rótulo é obrigatório').max(60),
+  address_line_1: z.string().min(5, 'Endereço é obrigatório'),
+  address_line_2: z.string().optional().nullable(),
+  city: z.string().min(2, 'Cidade é obrigatória'),
+  state: z.string().length(2, 'UF deve ter 2 letras'),
+  zip_code: z.string().min(8, 'CEP inválido'),
+  is_default: z.boolean().optional().default(false),
+})
+
+export type DoctorAddressFormData = z.infer<typeof doctorAddressSchema>
 
 // --- Payment confirmation ---
 

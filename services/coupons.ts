@@ -18,19 +18,25 @@ function generateCouponCode(): string {
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
-const createCouponSchema = z.object({
-  product_id: z
-    .string()
-    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'ID inválido'),
-  clinic_id: z
-    .string()
-    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'ID inválido'),
-  discount_type: z.enum(['PERCENT', 'FIXED']),
-  discount_value: z.number().positive(),
-  max_discount_amount: z.number().positive().optional(),
-  valid_from: z.string().datetime().optional(),
-  valid_until: z.string().datetime().nullable().optional(),
-})
+const uuidLoose = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'ID inválido')
+
+const createCouponSchema = z
+  .object({
+    product_id: uuidLoose,
+    clinic_id: uuidLoose.optional().nullable(),
+    doctor_id: uuidLoose.optional().nullable(),
+    discount_type: z.enum(['PERCENT', 'FIXED']),
+    discount_value: z.number().positive(),
+    max_discount_amount: z.number().positive().optional(),
+    valid_from: z.string().datetime().optional(),
+    valid_until: z.string().datetime().nullable().optional(),
+  })
+  .refine((d) => d.clinic_id || d.doctor_id, {
+    message: 'Informe a clínica ou o médico destinatário do cupom',
+    path: ['clinic_id'],
+  })
 
 export type CreateCouponInput = z.infer<typeof createCouponSchema>
 
@@ -38,7 +44,8 @@ export interface CouponRow {
   id: string
   code: string
   product_id: string
-  clinic_id: string
+  clinic_id: string | null
+  doctor_id: string | null
   discount_type: 'PERCENT' | 'FIXED'
   discount_value: number
   max_discount_amount: number | null
@@ -64,19 +71,26 @@ export async function createCoupon(
 
     const admin = createAdminClient()
 
-    // Verifica se já existe cupom ativo para este par clinic+product
-    const { data: existing } = await admin
+    const { clinic_id, doctor_id } = parsed.data
+    const targetField = clinic_id ? 'clinic_id' : 'doctor_id'
+    const targetId = clinic_id ?? doctor_id!
+
+    // Verifica duplicidade por target+product
+    const existingQuery = admin
       .from('coupons')
       .select('id')
-      .eq('clinic_id', parsed.data.clinic_id)
       .eq('product_id', parsed.data.product_id)
       .eq('active', true)
-      .maybeSingle()
+
+    if (clinic_id) existingQuery.eq('clinic_id', clinic_id)
+    else existingQuery.eq('doctor_id', doctor_id!)
+
+    const { data: existing } = await existingQuery.maybeSingle()
 
     if (existing) {
+      const who = clinic_id ? 'esta clínica' : 'este médico'
       return {
-        error:
-          'Já existe um cupom ativo para esta clínica e produto. Desative-o antes de criar um novo.',
+        error: `Já existe um cupom ativo para ${who} e produto. Desative-o antes de criar um novo.`,
       }
     }
 
@@ -87,7 +101,8 @@ export async function createCoupon(
       .insert({
         code,
         product_id: parsed.data.product_id,
-        clinic_id: parsed.data.clinic_id,
+        clinic_id: clinic_id ?? null,
+        doctor_id: doctor_id ?? null,
         discount_type: parsed.data.discount_type,
         discount_value: parsed.data.discount_value,
         max_discount_amount: parsed.data.max_discount_amount ?? null,
@@ -104,30 +119,66 @@ export async function createCoupon(
     }
 
     // Busca dados para notificação
-    const [{ data: product }, { data: clinic }] = await Promise.all([
-      admin.from('products').select('name').eq('id', parsed.data.product_id).single(),
-      admin.from('clinics').select('trade_name').eq('id', parsed.data.clinic_id).single(),
-    ])
-
-    // Notifica membros da clínica
-    const { data: members } = await admin
-      .from('clinic_members')
-      .select('user_id')
-      .eq('clinic_id', parsed.data.clinic_id)
+    const { data: product } = await admin
+      .from('products')
+      .select('name')
+      .eq('id', parsed.data.product_id)
+      .single()
 
     const discountLabel =
       parsed.data.discount_type === 'PERCENT'
         ? `${parsed.data.discount_value}%`
         : `R$${Number(parsed.data.discount_value).toFixed(2)}`
 
-    for (const member of members ?? []) {
-      await createNotification({
-        userId: member.user_id,
-        type: 'COUPON_ASSIGNED',
-        title: `Cupom de desconto disponível`,
-        body: `Você recebeu um cupom de ${discountLabel} de desconto no produto ${product?.name ?? '—'}. Código: ${code}`,
-        link: '/coupons',
-      })
+    if (clinic_id) {
+      // Notifica membros da clínica
+      const { data: members } = await admin
+        .from('clinic_members')
+        .select('user_id')
+        .eq('clinic_id', clinic_id)
+      for (const member of members ?? []) {
+        await createNotification({
+          userId: member.user_id,
+          type: 'COUPON_ASSIGNED',
+          title: `Cupom de desconto disponível`,
+          body: `Você recebeu um cupom de ${discountLabel} de desconto no produto ${product?.name ?? '—'}. Código: ${code}`,
+          link: '/coupons',
+        })
+      }
+    } else if (doctor_id) {
+      // Notifica o médico diretamente (via user_id)
+      const { data: doc } = await admin
+        .from('doctors')
+        .select('user_id')
+        .eq('id', doctor_id)
+        .maybeSingle()
+      if (doc?.user_id) {
+        await createNotification({
+          userId: doc.user_id,
+          type: 'COUPON_ASSIGNED',
+          title: `Cupom de desconto disponível`,
+          body: `Você recebeu um cupom de ${discountLabel} no produto ${product?.name ?? '—'}. Código: ${code}`,
+          link: '/coupons',
+        })
+      }
+    }
+
+    // Busca nome do destinatário para audit log
+    let targetName: string | undefined
+    if (clinic_id) {
+      const { data: clinic } = await admin
+        .from('clinics')
+        .select('trade_name')
+        .eq('id', clinic_id)
+        .single()
+      targetName = clinic?.trade_name
+    } else {
+      const { data: doc } = await admin
+        .from('doctors')
+        .select('full_name')
+        .eq('id', doctor_id!)
+        .single()
+      targetName = doc?.full_name
     }
 
     await createAuditLog({
@@ -138,7 +189,8 @@ export async function createCoupon(
       action: AuditAction.CREATE,
       newValues: {
         code,
-        clinic: clinic?.trade_name,
+        [targetField]: targetId,
+        target_name: targetName,
         product: product?.name,
         discount_type: parsed.data.discount_type,
         discount_value: parsed.data.discount_value,
@@ -163,7 +215,7 @@ export async function deactivateCoupon(couponId: string): Promise<{ error?: stri
 
     const { data: coupon, error: fetchErr } = await admin
       .from('coupons')
-      .select('id, active, code, clinic_id, product_id')
+      .select('id, active, code, clinic_id, doctor_id, product_id')
       .eq('id', couponId)
       .single()
 
@@ -180,20 +232,36 @@ export async function deactivateCoupon(couponId: string): Promise<{ error?: stri
       return { error: 'Erro ao desativar cupom' }
     }
 
-    // Notifica membros da clínica
-    const { data: members } = await admin
-      .from('clinic_members')
-      .select('user_id')
-      .eq('clinic_id', coupon.clinic_id)
-
-    for (const member of members ?? []) {
-      await createNotification({
-        userId: member.user_id,
-        type: 'COUPON_ASSIGNED',
-        title: 'Cupom cancelado',
-        body: `O cupom de desconto (${coupon.code}) foi cancelado pelo administrador.`,
-        link: '/coupons',
-      })
+    // Notifica destinatário (clínica ou médico)
+    if (coupon.clinic_id) {
+      const { data: members } = await admin
+        .from('clinic_members')
+        .select('user_id')
+        .eq('clinic_id', coupon.clinic_id)
+      for (const member of members ?? []) {
+        await createNotification({
+          userId: member.user_id,
+          type: 'COUPON_ASSIGNED',
+          title: 'Cupom cancelado',
+          body: `O cupom de desconto (${coupon.code}) foi cancelado pelo administrador.`,
+          link: '/coupons',
+        })
+      }
+    } else if (coupon.doctor_id) {
+      const { data: doc } = await admin
+        .from('doctors')
+        .select('user_id')
+        .eq('id', coupon.doctor_id)
+        .maybeSingle()
+      if (doc?.user_id) {
+        await createNotification({
+          userId: doc.user_id,
+          type: 'COUPON_ASSIGNED',
+          title: 'Cupom cancelado',
+          body: `O cupom de desconto (${coupon.code}) foi cancelado pelo administrador.`,
+          link: '/coupons',
+        })
+      }
     }
 
     await createAuditLog({
@@ -224,14 +292,19 @@ export async function activateCoupon(
     const user = await requireAuth()
     const admin = createAdminClient()
 
-    // Resolve clinic_id do usuário
-    const { data: membership } = await admin
-      .from('clinic_members')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    // Resolve who the current user is — clinic member or doctor
+    const [{ data: membership }, { data: doctorRecord }] = await Promise.all([
+      admin.from('clinic_members').select('clinic_id').eq('user_id', user.id).maybeSingle(),
+      admin
+        .from('doctors')
+        .select('id')
+        .or(`user_id.eq.${user.id},email.eq.${user.email}`)
+        .maybeSingle(),
+    ])
 
-    if (!membership) return { error: 'Usuário não vinculado a nenhuma clínica' }
+    if (!membership && !doctorRecord) {
+      return { error: 'Usuário não vinculado a nenhuma clínica ou perfil de médico' }
+    }
 
     const { data: coupon, error: fetchErr } = await admin
       .from('coupons')
@@ -242,8 +315,18 @@ export async function activateCoupon(
 
     if (fetchErr || !coupon) return { error: 'Código inválido ou cupom não encontrado' }
 
-    if (coupon.clinic_id !== membership.clinic_id) {
+    // Validate ownership: coupon must belong to the user's clinic or to the doctor
+    if (coupon.clinic_id && membership && coupon.clinic_id !== membership.clinic_id) {
       return { error: 'Este cupom não pertence à sua clínica' }
+    }
+    if (coupon.doctor_id && doctorRecord && coupon.doctor_id !== doctorRecord.id) {
+      return { error: 'Este cupom não pertence ao seu perfil' }
+    }
+    if (coupon.clinic_id && !membership) {
+      return { error: 'Este cupom é destinado a uma clínica' }
+    }
+    if (coupon.doctor_id && !doctorRecord) {
+      return { error: 'Este cupom é destinado a um médico' }
     }
 
     if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
@@ -315,7 +398,7 @@ export async function getClinicCoupons(): Promise<{
 // ─── listagem para admin ──────────────────────────────────────────────────────
 
 export async function getAdminCoupons(): Promise<{
-  coupons?: Array<CouponRow & { product_name: string; clinic_name: string }>
+  coupons?: Array<CouponRow & { product_name: string; recipient_name: string }>
   error?: string
 }> {
   try {
@@ -324,7 +407,7 @@ export async function getAdminCoupons(): Promise<{
 
     const { data, error } = await admin
       .from('coupons')
-      .select('*, products(name), clinics(trade_name)')
+      .select('*, products(name), clinics(trade_name), doctors(full_name)')
       .order('created_at', { ascending: false })
 
     if (error) return { error: 'Erro ao buscar cupons' }
@@ -332,8 +415,12 @@ export async function getAdminCoupons(): Promise<{
     const coupons = (data ?? []).map((c) => ({
       ...c,
       product_name: (c.products as { name: string } | null)?.name ?? '—',
-      clinic_name: (c.clinics as { trade_name: string } | null)?.trade_name ?? '—',
-    })) as Array<CouponRow & { product_name: string; clinic_name: string }>
+      // Recipient is either a clinic or a doctor
+      recipient_name:
+        (c.clinics as { trade_name: string } | null)?.trade_name ??
+        (c.doctors as { full_name: string } | null)?.full_name ??
+        '—',
+    })) as Array<CouponRow & { product_name: string; recipient_name: string }>
 
     return { coupons }
   } catch (err) {
@@ -350,22 +437,28 @@ export async function getAdminCoupons(): Promise<{
  * de uma clínica. Usado em createOrder para aplicar desconto automaticamente.
  */
 export async function getActiveCouponsForOrder(
-  clinicId: string,
-  productIds: string[]
+  clinicId: string | null,
+  productIds: string[],
+  doctorId?: string | null
 ): Promise<Record<string, string>> {
   if (!productIds.length) return {}
+  if (!clinicId && !doctorId) return {}
 
   const admin = createAdminClient()
   const now = new Date().toISOString()
 
-  const { data, error } = await admin
+  const query = admin
     .from('coupons')
     .select('id, product_id')
-    .eq('clinic_id', clinicId)
     .eq('active', true)
     .not('activated_at', 'is', null)
     .in('product_id', productIds)
     .or(`valid_until.is.null,valid_until.gte.${now}`)
+
+  if (clinicId) query.eq('clinic_id', clinicId)
+  else if (doctorId) query.eq('doctor_id', doctorId)
+
+  const { data, error } = await query
 
   if (error || !data?.length) return {}
 

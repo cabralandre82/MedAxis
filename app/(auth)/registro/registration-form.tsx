@@ -50,6 +50,10 @@ const doctorSchema = baseSchema.extend({
   crm: z.string().min(4, 'CRM é obrigatório'),
   crm_state: z.string().length(2, 'UF do CRM deve ter 2 letras'),
   specialty: z.string().min(2, 'Especialidade é obrigatória'),
+  cpf: z
+    .string()
+    .min(11, 'CPF inválido')
+    .regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$|^\d{11}$/, 'CPF inválido'),
   clinic_cnpj: z.string().optional(),
   clinic_name: z.string().optional(),
 })
@@ -308,6 +312,15 @@ export function RegistrationForm() {
                   <Label>Especialidade *</Label>
                   <Input placeholder="Dermatologia" {...register('specialty' as never)} />
                   <FieldError msg={e.specialty?.message} />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>CPF *</Label>
+                  <Input placeholder="000.000.000-00" {...register('cpf' as never)} />
+                  <FieldError msg={(e as Record<string, { message?: string }>).cpf?.message} />
+                  <p className="text-xs text-gray-400">
+                    Necessário para emissão de nota fiscal nas compras realizadas como pessoa
+                    física.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>

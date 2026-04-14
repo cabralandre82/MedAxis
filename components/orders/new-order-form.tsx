@@ -6,15 +6,29 @@ import { toast } from 'sonner'
 import { createOrder, type OrderDocument } from '@/services/orders'
 import { resolveDoctorFieldState } from '@/lib/orders/doctor-field-rules'
 import { REQUIRED_DOCUMENT_TYPES } from '@/components/orders/document-manager'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
-import { Loader2, Package, Upload, X, FileText, Plus, Trash2, UserPlus } from 'lucide-react'
+import {
+  Loader2,
+  Package,
+  Upload,
+  X,
+  FileText,
+  Plus,
+  Trash2,
+  UserPlus,
+  Building2,
+  User,
+  MapPin,
+  PlusCircle,
+} from 'lucide-react'
 import Link from 'next/link'
+import type { DoctorAddress } from '@/types'
 
 export interface NewOrderFormProduct {
   id: string
@@ -46,6 +60,12 @@ interface NewOrderFormProps {
   isClinicAdmin?: boolean
   /** Pre-populated cart items restored from URL (e.g. after navigating to /doctors/new). */
   initialCart?: { productId: string; quantity: number }[]
+  /** When the logged-in user is a DOCTOR: their own doctor record ID. */
+  myDoctorId?: string
+  /** Saved delivery addresses for the logged-in doctor. */
+  myAddresses?: DoctorAddress[]
+  /** Clinics the doctor is linked to (for clinic purchase option). */
+  myDoctorClinics?: { id: string; trade_name: string }[]
 }
 
 export function NewOrderForm({
@@ -56,12 +76,22 @@ export function NewOrderForm({
   doctors,
   isClinicAdmin = false,
   initialCart,
+  myDoctorId,
+  myAddresses = [],
+  myDoctorClinics = [],
 }: NewOrderFormProps) {
   const router = useRouter()
+  const isDoctor = !!myDoctorId
+
   const [loading, setLoading] = useState(false)
   const [documents, setDocuments] = useState<OrderDocument[]>([])
+  // buyer_type: doctors default to solo purchase; others always CLINIC
+  const [buyerType, setBuyerType] = useState<'CLINIC' | 'DOCTOR'>(isDoctor ? 'DOCTOR' : 'CLINIC')
   const [clinicId, setClinicId] = useState(resolvedClinic?.id ?? '')
   const [doctorId, setDoctorId] = useState('')
+  const [deliveryAddressId, setDeliveryAddressId] = useState(
+    myAddresses.find((a) => a.is_default)?.id ?? myAddresses[0]?.id ?? ''
+  )
   const [notes, setNotes] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -137,8 +167,13 @@ export function NewOrderForm({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     const newErrors: Record<string, string> = {}
-    if (!clinicId) newErrors.clinic_id = 'Selecione a clínica'
-    if (doctorRequired && !doctorId) newErrors.doctor_id = 'Selecione o médico solicitante'
+
+    if (buyerType === 'CLINIC') {
+      if (!clinicId) newErrors.clinic_id = 'Selecione a clínica'
+      if (doctorRequired && !doctorId) newErrors.doctor_id = 'Selecione o médico solicitante'
+    } else {
+      if (!deliveryAddressId) newErrors.delivery_address_id = 'Selecione o endereço de entrega'
+    }
     if (cart.length === 0) newErrors.items = 'Adicione ao menos um produto'
     if (Object.keys(newErrors).length) {
       setErrors(newErrors)
@@ -149,8 +184,10 @@ export function NewOrderForm({
     setLoading(true)
     try {
       const result = await createOrder({
-        clinic_id: clinicId,
-        doctor_id: doctorId || null,
+        buyer_type: buyerType,
+        clinic_id: buyerType === 'CLINIC' ? clinicId : null,
+        doctor_id: buyerType === 'DOCTOR' ? myDoctorId : doctorId || null,
+        delivery_address_id: buyerType === 'DOCTOR' ? deliveryAddressId : null,
         notes: notes || undefined,
         items: cart.map((c) => ({ product_id: c.product.id, quantity: c.quantity })),
         documents,
@@ -273,95 +310,201 @@ export function NewOrderForm({
           <CardTitle className="text-base">Dados do pedido</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Clinic — shown as read-only badge when resolved, or as selector for admins */}
-          {resolvedClinic ? (
-            <div className="space-y-1.5">
-              <Label>Clínica</Label>
-              <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                {resolvedClinic.trade_name}
+          {/* Buyer type toggle — only visible for DOCTOR users */}
+          {isDoctor && (
+            <div className="space-y-2">
+              <Label>Comprar como</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBuyerType('DOCTOR')}
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors',
+                    buyerType === 'DOCTOR'
+                      ? 'border-blue-500 bg-blue-50 font-medium text-blue-700 ring-1 ring-blue-500'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                  )}
+                >
+                  <User className="h-4 w-4 flex-shrink-0" />
+                  <span>Pessoa Física (CPF)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBuyerType('CLINIC')}
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors',
+                    buyerType === 'CLINIC'
+                      ? 'border-blue-500 bg-blue-50 font-medium text-blue-700 ring-1 ring-blue-500'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                  )}
+                >
+                  <Building2 className="h-4 w-4 flex-shrink-0" />
+                  <span>Clínica vinculada</span>
+                </button>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label htmlFor="clinic_id">Clínica *</Label>
-              <select
-                id="clinic_id"
-                value={clinicId}
-                onChange={(e) => setClinicId(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              >
-                <option value="">Selecione a clínica...</option>
-                {(adminClinics ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.trade_name}
-                  </option>
-                ))}
-              </select>
-              {errors.clinic_id && <p className="text-xs text-red-500">{errors.clinic_id}</p>}
             </div>
           )}
 
-          {/* Doctor field or shortcut when clinic has no linked doctors */}
-          {showDoctorField ? (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="doctor_id">
-                  Médico solicitante{' '}
-                  {doctorRequired ? (
-                    '*'
-                  ) : (
-                    <span className="font-normal text-gray-400">(opcional)</span>
-                  )}
-                </Label>
-                {isClinicAdmin && (
-                  <Link
-                    href={doctorNewUrl()}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+          {/* CLINIC buyer: show clinic selector */}
+          {buyerType === 'CLINIC' && (
+            <>
+              {resolvedClinic ? (
+                <div className="space-y-1.5">
+                  <Label>Clínica</Label>
+                  <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                    {resolvedClinic.trade_name}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="clinic_id">Clínica *</Label>
+                  <select
+                    id="clinic_id"
+                    value={clinicId}
+                    onChange={(e) => setClinicId(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
                   >
-                    <UserPlus className="h-3 w-3" />
-                    Cadastrar novo médico
-                  </Link>
-                )}
-              </div>
-              <select
-                id="doctor_id"
-                value={doctorId}
-                onChange={(e) => setDoctorId(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              >
-                <option value="">Selecione o médico...</option>
-                {doctors.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.full_name} — CRM {d.crm}/{d.crm_state}
-                  </option>
+                    <option value="">Selecione a clínica...</option>
+                    {(isDoctor ? myDoctorClinics : (adminClinics ?? [])).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.trade_name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.clinic_id && <p className="text-xs text-red-500">{errors.clinic_id}</p>}
+                </div>
+              )}
+
+              {/* Doctor field — only for non-doctor users (clinic admin / platform admin) */}
+              {!isDoctor &&
+                (showDoctorField ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="doctor_id">
+                        Médico solicitante{' '}
+                        {doctorRequired ? (
+                          '*'
+                        ) : (
+                          <span className="font-normal text-gray-400">(opcional)</span>
+                        )}
+                      </Label>
+                      {isClinicAdmin && (
+                        <Link
+                          href={doctorNewUrl()}
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                        >
+                          <UserPlus className="h-3 w-3" />
+                          Cadastrar novo médico
+                        </Link>
+                      )}
+                    </div>
+                    <select
+                      id="doctor_id"
+                      value={doctorId}
+                      onChange={(e) => setDoctorId(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                    >
+                      <option value="">Selecione o médico...</option>
+                      {doctors.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.full_name} — CRM {d.crm}/{d.crm_state}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.doctor_id && <p className="text-xs text-red-500">{errors.doctor_id}</p>}
+                  </div>
+                ) : (
+                  isClinicAdmin && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-sm font-medium text-amber-800">Nenhum médico vinculado</p>
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        Para pedir produtos com receita, vincule um médico à sua clínica.
+                      </p>
+                      <div className="mt-2 flex gap-3">
+                        <Link
+                          href={doctorNewUrl()}
+                          className="flex items-center gap-1 text-xs font-medium text-amber-900 underline hover:no-underline"
+                        >
+                          <UserPlus className="h-3 w-3" />
+                          Cadastrar novo médico
+                        </Link>
+                        <Link
+                          href="/doctors"
+                          className="text-xs font-medium text-amber-900 underline hover:no-underline"
+                        >
+                          Ver médicos disponíveis
+                        </Link>
+                      </div>
+                    </div>
+                  )
                 ))}
-              </select>
-              {errors.doctor_id && <p className="text-xs text-red-500">{errors.doctor_id}</p>}
-            </div>
-          ) : (
-            isClinicAdmin && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="text-sm font-medium text-amber-800">Nenhum médico vinculado</p>
-                <p className="mt-0.5 text-xs text-amber-700">
-                  Para pedir produtos com receita, vincule um médico à sua clínica.
-                </p>
-                <div className="mt-2 flex gap-3">
+            </>
+          )}
+
+          {/* DOCTOR buyer: show delivery address picker */}
+          {buyerType === 'DOCTOR' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Endereço de entrega *</Label>
+                <Link
+                  href="/profile/addresses"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                >
+                  <PlusCircle className="h-3 w-3" />
+                  Gerenciar endereços
+                </Link>
+              </div>
+
+              {myAddresses.length === 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-medium text-amber-800">Nenhum endereço cadastrado</p>
+                  <p className="mt-0.5 text-xs text-amber-700">
+                    Cadastre um endereço de entrega antes de fazer uma compra pessoal.
+                  </p>
                   <Link
-                    href={doctorNewUrl()}
-                    className="flex items-center gap-1 text-xs font-medium text-amber-900 underline hover:no-underline"
+                    href="/profile/addresses"
+                    className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-900 underline hover:no-underline"
                   >
-                    <UserPlus className="h-3 w-3" />
-                    Cadastrar novo médico
-                  </Link>
-                  <Link
-                    href="/doctors"
-                    className="text-xs font-medium text-amber-900 underline hover:no-underline"
-                  >
-                    Ver médicos disponíveis
+                    <MapPin className="h-3 w-3" />
+                    Adicionar endereço
                   </Link>
                 </div>
-              </div>
-            )
+              ) : (
+                <div className="space-y-2">
+                  {myAddresses.map((addr) => (
+                    <button
+                      key={addr.id}
+                      type="button"
+                      onClick={() => setDeliveryAddressId(addr.id)}
+                      className={cn(
+                        'w-full rounded-lg border p-3 text-left text-sm transition-colors',
+                        deliveryAddressId === addr.id
+                          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                        <span className="font-medium text-gray-800">{addr.label}</span>
+                        {addr.is_default && (
+                          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                            padrão
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 pl-5 text-xs text-gray-500">
+                        {addr.address_line_1}
+                        {addr.address_line_2 ? `, ${addr.address_line_2}` : ''} — {addr.city}/
+                        {addr.state}, CEP {addr.zip_code}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {errors.delivery_address_id && (
+                <p className="text-xs text-red-500">{errors.delivery_address_id}</p>
+              )}
+            </div>
           )}
 
           <div className="space-y-1.5">

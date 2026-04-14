@@ -157,6 +157,22 @@ Distribuidoras (`pharmacies.entity_type = 'DISTRIBUTOR'`) operam exclusivamente 
 
 Farmácias (`entity_type = 'PHARMACY'`) e distribuidoras compartilham: mesma tabela `pharmacies`, mesmo role `PHARMACY_ADMIN`, mesmo fluxo de pedidos/pagamentos/repasses, mesma estrutura de membros.
 
+## RN-27: Compra solo de médico (buyer_type = 'DOCTOR')
+
+Um médico com role `DOCTOR` pode realizar compras como **pessoa física**, sem vínculo a nenhuma clínica. Nesse caso, a nota fiscal é emitida pela farmácia para o CPF do médico.
+
+Regras aplicáveis:
+
+- `orders.buyer_type = 'DOCTOR'`: `clinic_id` é `NULL`; `doctor_id` é obrigatório.
+- `orders.buyer_type = 'CLINIC'`: comportamento original — `clinic_id` é obrigatório.
+- O CPF do médico (`doctors.cpf`) é obrigatório para compras solo. O sistema recusa o pedido server-side se o CPF não estiver cadastrado.
+- Endereço de entrega (`orders.delivery_address_id → doctor_addresses`) é obrigatório para compras solo. O médico mantém um livro de endereços (Amazon-style) em `/profile/addresses`.
+- A validação de compliance (`canPlaceOrder`) pula a verificação de status/CNPJ da clínica quando `buyer_type = 'DOCTOR'`.
+- Cupons podem ser direcionados a médicos (`coupons.doctor_id`) além de clínicas (`coupons.clinic_id`). Em pedidos solo, apenas cupons do médico são aplicados.
+- No formulário de novo pedido, o médico escolhe entre "Pessoa Física (CPF)" ou "Clínica vinculada" (se tiver vínculo). A opção Pessoa Física é o padrão.
+- O reorder copia o `buyer_type` e `delivery_address_id` do pedido original. Se nenhum endereço default existir para reorder de pedido solo, o sistema recusa e solicita abertura manual.
+- Validação do CRM: na aprovação do cadastro de médico, o sistema consulta a API pública do CFM (`ws.cfm.org.br`). Se o CRM estiver ativo (`situacao = 'A'`), registra `crm_validated_at`. Se a API falhar ou o status for diferente, a aprovação segue o fluxo manual normal.
+
 ## RN-24: Médico com múltiplas clínicas deve selecionar a clínica no pedido
 
 Um médico pode estar vinculado a múltiplas clínicas via `doctor_clinic_links`. Ao criar um pedido, o dropdown de clínica é filtrado para exibir apenas as clínicas vinculadas àquele médico. Se houver apenas uma, ela é auto-selecionada.
