@@ -2,6 +2,15 @@
 
 ---
 
+## [6.7.4] — 2026-04-14 — fix: histórico de preço exibia R$ NaN
+
+### Fixed
+
+- `types/index.ts`: `ProductPriceHistory` corrigido — campo `price` (inexistente no banco) substituído por `old_price` e `new_price`, que são os campos reais da tabela `product_price_history`.
+- `app/(private)/products/[id]/page.tsx`: tabela do histórico agora exibe duas colunas — **De** (preço anterior, tachado) e **Para** (novo preço), em vez de uma coluna única com valor `undefined` → `R$ NaN`.
+
+---
+
 ## [6.7.3] — 2026-04-14 — fix: relatórios — pedidos concluídos e em aberto
 
 ### Fixed
