@@ -173,6 +173,19 @@ Regras aplicáveis:
 - O reorder copia o `buyer_type` e `delivery_address_id` do pedido original. Se nenhum endereço default existir para reorder de pedido solo, o sistema recusa e solicita abertura manual.
 - Validação do CRM: na aprovação do cadastro de médico, o sistema consulta a API pública do CFM (`ws.cfm.org.br`). Se o CRM estiver ativo (`situacao = 'A'`), registra `crm_validated_at`. Se a API falhar ou o status for diferente, a aprovação segue o fluxo manual normal.
 
+## RN-28: Produto com receita obrigatória exige médico vinculado no pedido de clínica
+
+Ao criar um pedido com `buyer_type = 'CLINIC'`, se qualquer produto do carrinho tiver `requires_prescription = true`, o campo `doctor_id` é obrigatório no pedido.
+
+Regras:
+
+- Se a clínica **não tiver** nenhum médico vinculado e o carrinho **não tiver** produtos com receita: o campo de médico é omitido e o pedido é criado com `doctor_id = NULL`. Clínicas de estética comprando produtos industrializados sem receita (ex: ácido hialurônico) se enquadram aqui.
+- Se a clínica **não tiver** nenhum médico vinculado e o carrinho **tiver** produto com receita: o formulário bloqueia o botão de confirmar e exibe aviso em vermelho orientando a vincular um médico. A criação do pedido é também recusada no servidor.
+- Se a clínica **tiver** médicos vinculados e o carrinho **tiver** produto com receita: o campo de médico é exibido como obrigatório (`*`).
+- Se a clínica **tiver** médicos vinculados e o carrinho **não tiver** produto com receita: o campo de médico é exibido como opcional.
+
+Esta regra não se aplica a pedidos `buyer_type = 'DOCTOR'` (compra solo), onde o próprio médico autenticado é sempre o solicitante.
+
 ## RN-24: Médico com múltiplas clínicas deve selecionar a clínica no pedido
 
 Um médico pode estar vinculado a múltiplas clínicas via `doctor_clinic_links`. Ao criar um pedido, o dropdown de clínica é filtrado para exibir apenas as clínicas vinculadas àquele médico. Se houver apenas uma, ela é auto-selecionada.

@@ -2,6 +2,24 @@
 
 ---
 
+## [6.7.1] — 2026-04-14 — feat: guarda de receita para pedidos de clínica sem médico
+
+### Added
+
+- `services/orders.ts`: validação server-side que recusa pedidos de clínica com produto `requires_prescription = true` quando `doctor_id` é `null`.
+- `lib/orders/doctor-field-rules.ts`: `resolveDoctorFieldState` retorna novo campo `blocked: boolean` — `true` quando há produto com receita no carrinho mas nenhum médico vinculado à clínica.
+- `components/orders/new-order-form.tsx`: aviso vermelho e botão de submit desabilitado quando `blocked = true`; o aviso inclui links para cadastrar/vincular médico.
+
+### Tests
+
+- `tests/unit/lib/doctor-field-rules.test.ts`: 12 casos cobrindo todas as combinações de `{ show, required, blocked }`.
+
+### Business rule
+
+- `RN-28` adicionada ao `BUSINESS_RULES.md`: clínicas sem médico vinculado podem comprar produtos sem receita (ex: ácido hialurônico); são bloqueadas apenas quando o carrinho contém produto com receita obrigatória.
+
+---
+
 ## [6.7.0] — 2026-04-14 — feat: compra solo de médico (buyer_type = 'DOCTOR')
 
 ### Feature
