@@ -65,7 +65,7 @@ export default async function MyPharmacyPage() {
       .from('orders')
       .select('id, order_status')
       .eq('pharmacy_id', pharmacyId)
-      .not('order_status', 'in', '("COMPLETED","CANCELED","DRAFT")'),
+      .not('order_status', 'in', '("COMPLETED","DELIVERED","CANCELED","DRAFT")'),
   ])
 
   if (!pharmacyRaw) notFound()

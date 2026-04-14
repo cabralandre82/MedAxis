@@ -23,7 +23,7 @@ async function PharmacyStaleOrders({ pharmacyId }: { pharmacyId: string }) {
     .from('orders')
     .select('id, code, order_status, updated_at, clinics(trade_name)')
     .eq('pharmacy_id', pharmacyId)
-    .not('order_status', 'in', '("COMPLETED","CANCELED","DRAFT")')
+    .not('order_status', 'in', '("COMPLETED","DELIVERED","CANCELED","DRAFT")')
 
   const stale = (orders ?? [])
     .map((o) => ({
