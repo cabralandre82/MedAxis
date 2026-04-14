@@ -3,17 +3,23 @@
  * required when placing an order.
  *
  * Rules:
- * - No linked doctors → field is hidden (clinic has no doctors at all)
- * - Has linked doctors + no prescription product in cart → optional
- * - Has linked doctors + at least one prescription product in cart → required
+ * - No linked doctors + prescription product in cart → blocked (order cannot proceed)
+ * - No linked doctors + no prescription product → field hidden, not required
+ * - Has linked doctors + no prescription product → show, optional
+ * - Has linked doctors + prescription product → show, required
  */
 export function resolveDoctorFieldState(
   cartItems: { requires_prescription: boolean }[],
   linkedDoctors: unknown[]
-): { show: boolean; required: boolean } {
-  if (linkedDoctors.length === 0) return { show: false, required: false }
-  const required = cartItems.some((item) => item.requires_prescription)
-  return { show: true, required }
+): { show: boolean; required: boolean; blocked: boolean } {
+  const hasRxProduct = cartItems.some((item) => item.requires_prescription)
+
+  if (linkedDoctors.length === 0) {
+    // Blocked when there's a prescription product but no doctor available to assign
+    return { show: false, required: false, blocked: hasRxProduct }
+  }
+
+  return { show: true, required: hasRxProduct, blocked: false }
 }
 
 /**

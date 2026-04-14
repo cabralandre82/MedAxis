@@ -138,7 +138,11 @@ export function NewOrderForm({
   const maxDeadline = Math.max(0, ...cart.map((c) => c.product.estimated_deadline_days))
   const pharmacyName = cart[0]?.product.pharmacies?.trade_name ?? '—'
 
-  const { show: showDoctorField, required: doctorRequired } = resolveDoctorFieldState(
+  const {
+    show: showDoctorField,
+    required: doctorRequired,
+    blocked: orderBlockedByRx,
+  } = resolveDoctorFieldState(
     cart.map((c) => ({ requires_prescription: c.product.requires_prescription })),
     doctors
   )
@@ -414,23 +418,27 @@ export function NewOrderForm({
                     {errors.doctor_id && <p className="text-xs text-red-500">{errors.doctor_id}</p>}
                   </div>
                 ) : (
-                  isClinicAdmin && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                      <p className="text-sm font-medium text-amber-800">Nenhum médico vinculado</p>
-                      <p className="mt-0.5 text-xs text-amber-700">
-                        Para pedir produtos com receita, vincule um médico à sua clínica.
+                  isClinicAdmin &&
+                  orderBlockedByRx && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                      <p className="text-sm font-medium text-red-800">
+                        Médico obrigatório para este pedido
+                      </p>
+                      <p className="mt-0.5 text-xs text-red-700">
+                        Um ou mais produtos exigem receita médica. Vincule um médico à sua clínica
+                        antes de continuar.
                       </p>
                       <div className="mt-2 flex gap-3">
                         <Link
                           href={doctorNewUrl()}
-                          className="flex items-center gap-1 text-xs font-medium text-amber-900 underline hover:no-underline"
+                          className="flex items-center gap-1 text-xs font-medium text-red-900 underline hover:no-underline"
                         >
                           <UserPlus className="h-3 w-3" />
                           Cadastrar novo médico
                         </Link>
                         <Link
                           href="/doctors"
-                          className="text-xs font-medium text-amber-900 underline hover:no-underline"
+                          className="text-xs font-medium text-red-900 underline hover:no-underline"
                         >
                           Ver médicos disponíveis
                         </Link>
@@ -610,7 +618,14 @@ export function NewOrderForm({
         </Card>
       )}
 
-      <Button type="submit" size="lg" className="w-full" disabled={loading || cart.length === 0}>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full"
+        disabled={
+          loading || cart.length === 0 || (buyerType === 'CLINIC' && !isDoctor && orderBlockedByRx)
+        }
+      >
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

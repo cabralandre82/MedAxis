@@ -137,11 +137,24 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     const productIds = items.map((i) => i.product_id)
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, pharmacy_id, price_current, name, estimated_deadline_days, active')
+      .select(
+        'id, pharmacy_id, price_current, name, estimated_deadline_days, active, requires_prescription'
+      )
       .in('id', productIds)
 
     if (productsError || !products?.length) return { error: 'Produtos não encontrados' }
     if (products.some((p) => !p.active)) return { error: 'Um ou mais produtos estão inativos' }
+
+    // Prescription guard: if any product requires a prescription, a doctor must be identified.
+    // For CLINIC orders this means doctor_id must be provided (clinic has at least one linked doctor).
+    // For DOCTOR solo orders doctor_id is always set, so this is a no-op for that path.
+    const hasRxProduct = products.some((p) => p.requires_prescription)
+    if (hasRxProduct && !doctor_id) {
+      return {
+        error:
+          'Um ou mais produtos exigem receita médica. Vincule um médico à clínica antes de realizar este pedido.',
+      }
+    }
 
     const pharmacyIds = [...new Set(products.map((p) => p.pharmacy_id))]
     if (pharmacyIds.length > 1) return { error: 'Todos os produtos devem ser da mesma farmácia' }

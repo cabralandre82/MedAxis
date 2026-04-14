@@ -7,39 +7,85 @@ const noRx = { requires_prescription: false }
 const withRx = { requires_prescription: true }
 
 describe('resolveDoctorFieldState', () => {
-  it('hides field when clinic has no linked doctors', () => {
-    expect(resolveDoctorFieldState([], [])).toEqual({ show: false, required: false })
-    expect(resolveDoctorFieldState([withRx], [])).toEqual({ show: false, required: false })
-    expect(resolveDoctorFieldState([noRx], [])).toEqual({ show: false, required: false })
+  it('hides field and not blocked when clinic has no doctors and cart has no Rx products', () => {
+    expect(resolveDoctorFieldState([], [])).toEqual({
+      show: false,
+      required: false,
+      blocked: false,
+    })
+    expect(resolveDoctorFieldState([noRx], [])).toEqual({
+      show: false,
+      required: false,
+      blocked: false,
+    })
+    expect(resolveDoctorFieldState([noRx, noRx], [])).toEqual({
+      show: false,
+      required: false,
+      blocked: false,
+    })
+  })
+
+  it('blocks order when clinic has no doctors but cart has a prescription product', () => {
+    expect(resolveDoctorFieldState([withRx], [])).toEqual({
+      show: false,
+      required: false,
+      blocked: true,
+    })
+    expect(resolveDoctorFieldState([noRx, withRx], [])).toEqual({
+      show: false,
+      required: false,
+      blocked: true,
+    })
   })
 
   it('shows field as optional when clinic has doctors but no prescription product', () => {
-    expect(resolveDoctorFieldState([], [doctor])).toEqual({ show: true, required: false })
-    expect(resolveDoctorFieldState([noRx], [doctor])).toEqual({ show: true, required: false })
-    expect(resolveDoctorFieldState([noRx, noRx], [doctor])).toEqual({ show: true, required: false })
+    expect(resolveDoctorFieldState([], [doctor])).toEqual({
+      show: true,
+      required: false,
+      blocked: false,
+    })
+    expect(resolveDoctorFieldState([noRx], [doctor])).toEqual({
+      show: true,
+      required: false,
+      blocked: false,
+    })
+    expect(resolveDoctorFieldState([noRx, noRx], [doctor])).toEqual({
+      show: true,
+      required: false,
+      blocked: false,
+    })
   })
 
   it('shows field as required when at least one product requires prescription', () => {
-    expect(resolveDoctorFieldState([withRx], [doctor])).toEqual({ show: true, required: true })
+    expect(resolveDoctorFieldState([withRx], [doctor])).toEqual({
+      show: true,
+      required: true,
+      blocked: false,
+    })
     expect(resolveDoctorFieldState([noRx, withRx], [doctor])).toEqual({
       show: true,
       required: true,
+      blocked: false,
     })
     expect(resolveDoctorFieldState([withRx, withRx], [doctor])).toEqual({
       show: true,
       required: true,
+      blocked: false,
     })
-  })
-
-  it('required only when clinic has doctors AND cart has prescription product', () => {
-    // prescription product but no doctors → hidden, not required
-    expect(resolveDoctorFieldState([withRx], [])).toEqual({ show: false, required: false })
   })
 
   it('works with multiple linked doctors', () => {
     const doctors = [doctor, { ...doctor, id: 'd2' }]
-    expect(resolveDoctorFieldState([withRx], doctors)).toEqual({ show: true, required: true })
-    expect(resolveDoctorFieldState([noRx], doctors)).toEqual({ show: true, required: false })
+    expect(resolveDoctorFieldState([withRx], doctors)).toEqual({
+      show: true,
+      required: true,
+      blocked: false,
+    })
+    expect(resolveDoctorFieldState([noRx], doctors)).toEqual({
+      show: true,
+      required: false,
+      blocked: false,
+    })
   })
 })
 
