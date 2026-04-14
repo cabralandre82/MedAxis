@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Download, Trash2, Shield, Info } from 'lucide-react'
+import { BackButton } from '@/components/ui/back-button'
 
 export default function PrivacyPage() {
   const [deletionReason, setDeletionReason] = useState('')
@@ -53,6 +54,7 @@ export default function PrivacyPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
+      <BackButton href="/profile" label="Perfil" />
       <div className="flex items-center gap-3">
         <Shield className="text-primary h-6 w-6" />
         <div>

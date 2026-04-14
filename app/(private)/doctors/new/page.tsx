@@ -1,5 +1,6 @@
 import { requireRolePage } from '@/lib/rbac'
 import { DoctorForm } from '@/components/doctors/doctor-form'
+import { BackButton } from '@/components/ui/back-button'
 
 export const metadata = { title: 'Novo Médico | Clinipharma' }
 
@@ -22,7 +23,8 @@ export default async function NewDoctorPage({ searchParams }: NewDoctorPageProps
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Novo Médico</h1>
+        <BackButton href="/doctors" label="Médicos" />
+        <h1 className="mt-1 text-2xl font-bold text-gray-900">Novo Médico</h1>
         <p className="mt-1 text-sm text-gray-500">
           {isClinicAdmin
             ? 'O médico será vinculado automaticamente à sua clínica.'

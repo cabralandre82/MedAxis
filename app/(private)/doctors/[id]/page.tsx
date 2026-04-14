@@ -6,6 +6,7 @@ import { formatPhone, formatDate } from '@/lib/utils'
 import { EntityStatusBadge } from '@/components/shared/status-badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { DoctorStatusActions } from '@/components/doctors/doctor-status-actions'
+import { BackButton } from '@/components/ui/back-button'
 import type { Doctor, EntityStatus } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -61,13 +62,7 @@ export default async function DoctorDetailPage({ params }: PageProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href="/doctors" className="hover:text-primary">
-              Médicos
-            </Link>
-            <span>/</span>
-            <span>{typedDoctor.full_name}</span>
-          </div>
+          <BackButton href="/doctors" label="Médicos" />
           <h1 className="mt-1 text-2xl font-bold text-gray-900">{typedDoctor.full_name}</h1>
           <p className="text-sm text-gray-500">
             CRM {typedDoctor.crm}/{typedDoctor.crm_state}

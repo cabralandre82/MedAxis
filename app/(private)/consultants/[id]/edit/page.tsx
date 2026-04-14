@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { requireRolePage } from '@/lib/rbac'
 
 import { ConsultantForm } from '@/components/consultants/consultant-form'
+import { BackButton } from '@/components/ui/back-button'
 import type { SalesConsultant } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -22,8 +23,8 @@ export default async function EditConsultantPage({ params }: { params: Promise<{
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Editar consultor</h1>
-        <p className="mt-1 text-sm text-slate-500">{consultant.full_name}</p>
+        <BackButton href={`/consultants/${id}`} label={consultant.full_name} />
+        <h1 className="mt-1 text-2xl font-bold text-slate-900">Editar consultor</h1>
       </div>
       <div className="rounded-xl border border-slate-200 bg-white p-6">
         <ConsultantForm consultant={consultant} />

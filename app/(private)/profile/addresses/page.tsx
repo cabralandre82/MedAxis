@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/session'
 import { createAdminClient } from '@/lib/db/admin'
 import { DoctorAddressBook } from '@/components/doctors/doctor-address-book'
+import { BackButton } from '@/components/ui/back-button'
 import type { DoctorAddress } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -36,7 +37,8 @@ export default async function DoctorAddressesPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Meus endereços de entrega</h1>
+        <BackButton href="/profile" label="Perfil" />
+        <h1 className="mt-1 text-2xl font-bold text-gray-900">Meus endereços de entrega</h1>
         <p className="mt-0.5 text-sm text-gray-500">
           Endereços salvos para compras pessoais (CPF). Você pode escolher um deles ao fazer um
           pedido.

@@ -4,6 +4,7 @@ import { requireRolePage } from '@/lib/rbac'
 import { createAdminClient } from '@/lib/db/admin'
 import { getCurrentUser } from '@/lib/auth/session'
 import { ProductForm } from '@/components/products/product-form'
+import { BackButton } from '@/components/ui/back-button'
 import type { ProductWithRelations, ProductCategory, Pharmacy } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -69,17 +70,7 @@ export default async function EditProductPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link href="/products" className="hover:text-primary">
-            Produtos
-          </Link>
-          <span>/</span>
-          <Link href={`/products/${id}`} className="hover:text-primary">
-            {product.name}
-          </Link>
-          <span>/</span>
-          <span>Editar</span>
-        </div>
+        <BackButton href={`/products/${id}`} label={product.name} />
         <h1 className="mt-1 text-2xl font-bold text-gray-900">Editar Produto</h1>
         {!isPharmacy && (
           <p className="mt-1 text-sm text-amber-600">

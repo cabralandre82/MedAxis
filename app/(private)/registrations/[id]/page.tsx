@@ -4,6 +4,7 @@ import { requireRolePage } from '@/lib/rbac'
 import { createAdminClient } from '@/lib/db/admin'
 import { formatDate } from '@/lib/utils'
 import { Building2, Stethoscope, FileText, ExternalLink } from 'lucide-react'
+import { BackButton } from '@/components/ui/back-button'
 import {
   REGISTRATION_STATUS_LABELS,
   REGISTRATION_STATUS_COLORS,
@@ -63,6 +64,7 @@ export default async function RegistrationDetailPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <BackButton href="/registrations" label="Solicitações de cadastro" />
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

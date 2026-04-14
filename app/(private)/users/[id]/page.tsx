@@ -8,6 +8,7 @@ import { formatDate, formatPhone } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResetPasswordDialog } from '@/components/users/reset-password-dialog'
 import { DeactivateUserDialog } from '@/components/users/deactivate-user-dialog'
+import { BackButton } from '@/components/ui/back-button'
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
@@ -94,13 +95,7 @@ export default async function UserDetailPage({ params }: PageProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href="/users" className="hover:text-primary">
-              Usuários
-            </Link>
-            <span>/</span>
-            <span>{profile.full_name}</span>
-          </div>
+          <BackButton href="/users" label="Usuários" />
           <h1 className="mt-1 text-2xl font-bold text-gray-900">{profile.full_name}</h1>
           <div className="mt-1 flex flex-wrap gap-2">
             {profile.user_roles.map((r) => (

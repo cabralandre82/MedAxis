@@ -1,9 +1,8 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
 import { createAdminClient } from '@/lib/db/admin'
 import { ClinicForm } from '@/components/clinics/clinic-form'
-
+import { BackButton } from '@/components/ui/back-button'
 import type { Clinic } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -26,17 +25,7 @@ export default async function EditClinicPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link href="/clinics" className="hover:text-primary">
-            Clínicas
-          </Link>
-          <span>/</span>
-          <Link href={`/clinics/${id}`} className="hover:text-primary">
-            {(clinic as unknown as Clinic).trade_name}
-          </Link>
-          <span>/</span>
-          <span>Editar</span>
-        </div>
+        <BackButton href={`/clinics/${id}`} label={(clinic as unknown as Clinic).trade_name} />
         <h1 className="mt-1 text-2xl font-bold text-gray-900">Editar Clínica</h1>
       </div>
       <div className="rounded-lg border bg-white p-6">

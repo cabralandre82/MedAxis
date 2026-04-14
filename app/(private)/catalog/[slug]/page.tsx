@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { notFound } from 'next/navigation'
 import { ProductDetail } from '@/components/catalog/product-detail'
 import { ProductRecommendations } from '@/components/catalog/product-recommendations'
+import { BackButton } from '@/components/ui/back-button'
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>
@@ -66,6 +67,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   return (
     <div className="space-y-6">
+      <BackButton href="/catalog" label="Catálogo" />
       <ProductDetail product={product} />
       {recommendations.length > 0 && (
         <ProductRecommendations

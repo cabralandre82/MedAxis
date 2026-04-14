@@ -7,6 +7,7 @@ import { OrderDetail } from '@/components/orders/order-detail'
 import { ReorderButton } from '@/components/orders/reorder-button'
 import { SaveTemplateModal } from '@/components/orders/templates/save-template-modal'
 import { getPrescriptionState } from '@/lib/prescription-rules'
+import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -119,6 +120,9 @@ export default async function OrderPage({ params }: OrderPageProps) {
 
   return (
     <div>
+      <div className="mb-4">
+        <BackButton href="/orders" label="Pedidos" />
+      </div>
       {/* Tracking link + reorder actions */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {trackingUrl && (

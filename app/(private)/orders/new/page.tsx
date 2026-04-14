@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/session'
 import { NewOrderForm, type NewOrderFormProduct } from '@/components/orders/new-order-form'
 import { parseCartParam } from '@/lib/orders/doctor-field-rules'
+import { BackButton } from '@/components/ui/back-button'
 import type { DoctorAddress } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -133,7 +134,8 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
   return (
     <div className="max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Novo pedido</h1>
+        <BackButton href="/orders" label="Pedidos" />
+        <h1 className="mt-1 text-2xl font-bold text-gray-900">Novo pedido</h1>
         <p className="mt-0.5 text-sm text-gray-500">
           Adicione um ou mais produtos da mesma farmácia e preencha os dados
         </p>

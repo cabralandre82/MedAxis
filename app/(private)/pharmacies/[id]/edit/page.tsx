@@ -1,9 +1,8 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { requireRolePage } from '@/lib/rbac'
 import { createAdminClient } from '@/lib/db/admin'
 import { PharmacyForm } from '@/components/pharmacies/pharmacy-form'
-
+import { BackButton } from '@/components/ui/back-button'
 import type { Pharmacy } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -26,17 +25,10 @@ export default async function EditPharmacyPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link href="/pharmacies" className="hover:text-primary">
-            Farmácias
-          </Link>
-          <span>/</span>
-          <Link href={`/pharmacies/${id}`} className="hover:text-primary">
-            {(pharmacy as unknown as Pharmacy).trade_name}
-          </Link>
-          <span>/</span>
-          <span>Editar</span>
-        </div>
+        <BackButton
+          href={`/pharmacies/${id}`}
+          label={(pharmacy as unknown as Pharmacy).trade_name}
+        />
         <h1 className="mt-1 text-2xl font-bold text-gray-900">Editar Farmácia</h1>
       </div>
       <div className="rounded-lg border bg-white p-6">

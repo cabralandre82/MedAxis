@@ -7,6 +7,7 @@ import { formatCNPJ, formatPhone, formatDate, formatCurrency } from '@/lib/utils
 import { EntityStatusBadge } from '@/components/shared/status-badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { PharmacyStatusActions } from '@/components/pharmacies/pharmacy-status-actions'
+import { BackButton } from '@/components/ui/back-button'
 import type { Pharmacy, EntityStatus } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -65,13 +66,7 @@ export default async function DistributorDetailPage({ params }: PageProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href="/distributors" className="hover:text-primary">
-              Distribuidoras
-            </Link>
-            <span>/</span>
-            <span>{typedDistributor.trade_name}</span>
-          </div>
+          <BackButton href="/distributors" label="Distribuidoras" />
           <h1 className="mt-1 text-2xl font-bold text-gray-900">{typedDistributor.trade_name}</h1>
           <p className="text-sm text-gray-500">{typedDistributor.corporate_name}</p>
         </div>

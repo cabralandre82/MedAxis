@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { getCurrentUser } from '@/lib/auth/session'
 
 import { TicketConversation } from '@/components/support/ticket-conversation'
+import { BackButton } from '@/components/ui/back-button'
 import {
   TICKET_CATEGORY_LABELS,
   TICKET_STATUS_LABELS,
@@ -65,14 +66,7 @@ export default async function SupportTicketPage({ params }: PageProps) {
 
   return (
     <div className="space-y-4">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/support" className="hover:text-primary">
-          Suporte
-        </Link>
-        <span>/</span>
-        <span className="font-mono">{ticket.code}</span>
-      </div>
+      <BackButton href="/support" label="Suporte" />
 
       <TicketConversation
         ticket={ticket as unknown as Parameters<typeof TicketConversation>[0]['ticket']}

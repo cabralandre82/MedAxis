@@ -7,6 +7,7 @@ import { EntityStatusBadge } from '@/components/shared/status-badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { ClinicStatusActions } from '@/components/clinics/clinic-status-actions'
 import { AssignConsultantDialog } from '@/components/consultants/assign-consultant-dialog'
+import { BackButton } from '@/components/ui/back-button'
 import type { Clinic, EntityStatus, SalesConsultant } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -62,13 +63,7 @@ export default async function ClinicDetailPage({ params }: PageProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href="/clinics" className="hover:text-primary">
-              Clínicas
-            </Link>
-            <span>/</span>
-            <span>{typedClinic.trade_name}</span>
-          </div>
+          <BackButton href="/clinics" label="Clínicas" />
           <h1 className="mt-1 text-2xl font-bold text-gray-900">{typedClinic.trade_name}</h1>
           <p className="text-sm text-gray-500">{typedClinic.corporate_name}</p>
         </div>

@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { createAdminClient } from '@/lib/db/admin'
 
 import { UserForm } from '@/components/users/user-form'
+import { BackButton } from '@/components/ui/back-button'
 import type { Clinic, Pharmacy, SalesConsultant } from '@/types'
 import type { Metadata } from 'next'
 
@@ -44,7 +45,8 @@ export default async function NewUserPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Novo Usuário</h1>
+        <BackButton href="/users" label="Usuários" />
+        <h1 className="mt-1 text-2xl font-bold text-gray-900">Novo Usuário</h1>
         <p className="mt-1 text-sm text-gray-500">
           Crie credenciais de acesso para um novo usuário da plataforma
         </p>

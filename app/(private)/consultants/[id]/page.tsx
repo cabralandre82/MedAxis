@@ -5,6 +5,7 @@ import { requireRolePage } from '@/lib/rbac'
 import { getCurrentUser } from '@/lib/auth/session'
 
 import { ButtonLink } from '@/components/ui/button-link'
+import { BackButton } from '@/components/ui/back-button'
 import { formatCNPJ, formatCurrency } from '@/lib/utils'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
 
@@ -81,7 +82,8 @@ export default async function ConsultantDetailPage({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{c.full_name}</h1>
+          <BackButton href="/consultants" label="Consultores" />
+          <h1 className="mt-1 text-2xl font-bold text-slate-900">{c.full_name}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {c.email} · CNPJ: {formatCNPJ(c.cnpj)}
           </p>

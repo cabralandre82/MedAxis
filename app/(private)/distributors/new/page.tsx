@@ -1,5 +1,6 @@
 import { requireRolePage } from '@/lib/rbac'
 import { PharmacyForm } from '@/components/pharmacies/pharmacy-form'
+import { BackButton } from '@/components/ui/back-button'
 
 export const metadata = { title: 'Nova Distribuidora | Clinipharma' }
 
@@ -9,7 +10,8 @@ export default async function NewDistributorPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Nova Distribuidora</h1>
+        <BackButton href="/distributors" label="Distribuidoras" />
+        <h1 className="mt-1 text-2xl font-bold text-gray-900">Nova Distribuidora</h1>
         <p className="mt-1 text-sm text-gray-500">
           Preencha os dados para cadastrar uma nova distribuidora parceira
         </p>
