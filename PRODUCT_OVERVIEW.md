@@ -6,21 +6,21 @@ Farmácias de manipulação e distribuidoras especializadas vendem para clínica
 
 Clinipharma resolve isso com uma plataforma intermediária B2B que:
 
-- Centraliza o catálogo de produtos das farmácias
+- Centraliza o catálogo de produtos de farmácias de manipulação e distribuidoras de produtos industrializados
 - Permite que médicos e clínicas façam pedidos com documentação formal
 - Registra pagamentos e comissões
-- Controla repasses para farmácias
+- Controla repasses para farmácias e distribuidoras
 - Audita toda a operação
 
 ## Quem usa
 
-| Perfil         | O que faz                                      |
-| -------------- | ---------------------------------------------- |
-| SUPER_ADMIN    | Controle total da plataforma                   |
-| PLATFORM_ADMIN | Opera o dia a dia: catálogo, pedidos, repasses |
-| CLINIC_ADMIN   | Gerencia a própria clínica, cria pedidos       |
-| DOCTOR         | Cria pedidos, anexa documentos                 |
-| PHARMACY_ADMIN | Executa pedidos, atualiza status, vê repasses  |
+| Perfil         | O que faz                                                                  |
+| -------------- | -------------------------------------------------------------------------- |
+| SUPER_ADMIN    | Controle total da plataforma                                               |
+| PLATFORM_ADMIN | Opera o dia a dia: catálogo, pedidos, repasses                             |
+| CLINIC_ADMIN   | Gerencia a própria clínica, cria pedidos                                   |
+| DOCTOR         | Cria pedidos, anexa documentos                                             |
+| PHARMACY_ADMIN | Executa pedidos, atualiza status, vê repasses (farmácias e distribuidoras) |
 
 ## Como funciona o fluxo principal
 
@@ -66,16 +66,26 @@ A comissão é configurável globalmente por administrador.
 
 ## Catálogo
 
-- Cada produto está vinculado a uma farmácia específica
+- Cada produto está vinculado a uma farmácia ou distribuidora específica (`pharmacy_id`)
+- Produtos têm flag `is_manipulated` — magistrais/compostos em farmácias vs. industrializados em distribuidoras
 - Preço fixo, pré-cadastrado pela plataforma
-- Se o preço mudar, a farmácia comunica por fora → plataforma atualiza manualmente
+- Se o preço mudar, a farmácia/distribuidora comunica por fora → plataforma atualiza manualmente
 - Sistema registra histórico completo de alterações de preço
 - O preço é **congelado** no momento da criação do pedido
+
+## Tipos de fornecedor
+
+| Tipo                    | `entity_type` | Produtos permitidos                                | Diferença na plataforma                       |
+| ----------------------- | ------------- | -------------------------------------------------- | --------------------------------------------- |
+| Farmácia de manipulação | `PHARMACY`    | Manipulados e industrializados                     | Timeline usa linguagem de manipulação         |
+| Distribuidora           | `DISTRIBUTOR` | Apenas industrializados (`is_manipulated = false`) | Timeline usa linguagem de separação/expedição |
+
+Ambos os tipos compartilham o mesmo fluxo de pedidos, pagamentos e repasses. A distinção é transparente para as clínicas.
 
 ## Estado atual
 
 MVP funcional para:
 
 - Demonstração comercial
-- Onboarding de clínicas e farmácias
+- Onboarding de clínicas, farmácias e distribuidoras
 - Operação assistida

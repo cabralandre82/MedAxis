@@ -2,6 +2,41 @@
 
 ---
 
+## [6.6.1] — 2026-04-14 — Fix: linguagem de manipulação zerada para distribuidoras
+
+### Corrigido
+
+- **`components/orders/pharmacy-order-actions.tsx`**: Stepper e textos de ação agora são dinâmicos via `isManipulated` prop.
+  - Pedidos de distribuidoras (produtos com `is_manipulated = false`): "Em Separação", "Iniciar Separação", "O pedido está separado, embalado…"
+  - Pedidos de farmácias (produtos com `is_manipulated = true`): comportamento original mantido ("Em Manipulação", "Iniciar Manipulação", "O produto está manipulado…")
+- **`components/orders/order-detail.tsx`**: Deriva `hasManipulatedProduct` dos itens do pedido e passa para `PharmacyOrderActions`. Query da página inclui `is_manipulated` nos produtos e `entity_type` na farmácia.
+- **`components/catalog/product-detail.tsx`**: Trust signal exibe "Produto industrializado" para produtos com `is_manipulated = false` e "Produto manipulado certificado" para manipulados.
+
+---
+
+## [6.6.0] — 2026-04-14 — Suporte a distribuidoras
+
+### Feature
+
+- **Migrations `039` e `040`**:
+  - `039`: `pharmacies.entity_type text NOT NULL DEFAULT 'PHARMACY' CHECK (... IN ('PHARMACY','DISTRIBUTOR'))` — discriminador de tipo na tabela de farmácias.
+  - `040`: `products.is_manipulated boolean NOT NULL DEFAULT false` — flag por produto; `product_categories.is_manipulated` revertida (abordagem descartada).
+- **Páginas `/distributors`** (4 novas): listagem, detalhe, novo, edição. Reutilizam `PharmacyForm` com `entityType="DISTRIBUTOR"`.
+- **Sidebar**: entrada "Distribuidoras" (ícone Truck) para `SUPER_ADMIN` e `PLATFORM_ADMIN`.
+- **`/pharmacies` page**: query filtrada por `entity_type = 'PHARMACY'`.
+- **`PharmacyForm`**: aceita `entityType` e `listPath` — adapta labels, rotas de redirect e `entity_type` enviado ao serviço.
+- **Formulário de produto — seção "Tipo de Produto"**: toggle "Produto manipulado (magistral)" visível para farmácias; para distribuidoras exibe aviso estático e oculta o toggle.
+- **`services/products.ts`**: guard server-side força `is_manipulated = false` quando a farmácia proprietária é uma distribuidora.
+- **`BUSINESS_RULES.md`**: RN-23 atualizada; RN-26 adicionada (regras completas de distribuidoras).
+
+### Testes
+
+- `tests/unit/services/pharmacies.test.ts`: 2 novos casos — criação com `entity_type = 'DISTRIBUTOR'` e default `PHARMACY`.
+- `tests/unit/services/products.test.ts`: 2 novos casos — `is_manipulated` forçado `false` para distribuidora; `is_manipulated = true` preservado para farmácia. Teste de retry (23505) corrigido para lidar com o novo query de `entity_type`.
+- **892 testes — todos passando.**
+
+---
+
 ## [6.3.0] — 2026-04-13 — Push FCM frontend + guia de produção SMS/WhatsApp
 
 ### Push Notifications — Frontend completo
