@@ -27,6 +27,19 @@ describe('isValidTransition — admin', () => {
     expect(isValidTransition('AWAITING_DOCUMENTS', 'CANCELED', 'admin')).toBe(true)
     expect(isValidTransition('AWAITING_PAYMENT', 'CANCELED', 'admin')).toBe(true)
   })
+
+  it('allows admin to cancel from execution stages (RECEIVED_BY_PHARMACY through DELIVERED)', () => {
+    expect(isValidTransition('RECEIVED_BY_PHARMACY', 'CANCELED', 'admin')).toBe(true)
+    expect(isValidTransition('IN_EXECUTION', 'CANCELED', 'admin')).toBe(true)
+    expect(isValidTransition('READY', 'CANCELED', 'admin')).toBe(true)
+    expect(isValidTransition('SHIPPED', 'CANCELED', 'admin')).toBe(true)
+    expect(isValidTransition('DELIVERED', 'CANCELED', 'admin')).toBe(true)
+  })
+
+  it('blocks admin from canceling already terminal orders', () => {
+    expect(isValidTransition('COMPLETED', 'CANCELED', 'admin')).toBe(false)
+    expect(isValidTransition('CANCELED', 'CANCELED', 'admin')).toBe(false)
+  })
 })
 
 describe('isValidTransition — pharmacy', () => {

@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-13 | Versão da plataforma: **6.5.25** | **883 testes** | cobertura atualizada
+> Gerado em: 2026-04-14 | Versão da plataforma: **6.5.26** | **885 testes** | cobertura atualizada
+>
+> **v6.5.26:** Fix cancelamento de pedidos pelo SUPER_ADMIN. Dois problemas corrigidos: (1) Máquina de estados (`status-machine.ts`): `CANCELED` não existia nas transições admin para `RECEIVED_BY_PHARMACY`, `IN_EXECUTION`, `READY`, `SHIPPED` e `DELIVERED` — admin ficava bloqueado assim que a farmácia recebia o pedido. Adicionado `CANCELED` a todos esses estados. (2) UI ausente: `order-detail.tsx` só renderizava `PharmacyOrderActions` — admin não tinha nenhum botão de ação de status. Criado `AdminOrderActions` (componente cliente) que lê `getAllowedTransitions('admin')` e renderiza botões configuráveis: "Cancelar pedido" (destructive, motivo obrigatório, dialog de confirmação) e "Marcar como concluído" (quando DELIVERED). 7 novos testes na state machine (885 total).
 >
 > **v6.5.25:** Fluxo completo de revisão de preço. Card "Revisar preço" agora linka para `/products?needs_review=1`. Lista de produtos: suporte ao filtro `?needs_review=1` (mostra apenas produtos pendentes + banner laranja informativo + botão "Limpar filtro"); badge `⚠️ Revisar preço` visível por linha para admin. Detalhe do produto: banner laranja "Repasse atualizado pela farmácia" quando `needs_price_review=true` com dois CTAs — "Alterar preço" (abre `PriceUpdateForm`, zera flag ao salvar) e "Confirmar sem alterar" (`DismissPriceReviewButton` → `dismissPriceReview()` server action). `dismissPriceReview`: nova server action que seta `needs_price_review=false` + audit log + revalidações. 2 novos testes (883 total).
 >

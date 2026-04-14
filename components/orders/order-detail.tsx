@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { ButtonLink } from '@/components/ui/button-link'
 import { PharmacyOrderActions } from '@/components/orders/pharmacy-order-actions'
+import { AdminOrderActions } from '@/components/orders/admin-order-actions'
 import { DocumentManager } from '@/components/orders/document-manager'
 import { PrescriptionManager } from '@/components/orders/prescription-manager'
 import type { OrderItemPrescriptionState } from '@/lib/prescription-rules'
@@ -233,6 +234,14 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
       {/* Pharmacy execution stepper — full width, prominent */}
       {isPharmacy && (
         <PharmacyOrderActions
+          orderId={String(order.id)}
+          currentStatus={String(order.order_status) as OrderStatus}
+        />
+      )}
+
+      {/* Admin actions — cancel and other explicit transitions */}
+      {isAdmin && (
+        <AdminOrderActions
           orderId={String(order.id)}
           currentStatus={String(order.order_status) as OrderStatus}
         />
