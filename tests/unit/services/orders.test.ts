@@ -12,7 +12,7 @@ vi.mock('@/lib/auth/session', () => ({ requireAuth: vi.fn() }))
 vi.mock('@/lib/audit', () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
   AuditAction: { CREATE: 'CREATE', STATUS_CHANGE: 'STATUS_CHANGE' },
-  AuditEntity: { ORDER: 'ORDER' },
+  AuditEntity: { ORDER: 'ORDER', PAYMENT: 'PAYMENT', TRANSFER: 'TRANSFER' },
 }))
 vi.mock('@/lib/orders/status-machine', () => ({
   isValidTransition: vi.fn().mockReturnValue(true),
@@ -710,5 +710,108 @@ describe('updateOrderStatus — history insert failure is non-blocking', () => {
 
     const result = await updateOrderStatus(OID, 'AWAITING_PAYMENT', 'note')
     expect(result.error).toBeUndefined()
+  })
+})
+
+describe('updateOrderStatus — order cancellation financial cleanup', () => {
+  beforeEach(() => {
+    vi.mocked(sessionModule.requireAuth).mockResolvedValue(adminMock)
+    vi.mocked(auditModule.createAuditLog).mockResolvedValue(undefined)
+  })
+
+  it('voids a PENDING payment when order is canceled', async () => {
+    const admin = mockSupabaseAdmin()
+
+    // call sequence: 1=fetch order, 2=update order status, 3=insert history, 4=fetch fullOrder (notify),
+    // 5=fetch payment, 6=update payment to CANCELED, 7=fetch transfer
+    let callCount = 0
+    admin.from = vi.fn().mockImplementation((table: string) => {
+      callCount++
+      if (table === 'orders' && callCount === 1)
+        return makeQueryBuilder(
+          {
+            id: OID,
+            order_status: 'AWAITING_PAYMENT',
+            pharmacy_id: 'ph-1',
+            created_by_user_id: 'u-1',
+          },
+          null
+        )
+      if (table === 'payments')
+        return makeQueryBuilder({ id: 'pay-1', status: 'PENDING', gross_amount: 100 }, null)
+      if (table === 'transfers') return makeQueryBuilder(null, null) // no transfer
+      return makeQueryBuilder(null, null)
+    })
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await updateOrderStatus(OID, 'CANCELED', 'cliente desistiu')
+    expect(result.error).toBeUndefined()
+  })
+
+  it('voids a PENDING transfer when order is canceled', async () => {
+    const admin = mockSupabaseAdmin()
+
+    admin.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'orders')
+        return makeQueryBuilder(
+          {
+            id: OID,
+            order_status: 'TRANSFER_PENDING',
+            pharmacy_id: 'ph-1',
+            created_by_user_id: 'u-1',
+          },
+          null
+        )
+      if (table === 'payments')
+        return makeQueryBuilder({ id: 'pay-1', status: 'CONFIRMED', gross_amount: 100 }, null)
+      if (table === 'transfers')
+        return makeQueryBuilder({ id: 'tr-1', status: 'PENDING', net_amount: 80 }, null)
+      return makeQueryBuilder(null, null)
+    })
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await updateOrderStatus(OID, 'CANCELED', 'cliente desistiu')
+    expect(result.error).toBeUndefined()
+  })
+
+  it('does not touch a CONFIRMED payment — leaves cleanup to admin', async () => {
+    const admin = mockSupabaseAdmin()
+    const updateSpy = vi.fn().mockResolvedValue({ error: null })
+
+    admin.from = vi.fn().mockImplementation((table: string) => {
+      if (table === 'payments') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: 'pay-1', status: 'CONFIRMED', gross_amount: 100 },
+            error: null,
+          }),
+          update: updateSpy,
+        }
+      }
+      if (table === 'orders')
+        return makeQueryBuilder(
+          { id: OID, order_status: 'SHIPPED', pharmacy_id: 'ph-1', created_by_user_id: 'u-1' },
+          null
+        )
+      if (table === 'transfers') return makeQueryBuilder(null, null)
+      return makeQueryBuilder(null, null)
+    })
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await updateOrderStatus(OID, 'CANCELED', 'motivo')
+    expect(result.error).toBeUndefined()
+    // update should NOT have been called on the CONFIRMED payment
+    expect(updateSpy).not.toHaveBeenCalled()
   })
 })

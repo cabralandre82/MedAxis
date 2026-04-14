@@ -1,6 +1,8 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-14 | Versão da plataforma: **6.5.26** | **885 testes** | cobertura atualizada
+> Gerado em: 2026-04-14 | Versão da plataforma: **6.5.27** | **888 testes** | cobertura atualizada
+>
+> **v6.5.27:** Auto-cancelamento financeiro ao cancelar pedido. Migration 037: adicionado `CANCELED` ao CHECK constraint de `payments.status` e `transfers.status`. `updateOrderStatus`: quando `newStatus='CANCELED'`, chama `handleOrderCancellationFinancials()` que aplica as regras: `payment PENDING|UNDER_REVIEW → CANCELED` (+ audit); `payment CONFIRMED → mantém + notificação urgente ao admin "estorno manual necessário"`; `transfer NOT_READY|PENDING → CANCELED` (+ audit); `transfer COMPLETED → mantém + notificação urgente ao admin "reversão manual necessária"`. Falha no cleanup nunca bloqueia o cancelamento do pedido (try/catch separado). 3 novos testes (888 total). **Ação manual:** rodar migration 037 no SQL Editor do Supabase.
 >
 > **v6.5.26:** Fix cancelamento de pedidos pelo SUPER_ADMIN. Dois problemas corrigidos: (1) Máquina de estados (`status-machine.ts`): `CANCELED` não existia nas transições admin para `RECEIVED_BY_PHARMACY`, `IN_EXECUTION`, `READY`, `SHIPPED` e `DELIVERED` — admin ficava bloqueado assim que a farmácia recebia o pedido. Adicionado `CANCELED` a todos esses estados. (2) UI ausente: `order-detail.tsx` só renderizava `PharmacyOrderActions` — admin não tinha nenhum botão de ação de status. Criado `AdminOrderActions` (componente cliente) que lê `getAllowedTransitions('admin')` e renderiza botões configuráveis: "Cancelar pedido" (destructive, motivo obrigatório, dialog de confirmação) e "Marcar como concluído" (quando DELIVERED). 7 novos testes na state machine (885 total).
 >

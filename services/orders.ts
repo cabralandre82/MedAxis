@@ -412,6 +412,19 @@ export async function updateOrderStatus(
       newValues: { status: newStatus, reason },
     })
 
+    // ── Auto-void payments and transfers when order is canceled ──────────────
+    if (newStatus === 'CANCELED') {
+      try {
+        await handleOrderCancellationFinancials(orderId, user.id, user.roles[0], adminClient)
+      } catch (err) {
+        // Financial cleanup failure must never block the status update
+        logger.error('[updateOrderStatus] financial cleanup failed on cancel', {
+          orderId,
+          error: err,
+        })
+      }
+    }
+
     const NOTIFY_STATUSES: Record<string, string> = {
       READY: 'Pronto para envio',
       SHIPPED: 'Enviado',
@@ -492,5 +505,110 @@ export async function updateOrderStatus(
   } catch (err) {
     logger.error('updateOrderStatus error:', { error: err })
     return { error: 'Erro interno' }
+  }
+}
+
+/**
+ * Voids pending payments and pending transfers when an order is canceled.
+ *
+ * Rules:
+ *  - payment PENDING | UNDER_REVIEW  → CANCELED (no money involved)
+ *  - payment CONFIRMED               → kept as-is + urgent admin notification (manual refund needed)
+ *  - transfer NOT_READY | PENDING    → CANCELED (money not yet sent)
+ *  - transfer COMPLETED              → kept as-is + urgent admin notification (manual reversal needed)
+ *  - payment FAILED | REFUNDED       → no action
+ *  - transfer FAILED                 → no action
+ */
+async function handleOrderCancellationFinancials(
+  orderId: string,
+  actorUserId: string,
+  actorRole: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  adminClient: any
+): Promise<void> {
+  const now = new Date().toISOString()
+
+  // ── Payment ────────────────────────────────────────────────────────────────
+  const { data: payment } = await adminClient
+    .from('payments')
+    .select('id, status, gross_amount')
+    .eq('order_id', orderId)
+    .maybeSingle()
+
+  if (payment) {
+    if (['PENDING', 'UNDER_REVIEW'].includes(payment.status)) {
+      await adminClient
+        .from('payments')
+        .update({ status: 'CANCELED', updated_at: now })
+        .eq('id', payment.id)
+
+      await createAuditLog({
+        actorUserId,
+        actorRole,
+        entityType: AuditEntity.PAYMENT,
+        entityId: payment.id,
+        action: AuditAction.STATUS_CHANGE,
+        oldValues: { status: payment.status },
+        newValues: {
+          status: 'CANCELED',
+          reason: 'Pedido cancelado — pagamento anulado automaticamente',
+        },
+      })
+    } else if (payment.status === 'CONFIRMED') {
+      const amount = formatCurrency(Number(payment.gross_amount))
+      const payload = {
+        type: 'GENERIC' as const,
+        title: '⚠️ Pedido cancelado com pagamento confirmado',
+        body: `O pedido foi cancelado, mas o pagamento de ${amount} já foi confirmado. Verifique a necessidade de estorno manual.`,
+        link: `/orders/${orderId}`,
+        push: true,
+      }
+      await Promise.all([
+        createNotificationForRole('SUPER_ADMIN', payload),
+        createNotificationForRole('PLATFORM_ADMIN', payload),
+      ])
+    }
+  }
+
+  // ── Transfer ───────────────────────────────────────────────────────────────
+  const { data: transfer } = await adminClient
+    .from('transfers')
+    .select('id, status, net_amount')
+    .eq('order_id', orderId)
+    .maybeSingle()
+
+  if (transfer) {
+    if (['NOT_READY', 'PENDING'].includes(transfer.status)) {
+      await adminClient
+        .from('transfers')
+        .update({ status: 'CANCELED', updated_at: now })
+        .eq('id', transfer.id)
+
+      await createAuditLog({
+        actorUserId,
+        actorRole,
+        entityType: AuditEntity.TRANSFER,
+        entityId: transfer.id,
+        action: AuditAction.STATUS_CHANGE,
+        oldValues: { status: transfer.status },
+        newValues: {
+          status: 'CANCELED',
+          reason: 'Pedido cancelado — repasse anulado automaticamente',
+        },
+      })
+    } else if (transfer.status === 'COMPLETED') {
+      const amount = formatCurrency(Number(transfer.net_amount))
+      const payload = {
+        type: 'GENERIC' as const,
+        title: '⚠️ Pedido cancelado com repasse já processado',
+        body: `O pedido foi cancelado, mas o repasse de ${amount} à farmácia já foi concluído. Verifique a necessidade de reversão manual.`,
+        link: `/orders/${orderId}`,
+        push: true,
+      }
+      await Promise.all([
+        createNotificationForRole('SUPER_ADMIN', payload),
+        createNotificationForRole('PLATFORM_ADMIN', payload),
+      ])
+    }
   }
 }
