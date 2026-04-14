@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 import { productSchema, type ProductFormData } from '@/lib/validators'
 import { createProduct, updateProduct } from '@/services/products'
 import { slugify, formatCurrency } from '@/lib/utils'
@@ -620,33 +621,57 @@ export function ProductForm({
           {/* Campos condicionais — só aparecem se requires_prescription = true */}
           {requiresPrescription && (
             <div className="space-y-4 border-t border-gray-100 pt-4">
-              {/* Tipo de receita */}
+              {/* Tipo de receita — radio cards */}
               <div className="space-y-2">
                 <Label>Tipo de receita</Label>
-                <Select
-                  defaultValue={product?.prescription_type ?? undefined}
-                  onValueChange={(v) =>
-                    setValue(
-                      'prescription_type',
-                      v as 'SIMPLE' | 'SPECIAL_CONTROL' | 'ANTIMICROBIAL'
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {(
+                    [
+                      {
+                        value: 'SIMPLE',
+                        icon: '📋',
+                        label: 'Receita Simples',
+                        detail: 'Receita médica comum — branca ou azul',
+                      },
+                      {
+                        value: 'SPECIAL_CONTROL',
+                        icon: '🔴',
+                        label: 'Controle Especial',
+                        detail: 'Portaria 344/98 — Lista B1, B2, C1, C2, C3',
+                      },
+                      {
+                        value: 'ANTIMICROBIAL',
+                        icon: '💊',
+                        label: 'Antimicrobiano',
+                        detail: 'Receita de retenção em 2 vias',
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const selected = watch('prescription_type') === opt.value
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          setValue(
+                            'prescription_type',
+                            opt.value as 'SIMPLE' | 'SPECIAL_CONTROL' | 'ANTIMICROBIAL'
+                          )
+                        }
+                        className={cn(
+                          'flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        )}
+                      >
+                        <span className="text-base">{opt.icon}</span>
+                        <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+                        <span className="text-xs text-gray-500">{opt.detail}</span>
+                      </button>
                     )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SIMPLE">
-                      📋 Receita Simples — receita médica comum (branca ou azul)
-                    </SelectItem>
-                    <SelectItem value="SPECIAL_CONTROL">
-                      🔴 Controle Especial — Portaria 344/98 (Lista B1, B2, C1, C2, C3)
-                    </SelectItem>
-                    <SelectItem value="ANTIMICROBIAL">
-                      💊 Antimicrobiano — receita de retenção em 2 vias
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  })}
+                </div>
                 <p className="text-xs text-gray-400">
                   Informação exibida na interface da clínica ao enviar a receita.
                 </p>

@@ -10,7 +10,14 @@ import { PharmacyCostUpdateForm } from '@/components/products/pharmacy-cost-upda
 import { ToggleProductActive } from '@/components/products/toggle-product-active'
 import { DismissPriceReviewButton } from '@/components/products/dismiss-price-review-button'
 import { Badge } from '@/components/ui/badge'
-import { Package, AlertTriangle, RefreshCw } from 'lucide-react'
+import {
+  Package,
+  AlertTriangle,
+  RefreshCw,
+  FlaskConical,
+  FileText,
+  CheckCircle2,
+} from 'lucide-react'
 import type { ProductWithRelations, ProductCategory, Pharmacy, ProductPriceHistory } from '@/types'
 import { getCurrentUser } from '@/lib/auth/session'
 
@@ -125,6 +132,17 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
   const product = productRaw as unknown as ProductWithRelations & {
     product_categories: ProductCategory | null
     pharmacies: Pharmacy | null
+  }
+
+  const isDistributor = product.pharmacies?.entity_type === 'DISTRIBUTOR'
+
+  const PRESCRIPTION_TYPE_LABELS: Record<string, { label: string; detail: string }> = {
+    SIMPLE: { label: 'Receita Simples', detail: 'Receita médica comum (branca ou azul)' },
+    SPECIAL_CONTROL: {
+      label: 'Controle Especial',
+      detail: 'Portaria 344/98 — Lista B1, B2, C1, C2, C3',
+    },
+    ANTIMICROBIAL: { label: 'Antimicrobiano', detail: 'Receita de retenção em 2 vias' },
   }
 
   const priceHistory = isPharmacy
@@ -271,6 +289,54 @@ export default async function ProductDetailAdminPage({ params }: PageProps) {
               <dd className="mt-1 text-sm text-gray-700">{product.short_description}</dd>
             </div>
           )}
+
+          <div className="border-t border-gray-100 pt-4">
+            <p className="mb-3 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+              Classificação
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {/* Tipo de produto — só para farmácias, não distribuidoras */}
+              {!isDistributor && (
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+                    product.is_manipulated
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <FlaskConical className="h-3.5 w-3.5" />
+                  {product.is_manipulated ? 'Produto manipulado' : 'Produto industrializado'}
+                </span>
+              )}
+
+              {/* Receita médica */}
+              {product.requires_prescription ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                  <FileText className="h-3.5 w-3.5" />
+                  Exige receita
+                  {product.prescription_type &&
+                    PRESCRIPTION_TYPE_LABELS[product.prescription_type] &&
+                    ` — ${PRESCRIPTION_TYPE_LABELS[product.prescription_type].label}`}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Sem receita obrigatória
+                </span>
+              )}
+
+              {/* Detalhe do tipo de receita */}
+              {product.requires_prescription &&
+                product.prescription_type &&
+                PRESCRIPTION_TYPE_LABELS[product.prescription_type] && (
+                  <p className="w-full text-xs text-gray-400">
+                    {PRESCRIPTION_TYPE_LABELS[product.prescription_type].detail}
+                    {product.max_units_per_prescription != null &&
+                      ` · ${product.max_units_per_prescription} unidade(s) por receita`}
+                  </p>
+                )}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
