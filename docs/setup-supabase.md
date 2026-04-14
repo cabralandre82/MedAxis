@@ -7,16 +7,17 @@
 
 ## Status atual (produção)
 
-| Etapa                                  | Status                               |
-| -------------------------------------- | ------------------------------------ |
-| Migrations 001–033 aplicadas           | ✅ Concluído                         |
-| Migration 034 — Realtime orders        | ✅ Concluído (manual via SQL Editor) |
-| Migration 035 — Realtime notifications | ✅ Concluído (manual via SQL Editor) |
-| Migration 036 — needs_price_review     | ✅ Concluído (manual via SQL Editor) |
-| Buckets de storage criados             | ✅ Concluído                         |
-| Seed de categorias/produtos            | ✅ Concluído                         |
-| Usuários iniciais criados              | ✅ Concluído                         |
-| Auth URLs configuradas                 | ✅ Concluído                         |
+| Etapa                                          | Status                               |
+| ---------------------------------------------- | ------------------------------------ |
+| Migrations 001–033 aplicadas                   | ✅ Concluído                         |
+| Migration 034 — Realtime orders                | ✅ Concluído (manual via SQL Editor) |
+| Migration 035 — Realtime notifications         | ✅ Concluído (manual via SQL Editor) |
+| Migration 036 — needs_price_review             | ✅ Concluído (manual via SQL Editor) |
+| Migration 037 — CANCELED em payments/transfers | ✅ Concluído (manual via SQL Editor) |
+| Buckets de storage criados                     | ✅ Concluído                         |
+| Seed de categorias/produtos                    | ✅ Concluído                         |
+| Usuários iniciais criados                      | ✅ Concluído                         |
+| Auth URLs configuradas                         | ✅ Concluído                         |
 
 ### Migrations que exigem execução manual via SQL Editor
 
@@ -60,6 +61,22 @@ ALTER TABLE public.products
 CREATE INDEX IF NOT EXISTS idx_products_needs_price_review
   ON public.products (needs_price_review)
   WHERE needs_price_review = true;
+```
+
+**037 — Status CANCELED em payments e transfers** (`supabase/migrations/037_payment_transfer_canceled_status.sql`)
+
+```sql
+ALTER TABLE public.payments
+  DROP CONSTRAINT IF EXISTS payments_status_check;
+ALTER TABLE public.payments
+  ADD CONSTRAINT payments_status_check
+    CHECK (status IN ('PENDING','UNDER_REVIEW','CONFIRMED','FAILED','REFUNDED','CANCELED'));
+
+ALTER TABLE public.transfers
+  DROP CONSTRAINT IF EXISTS transfers_status_check;
+ALTER TABLE public.transfers
+  ADD CONSTRAINT transfers_status_check
+    CHECK (status IN ('NOT_READY','PENDING','COMPLETED','FAILED','CANCELED'));
 ```
 
 ---
