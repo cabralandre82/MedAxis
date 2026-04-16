@@ -21,23 +21,16 @@
   - ~~Push não disparado nos eventos de negócio~~ ✅ **v6.2.0**: `push: true` wired em status de pedido (criação, READY, SHIPPED, DELIVERED, CANCELED) e novos pedidos para admins.
   - ~~**⚠️ PENDENTE FRONTEND:** service worker + Firebase SDK no cliente ainda não implementados.~~ ✅ **v6.3.0**: `PushInitializer` component montado no layout privado — solicita permissão, registra token via `POST /api/push/subscribe`, e exibe toasts para mensagens em foreground. Ícones PWA (`public/icons/icon-192x192.png`, `icon-512x512.png`) criados. Todas as 7 variáveis `NEXT_PUBLIC_FIREBASE_*` configuradas no Vercel (Production + Development).
 
-- ~~Sem SMS~~ ✅ **Implementado na v1.3.0**: Twilio integrado.
+- ~~Sem SMS~~ ✅ **Implementado via Zenvia**: `lib/zenvia.ts` — SMS e WhatsApp unificados num único provider REST brasileiro.
   - ~~SMS não disparado nos fluxos principais~~ ✅ **v6.2.0**: SMS agora enviado em: aprovação/rejeição/docs pendentes de cadastro; criação de pedido; transições READY, SHIPPED, DELIVERED, CANCELED.
-  - **⚠️ PENDENTE PRODUÇÃO (ação manual):** credenciais de teste ativas — SMS não chegam ao destinatário real. Para ativar:
-    1. Fazer upgrade da conta Twilio para conta paga
-    2. Adquirir número brasileiro (+55) no painel Twilio
-    3. `vercel env add TWILIO_ACCOUNT_SID production` (substituir pelo SID real)
-    4. `vercel env add TWILIO_AUTH_TOKEN production` (substituir pelo token real)
-    5. `vercel env add TWILIO_PHONE_NUMBER production` (ex: `+5511999999999`)
+  - **⚠️ PENDENTE PRODUÇÃO (ação manual):** `ZENVIA_API_TOKEN=PENDING` — mensagens silenciosamente ignoradas. Para ativar:
+    1. Criar conta em [app.zenvia.com](https://app.zenvia.com) → Developers → Tokens & Webhooks → Criar novo
+    2. Obter sender SMS (shortcode ou alphanumeric "Clinipharma")
+    3. Registrar número WhatsApp Business (verificação Meta) ou usar keyword sandbox
+    4. No Vercel: atualizar `ZENVIA_API_TOKEN` (id: `WCWL1B4O5e9guOOZ`), `ZENVIA_SMS_FROM` (id: `fYrN1vRC0mPF93Ne`), `ZENVIA_WHATSAPP_FROM` (id: `qN5b0EH8Y0bouNYp`)
 
-- **WhatsApp não ativo**: infraestrutura e templates prontos (Evolution API).
+- ~~**WhatsApp não ativo** (Evolution API)~~ ✅ **Migrado para Zenvia**: sem Docker, sem QR code, sem infraestrutura própria. Mesmo fluxo acima.
   - ~~WhatsApp só ativo em 2 eventos~~ ✅ **v6.2.0**: WhatsApp agora disparado em aprovação/rejeição de cadastros e nas transições READY, SHIPPED, DELIVERED de pedidos.
-  - **⚠️ PENDENTE PRODUÇÃO (ação manual):** `EVOLUTION_API_URL=PENDING_DEPLOY` — mensagens WhatsApp silenciosamente ignoradas. Para ativar:
-    1. Deploy Evolution API em Docker (ver `docs/infra/evolution-api-setup.md`)
-    2. Adquirir número WhatsApp dedicado e escanear QR code
-    3. `vercel env add EVOLUTION_API_URL production` (URL pública do servidor)
-    4. `vercel env add EVOLUTION_API_KEY production` (chave da API)
-    5. `vercel env add EVOLUTION_INSTANCE_NAME production` (ex: `clinipharma`)
 
 - ~~Sem preferências de notificação por usuário~~ ✅ **v1.2.0**: toggles em `/profile`
 - ~~Sem alertas de pedidos parados~~ ✅ **v1.2.0**: widget + Vercel Cron diário + email digest
@@ -45,7 +38,7 @@
 ## Assinatura Eletrônica
 
 - ~~Sem assinatura eletrônica~~ ✅ **Implementado na v1.3.0**: Clicksign sandbox integrado — PDF automático, signatários, webhook.
-  - **⚠️ PENDENTE PRODUÇÃO:** criar conta Clicksign empresarial → gerar token produção → atualizar `CLICKSIGN_ACCESS_TOKEN` + `CLICKSIGN_API_URL` no Vercel → configurar webhook no painel Clicksign.
+  - ✅ **PRODUÇÃO CONFIGURADA (2026-04-16):** `CLICKSIGN_ACCESS_TOKEN` + `CLICKSIGN_API_URL` (`https://app.clicksign.com/api/v1`) atualizados no Vercel. **Pendência manual:** registrar webhook `https://clinipharma.com.br/api/contracts/webhook` no painel Clicksign Produção.
 
 ## Autenticação
 
@@ -167,10 +160,9 @@
 
 ## Resumo das pendências bloqueantes para lançamento comercial real
 
-| #   | Pendência              | Por que bloqueia                               | Pré-requisito                     |
-| --- | ---------------------- | ---------------------------------------------- | --------------------------------- |
-| 1   | **Asaas produção**     | Sem isso, nenhum pagamento real é processado   | CNPJ da empresa                   |
-| 2   | **NF-e / NFS-e**       | Obrigação fiscal para operar legalmente        | CNPJ + certificado A1             |
-| 3   | **Clicksign produção** | Contratos sandbox não têm valor jurídico pleno | Conta empresarial                 |
-| 4   | **Twilio produção**    | SMS test não chega ao destinatário             | Upgrade de conta                  |
-| 5   | **WhatsApp**           | Canal principal de conversão no Brasil         | Número dedicado + servidor Docker |
+| #     | Pendência                  | Por que bloqueia                                                                  | Pré-requisito                  |
+| ----- | -------------------------- | --------------------------------------------------------------------------------- | ------------------------------ |
+| 1     | **Asaas produção**         | Sem isso, nenhum pagamento real é processado                                      | CNPJ da empresa                |
+| 2     | **NF-e / NFS-e**           | Obrigação fiscal para operar legalmente                                           | CNPJ + certificado A1          |
+| ~~3~~ | ~~**Clicksign produção**~~ | ✅ **PRODUÇÃO CONFIGURADA (2026-04-16)** — pendência: registrar webhook no painel | —                              |
+| 4     | **Zenvia SMS+WhatsApp**    | Mensagens ignoradas até token real configurado                                    | Conta Zenvia + token + senders |
