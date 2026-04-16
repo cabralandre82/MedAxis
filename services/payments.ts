@@ -9,6 +9,7 @@ import { sendEmail } from '@/lib/email'
 import { paymentConfirmedEmail, transferRegisteredEmail } from '@/lib/email/templates'
 import { createNotification } from '@/lib/notifications'
 import { formatCurrency } from '@/lib/utils'
+import { emitirNFSeParaTransferencia } from '@/services/nfse'
 
 interface ConfirmPaymentInput {
   paymentId: string
@@ -442,6 +443,43 @@ export async function completeTransfer(
           body: `${pharmacyData.trade_name} · ${formatCurrency(Number(transfer.net_amount))}`,
           link: `/transfers`,
         })
+      }
+    }
+
+    // Emit NFS-e for platform commission — non-blocking, never throws
+    {
+      const { data: transferFull } = await adminClient
+        .from('transfers')
+        .select('commission_amount')
+        .eq('id', transferId)
+        .single()
+
+      const commissionAmount = Number(transferFull?.commission_amount ?? 0)
+
+      if (commissionAmount > 0) {
+        const { data: orderForNFSe } = await adminClient
+          .from('orders')
+          .select('code, clinics(cnpj, trade_name, email)')
+          .eq('id', transfer.order_id)
+          .single()
+
+        type ClinicFields = {
+          cnpj?: string | null
+          trade_name?: string | null
+          email?: string | null
+        }
+        const clinicNFSe = (orderForNFSe as { clinics?: ClinicFields | null } | null)?.clinics
+
+        if (clinicNFSe?.cnpj) {
+          emitirNFSeParaTransferencia({
+            transferId,
+            valorServicos: commissionAmount,
+            tomadorCnpj: clinicNFSe.cnpj,
+            tomadorRazaoSocial: clinicNFSe.trade_name ?? 'Cliente',
+            tomadorEmail: clinicNFSe.email ?? undefined,
+            orderCode: (orderForNFSe as { code?: string })?.code ?? transfer.order_id,
+          }).catch((err) => logger.error('[completeTransfer] NFS-e async error', { error: err }))
+        }
       }
     }
 

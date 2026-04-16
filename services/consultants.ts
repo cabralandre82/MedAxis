@@ -9,6 +9,7 @@ import { salesConsultantSchema, type SalesConsultantFormData } from '@/lib/valid
 import { sendEmail } from '@/lib/email'
 import { consultantTransferEmail } from '@/lib/email/templates'
 import { formatCurrency } from '@/lib/utils'
+import { emitirNFSeParaConsultor } from '@/services/nfse'
 
 // ─── Create ────────────────────────────────────────────────────────────────
 
@@ -294,6 +295,28 @@ export async function registerConsultantTransfer(
       }
     } catch {
       // email failure must not affect transfer registration
+    }
+
+    // Emit NFS-e for consultant commission — non-blocking, never throws
+    if (grossAmount > 0) {
+      const { data: consultantForNFSe } = await adminClient
+        .from('sales_consultants')
+        .select('cnpj, full_name, email')
+        .eq('id', consultantId)
+        .single()
+
+      if (consultantForNFSe?.cnpj) {
+        emitirNFSeParaConsultor({
+          consultantTransferId: transfer.id,
+          valorServicos: grossAmount,
+          tomadorCpfCnpj: consultantForNFSe.cnpj,
+          tomadorNome: consultantForNFSe.full_name,
+          tomadorEmail: consultantForNFSe.email ?? undefined,
+          commissionCount: commissions.length,
+        }).catch((err) =>
+          logger.error('[registerConsultantTransfer] NFS-e async error', { error: err })
+        )
+      }
     }
 
     revalidatePath('/consultant-transfers')

@@ -101,15 +101,15 @@
 
 Sem estes itens a plataforma não pode operar comercialmente (jurídico, fiscal ou tecnicamente inviável).
 
-| #     | Pendência                                       | Razão                                                | Como resolver                                                                                       |
-| ----- | ----------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 1     | **CNPJ da empresa**                             | Pré-requisito de TUDO abaixo                         | Abrir empresa com contadora                                                                         |
-| 2     | **Asaas → Produção**                            | Sem CNPJ, zero pagamentos reais processados          | Conta Asaas PJ → API Key prod → atualizar `ASAAS_API_KEY` + `ASAAS_API_URL` no Vercel               |
-| 3     | **NF-e / NFS-e**                                | Obrigação fiscal — ilegal operar sem                 | CNPJ + certificado digital A1 + conta Nuvem Fiscal → substituir `NUVEM_FISCAL_*` no Vercel          |
-| 4     | **Clicksign → Produção**                        | Contratos sandbox não têm valor jurídico             | Conta empresarial Clicksign → token produção → atualizar `CLICKSIGN_ACCESS_TOKEN` + URL no Vercel   |
-| 5     | **DPA formal (LGPD)**                           | Obrigação legal com parceiros que processam dados    | Elaborar com advogado LGPD — assinar com farmácias e clínicas antes do go-live                      |
-| ~~6~~ | ~~**Política de Privacidade + Termos de Uso**~~ | ~~LGPD Art. 8~~                                      | ✅ Implementado em `/privacy` e `/terms` — v5.1.0                                                   |
-| 7     | **Migração PII encrypted**                      | Dados existentes de `phone`/`crm` ainda em plaintext | Escrever e rodar script: ler plaintext → `encrypt()` → salvar em `*_encrypted` → atualizar services |
+| #     | Pendência                                       | Razão                                                                           | Como resolver                                                                                       |
+| ----- | ----------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 1     | **CNPJ da empresa**                             | Pré-requisito de TUDO abaixo                                                    | Abrir empresa com contadora                                                                         |
+| 2     | **Asaas → Produção**                            | Sem CNPJ, zero pagamentos reais processados                                     | Conta Asaas PJ → API Key prod → atualizar `ASAAS_API_KEY` + `ASAAS_API_URL` no Vercel               |
+| ~~3~~ | ~~**NF-e / NFS-e**~~                            | ✅ **v6.8.0** — código pronto, aguarda credenciais Nuvem Fiscal + migration 042 |
+| 4     | **Clicksign → Produção**                        | Contratos sandbox não têm valor jurídico                                        | Conta empresarial Clicksign → token produção → atualizar `CLICKSIGN_ACCESS_TOKEN` + URL no Vercel   |
+| 5     | **DPA formal (LGPD)**                           | Obrigação legal com parceiros que processam dados                               | Elaborar com advogado LGPD — assinar com farmácias e clínicas antes do go-live                      |
+| ~~6~~ | ~~**Política de Privacidade + Termos de Uso**~~ | ~~LGPD Art. 8~~                                                                 | ✅ Implementado em `/privacy` e `/terms` — v5.1.0                                                   |
+| 7     | **Migração PII encrypted**                      | Dados existentes de `phone`/`crm` ainda em plaintext                            | Escrever e rodar script: ler plaintext → `encrypt()` → salvar em `*_encrypted` → atualizar services |
 
 ---
 
@@ -209,12 +209,12 @@ Ações comerciais e operacionais (não técnicas):
 
 Itens do roadmap que dependem de CNPJ ativo para implementar:
 
-| Item | Descrição                                                                         |
-| ---- | --------------------------------------------------------------------------------- |
-| B1   | **Emissão de NF-e** — Nuvem Fiscal integrada após CNPJ + certificado A1           |
-| B2   | **Asaas produção completo** — split de pagamento, antecipação, relatórios fiscais |
-| B3   | **ANPD registro** — iniciar registro formal como controlador de dados pessoais    |
-| B4   | **DPA template** — revisão final por advogado LGPD especializado                  |
+| Item   | Descrição                                                                                                                 |
+| ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| ~~B1~~ | ~~**Emissão de NF-e**~~ — ✅ **v6.8.0**: NFS-e implementada via Nuvem Fiscal. Aguarda apenas credenciais + migration 042. |
+| B2     | **Asaas produção completo** — split de pagamento, antecipação, relatórios fiscais                                         |
+| B3     | **ANPD registro** — iniciar registro formal como controlador de dados pessoais                                            |
+| B4     | **DPA template** — revisão final por advogado LGPD especializado                                                          |
 
 ---
 

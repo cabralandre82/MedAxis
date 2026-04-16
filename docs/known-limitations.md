@@ -7,10 +7,10 @@
 ## Financeiro
 
 - ~~Sem gateway de pagamento automático~~ ✅ **Implementado na v1.3.0**: Asaas sandbox integrado — PIX QR, boleto e cartão. Webhook confirma pagamento automaticamente.
-  - **⚠️ PENDENTE PRODUÇÃO:** criar conta Asaas PJ (requer CNPJ) → gerar API Key real → atualizar `ASAAS_API_KEY` + `ASAAS_API_URL` no Vercel → configurar webhook no painel Asaas.
+  - ✅ **PRODUÇÃO CONFIGURADA (2026-04-14):** conta PJ criada, API Key de produção ativa no Vercel, webhook registrado em `https://clinipharma.com.br/api/payments/asaas/webhook`.
 
-- **Sem emissão fiscal**: NF-e/NFS-e não integrada.
-  - **⚠️ PENDENTE CNPJ:** modelo fiscal definido (Nuvem Fiscal), variáveis pré-configuradas no Vercel com `PENDING_CNPJ`. Após CNPJ + certificado A1 → substituir os 3 valores `NUVEM_FISCAL_*` no Vercel e implementar emissão.
+- ~~Sem emissão fiscal~~ ✅ **Implementado na v6.8.0**: NFS-e via Nuvem Fiscal integrada. Emissão automática ao confirmar repasse à farmácia (comissão da plataforma) e ao consultor. Circuit breaker protege o fluxo — falha na NFS-e nunca bloqueia o repasse.
+  - **⚠️ PENDENTE CREDENCIAIS:** substituir `NUVEM_FISCAL_CLIENT_ID`, `NUVEM_FISCAL_CLIENT_SECRET` e `NUVEM_FISCAL_CNPJ` no Vercel + rodar migration `042`.
 
 - **Repasse manual**: por design — admin aprova repasse antes de transferir (sem split automático).
 

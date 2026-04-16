@@ -39,9 +39,9 @@
 - [x] `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` = `67520190566`
 - [x] `NEXT_PUBLIC_FIREBASE_APP_ID` = `1:67520190566:web:927fdadd22238ff26b35a7`
 - [x] `NEXT_PUBLIC_FIREBASE_VAPID_KEY` = `BNrMF4L9UwGqH3dHkIZp9-plConcw5YXpcTbfL-mF6_XTv6oIlV10Buw1sgCqd-YVveXECTWcxvWxXgbgf_VQ-U` ✅ **chave real configurada**
-- [x] `ASAAS_API_KEY` (sandbox key)
-- [x] `ASAAS_API_URL` = `https://sandbox.asaas.com/api/v3`
-- [x] `ASAAS_WEBHOOK_SECRET` = `clinipharma_asaas_webhook_2026`
+- [x] `ASAAS_API_KEY` — ✅ **produção** configurada no Vercel (id: `e8M2BKBBylCBgjf0`) e `.env.local` em 2026-04-14.
+- [x] `ASAAS_API_URL` = `https://api.asaas.com/v3` — ✅ **produção** configurada no Vercel (id: `Ha59rt0jVTvFFY64`) e `.env.local` em 2026-04-14.
+- [x] `ASAAS_WEBHOOK_SECRET` — ✅ **produção** configurada no Vercel (id: `59YdW0ce1NcycTwx`) e `.env.local` em 2026-04-14. URL do webhook no Asaas: `https://clinipharma.com.br/api/payments/asaas/webhook?accessToken=whsec_8AzQE_w7P99SIDhRCLktw3Pq4G6IcYtI7jxD3bUCbjs`
 - [x] `TWILIO_ACCOUNT_SID` (test)
 - [x] `TWILIO_AUTH_TOKEN` (test)
 - [x] `TWILIO_PHONE_NUMBER` = `+15005550006` (test number)
@@ -72,6 +72,7 @@
 >
 > O token de serviço (Vercel API Token) pode ser criado em vercel.com/account/tokens.
 > PROJECT_ID = `prj_AselTmZTlBpnArr0M7zP6GTmNJ16` | TEAM_ID = `team_fccKc8W6hyQmvCcZAGCqV1UK`
+> VERCEL_TOKEN: armazenado apenas no `.env.local` (nunca comitar).
 
 ## Auditoria interna de QA / segurança / IA
 
@@ -125,9 +126,9 @@
 - [ ] **🔴 AÇÃO PENDENTE:** Migrar `phone`/`crm` existentes de plaintext para `*_encrypted` (script de migração)
 - [ ] **🔴 AÇÃO PENDENTE:** DPA formal com farmácias e clínicas (advogado LGPD — pré go-live comercial)
 - [x] **Política de Privacidade em `/privacy` e Termos de Uso em `/terms`** — implementadas em v5.1.0; acesso público corrigido no middleware em v5.1.4
-- [x] `NUVEM_FISCAL_CLIENT_ID` = `PENDING_CNPJ`
-- [x] `NUVEM_FISCAL_CLIENT_SECRET` = `PENDING_CNPJ`
-- [x] `NUVEM_FISCAL_CNPJ` = `PENDING_CNPJ`
+- [ ] `NUVEM_FISCAL_CLIENT_ID` — **🔴 PENDENTE:** substituir `PENDING_CNPJ` pelo client_id gerado na aba Credenciais de API da Nuvem Fiscal.
+- [ ] `NUVEM_FISCAL_CLIENT_SECRET` — **🔴 PENDENTE:** substituir `PENDING_CNPJ` pelo client_secret gerado na aba Credenciais de API da Nuvem Fiscal.
+- [ ] `NUVEM_FISCAL_CNPJ` — **🔴 PENDENTE:** substituir `PENDING_CNPJ` pelo CNPJ da Clinipharma (14 dígitos, sem pontos).
 
 ### Variáveis opcionais — ✅ todas configuradas
 
@@ -152,14 +153,12 @@
 **Status:** sandbox ativo, recebimento real BLOQUEADO  
 **O que fazer:**
 
-1. Acessar [asaas.com](https://asaas.com) → criar conta PJ (necessita CNPJ)
-2. Completar verificação de identidade e dados bancários
-3. Gerar API Key de produção
-4. No Vercel → Environment Variables:
-   - Atualizar `ASAAS_API_KEY` → nova chave de produção
-   - Atualizar `ASAAS_API_URL` → `https://api.asaas.com/v3` (remover `sandbox.`)
-5. No painel Asaas → Configurações → Notificações → Webhooks → Adicionar:
-   - URL: `https://clinipharma.com.br/api/payments/asaas/webhook?accessToken=clinipharma_asaas_webhook_2026`
+1. ✅ Conta PJ criada no Asaas (2026-04-14)
+2. ✅ API Key de produção gerada e configurada no Vercel (`ASAAS_API_KEY`, id: `e8M2BKBBylCBgjf0`)
+3. ✅ `ASAAS_API_URL` = `https://api.asaas.com/v3` configurada no Vercel (id: `Ha59rt0jVTvFFY64`)
+4. ✅ `ASAAS_WEBHOOK_SECRET` configurada no Vercel (id: `59YdW0ce1NcycTwx`)
+5. ✅ Webhook registrado no painel Asaas (2026-04-14):
+   - URL: `https://clinipharma.com.br/api/payments/asaas/webhook?accessToken=whsec_8AzQE_w7P99SIDhRCLktw3Pq4G6IcYtI7jxD3bUCbjs`
    - Eventos: `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_REFUNDED`
 
 ---
@@ -221,18 +220,19 @@
 
 ### 🧾 5. NF-e / NFS-e — Após CNPJ com contadora
 
-**Status:** modelo fiscal definido, aguardando CNPJ  
+**Status:** código implementado (v6.8.0) — aguardando credenciais Nuvem Fiscal  
 **O que fazer:**
 
-1. Finalizar abertura de empresa (CNPJ) com a contadora
-2. Criar conta na [Nuvem Fiscal](https://nuvemfiscal.com.br)
-3. Configurar certificado digital A1 na Nuvem Fiscal
-4. No Vercel → substituir os 3 `PENDING_CNPJ`:
-   - `NUVEM_FISCAL_CLIENT_ID` → client_id da Nuvem Fiscal
+1. ✅ CNPJ obtido (2026-04-14)
+2. ✅ Conta criada na [Nuvem Fiscal](https://nuvemfiscal.com.br) (2026-04-14)
+3. ✅ Certificado A1 configurado na Nuvem Fiscal (2026-04-14)
+4. ✅ Código implementado (`lib/nuvem-fiscal.ts`, `services/nfse.ts`, migration `042`) — NFS-e emitida automaticamente ao confirmar repasse à farmácia e ao consultor (2026-04-14)
+5. **🔴 PENDENTE:** Gerar credenciais em Nuvem Fiscal → **Credenciais de API** → passar `client_id` + `client_secret` e substituir as 3 variáveis `PENDING_CNPJ` no Vercel:
+   - `NUVEM_FISCAL_CLIENT_ID` → client_id
    - `NUVEM_FISCAL_CLIENT_SECRET` → client_secret
-   - `NUVEM_FISCAL_CNPJ` → CNPJ da Clinipharma (formato `00000000000000`)
-5. Implementar emissão de NFS-e na confirmação do repasse ao consultor
-6. Orientar farmácias parceiras a emitir NF-e para a clínica em cada entrega
+   - `NUVEM_FISCAL_CNPJ` → CNPJ sem pontos (ex: `12345678000199`)
+6. **🔴 PENDENTE:** Rodar migration `042_nfse_records.sql` no Supabase SQL Editor
+7. Orientar farmácias parceiras a emitir NF-e para a clínica em cada entrega
 
 ---
 
