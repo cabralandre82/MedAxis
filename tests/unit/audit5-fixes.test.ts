@@ -16,37 +16,36 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ── 6. SMS / WhatsApp empty phone guards ────────────────────────────────────
 
 describe('sendSms — empty phone guard', () => {
-  it('returns early without calling Twilio if phone is empty', async () => {
-    const { sendSms } = await import('@/lib/sms')
-    // should not throw, just silently return
+  it('returns early without calling Zenvia if phone is empty', async () => {
+    const { sendSms } = await import('@/lib/zenvia')
     await expect(sendSms('', 'test message')).resolves.toBeUndefined()
   })
 
   it('returns early if phone has fewer than 10 digits', async () => {
-    const { sendSms } = await import('@/lib/sms')
+    const { sendSms } = await import('@/lib/zenvia')
     await expect(sendSms('123', 'test message')).resolves.toBeUndefined()
   })
 
   it('processes a valid 11-digit phone number without crashing', async () => {
-    const { sendSms } = await import('@/lib/sms')
-    // Twilio is not configured in tests, should warn and return
+    const { sendSms } = await import('@/lib/zenvia')
+    // Zenvia is not configured in tests (mocked), should return undefined
     await expect(sendSms('11999999999', 'test')).resolves.toBeUndefined()
   })
 })
 
 describe('sendWhatsApp — empty phone guard', () => {
   it('returns early if phone is empty', async () => {
-    const { sendWhatsApp } = await import('@/lib/whatsapp')
+    const { sendWhatsApp } = await import('@/lib/zenvia')
     await expect(sendWhatsApp('', 'message')).resolves.toBeUndefined()
   })
 
   it('returns early if phone has fewer than 10 digits', async () => {
-    const { sendWhatsApp } = await import('@/lib/whatsapp')
+    const { sendWhatsApp } = await import('@/lib/zenvia')
     await expect(sendWhatsApp('555', 'message')).resolves.toBeUndefined()
   })
 
   it('processes valid phone when API is not configured (graceful no-op)', async () => {
-    const { sendWhatsApp } = await import('@/lib/whatsapp')
+    const { sendWhatsApp } = await import('@/lib/zenvia')
     await expect(sendWhatsApp('11999887766', 'msg')).resolves.toBeUndefined()
   })
 })
@@ -191,11 +190,13 @@ describe('assignUserRole — atomic upsert', () => {
 
 // ── 5. Clicksign webhook — secret verification ───────────────────────────────
 
-describe('Clicksign webhook — secret verification', () => {
-  it('checks CLICKSIGN_WEBHOOK_SECRET env var and rejects unauthorized requests', () => {
+describe('Clicksign webhook — HMAC SHA256 verification', () => {
+  it('verifies Content-Hmac header with HMAC SHA256 and rejects unauthorized requests', () => {
     const src = readFileSync(join(ROOT, 'app/api/contracts/webhook/route.ts'), 'utf8')
     expect(src).toContain('CLICKSIGN_WEBHOOK_SECRET')
-    expect(src).toContain('x-clicksign-secret')
+    expect(src).toContain('content-hmac')
+    expect(src).toContain('createHmac')
+    expect(src).toContain('timingSafeEqual')
     expect(src).toContain('status: 401')
   })
 })

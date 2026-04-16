@@ -2,8 +2,7 @@ import { inngest } from '@/lib/inngest'
 import { createAdminClient } from '@/lib/db/admin'
 import { createNotification, createNotificationForRole } from '@/lib/notifications'
 import { sendEmail } from '@/lib/email'
-import { sendSms, SMS } from '@/lib/sms'
-import { sendWhatsApp, WA } from '@/lib/whatsapp'
+import { sendSms, SMS, sendWhatsApp, WA } from '@/lib/zenvia'
 import { sendPushToUser } from '@/lib/push'
 
 type ClinicData = {

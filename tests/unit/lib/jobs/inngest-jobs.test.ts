@@ -74,8 +74,8 @@ describe('lib/jobs/stale-orders', () => {
 
   it('filters only non-terminal order statuses', () => {
     expect(src).toContain('COMPLETED')
-    expect(src).toContain('CANCELLED')
-    expect(src).toContain('REJECTED')
+    expect(src).toContain('CANCELED')
+    expect(src).toContain('DELIVERED')
     expect(src).toContain('.not(')
   })
 

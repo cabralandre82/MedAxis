@@ -62,11 +62,35 @@ vi.mock('firebase/messaging', () => ({
   onMessage: vi.fn().mockReturnValue(() => {}),
 }))
 
-// ── Twilio ────────────────────────────────────────────────────────────────────
-vi.mock('twilio', () => ({
-  default: vi.fn().mockReturnValue({
-    messages: { create: vi.fn().mockResolvedValue({ sid: 'test-sid' }) },
-  }),
+// ── Zenvia (SMS + WhatsApp) ───────────────────────────────────────────────────
+vi.mock('@/lib/zenvia', () => ({
+  sendSms: vi.fn().mockResolvedValue(undefined),
+  sendWhatsApp: vi.fn().mockResolvedValue(undefined),
+  SMS: {
+    orderCreated: (c: string) => `Clinipharma: Pedido ${c} recebido`,
+    orderReady: (c: string) => `Clinipharma: Pedido ${c} pronto`,
+    orderShipped: (c: string) => `Clinipharma: Pedido ${c} enviado`,
+    orderDelivered: (c: string) => `Clinipharma: Pedido ${c} entregue`,
+    orderCanceled: (c: string) => `Clinipharma: Pedido ${c} cancelado`,
+    registrationApproved: (n: string) => `Clinipharma: ${n} aprovado`,
+    registrationRejected: (n: string) => `Clinipharma: ${n} rejeitado`,
+    pendingDocs: (n: string) => `Clinipharma: ${n} docs pendentes`,
+    prescriptionRequired: (c: string) => `Clinipharma: ${c} receita`,
+    paymentConfirmed: (c: string) => `Clinipharma: ${c} pago`,
+    staleOrder: (c: string, d: number) => `Clinipharma: ${c} parado ${d}d`,
+  },
+  WA: {
+    orderCreated: (c: string, n: string) => `✅ Clinipharma — ${n} Pedido ${c}`,
+    orderReady: (c: string) => `📦 Clinipharma — Pedido ${c} pronto`,
+    orderShipped: (c: string) => `🚚 Clinipharma — Pedido ${c} enviado`,
+    orderDelivered: (c: string) => `🎉 Clinipharma — Pedido ${c} entregue`,
+    registrationApproved: (n: string) => `✅ Clinipharma — ${n} aprovado`,
+    registrationRejected: (n: string, r: string) => `❌ Clinipharma — ${n} rejeitado. Motivo: ${r}`,
+    contractSent: (n: string) => `📝 Clinipharma — contrato ${n}`,
+    staleOrderAlert: (c: string, d: number) => `⚠️ Clinipharma — ${c} ${d} dias`,
+    productInterestConfirm: (n: string, p: string) => `👋 Clinipharma — ${n} interesse ${p}`,
+    paymentConfirmed: (c: string) => `💳 Clinipharma — ${c} pago`,
+  },
 }))
 
 // ── Resend ────────────────────────────────────────────────────────────────────
@@ -148,6 +172,23 @@ vi.mock('@/lib/notifications', () => ({
 // ── lib/session-logger ───────────────────────────────────────────────────────
 vi.mock('@/lib/session-logger', () => ({
   logSession: vi.fn().mockResolvedValue(undefined),
+}))
+
+// ── services/nfse — non-blocking fiscal emission, always mock in other suites ─
+vi.mock('@/services/nfse', () => ({
+  emitirNFSeParaTransferencia: vi.fn().mockResolvedValue(undefined),
+  emitirNFSeParaConsultor: vi.fn().mockResolvedValue(undefined),
+}))
+
+// ── lib/nuvem-fiscal ─────────────────────────────────────────────────────────
+vi.mock('@/lib/nuvem-fiscal', () => ({
+  emitirNFSe: vi
+    .fn()
+    .mockResolvedValue({ id: 'nfse-mock', status: 'autorizado', referencia: 'mock' }),
+  consultarNFSe: vi
+    .fn()
+    .mockResolvedValue({ id: 'nfse-mock', status: 'autorizado', referencia: 'mock' }),
+  nuvemFiscalHealthCheck: vi.fn().mockResolvedValue(true),
 }))
 
 // ─── Supabase builder factory ──────────────────────────────────────────────

@@ -14,8 +14,7 @@ import { z } from 'zod'
 import { isValidTransition } from '@/lib/orders/status-machine'
 import { canPlaceOrder } from '@/lib/compliance'
 import { getActiveCouponsForOrder } from '@/services/coupons'
-import { sendSms, SMS } from '@/lib/sms'
-import { sendWhatsApp, WA } from '@/lib/whatsapp'
+import { sendSms, SMS, sendWhatsApp, WA } from '@/lib/zenvia'
 
 // Supabase uses gen_random_uuid() which may produce UUIDs outside strict RFC 4122 v4
 // variant bits (e.g. variant starting with 6x). Use a loose regex instead of z.string().uuid().
