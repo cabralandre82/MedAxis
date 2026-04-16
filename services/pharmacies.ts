@@ -5,6 +5,8 @@ import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
 import { pharmacySchema, type PharmacyFormData } from '@/lib/validators'
 import { validateCNPJ } from '@/lib/compliance'
+import { inngest } from '@/lib/inngest'
+import { logger } from '@/lib/logger'
 import type { EntityStatus } from '@/types'
 
 export async function createPharmacy(
@@ -164,6 +166,18 @@ export async function updatePharmacyStatus(
       oldValues: { status: existing?.status },
       newValues: { status },
     })
+
+    // Auto-send DPA when pharmacy is first activated
+    if (status === 'ACTIVE' && existing?.status !== 'ACTIVE') {
+      inngest
+        .send({
+          name: 'registration/contract.auto-send',
+          data: { entityType: 'PHARMACY', entityId: id, registrationId: id },
+        })
+        .catch((err) =>
+          logger.error('[updatePharmacyStatus] DPA auto-send trigger failed', { err })
+        )
+    }
 
     return {}
   } catch {

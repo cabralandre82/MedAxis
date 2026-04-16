@@ -122,14 +122,374 @@ interface ContractParty {
   email?: string
 }
 
+// ── Company constants ─────────────────────────────────────────────────────────
+
+const CLINIPHARMA = {
+  razaoSocial: 'ALC INTERMEDIACAO E REPRESENTACAO LTDA',
+  cnpj: '66.279.691/0001-12',
+  endereco: 'SQS 212, Bloco K, apto 402, Asa Sul, Brasília-DF, CEP 70275-110',
+  foro: 'Circunscrição Especial Judiciária de Brasília-DF',
+  site: 'clinipharma.com.br',
+}
+
+// ── PDF layout helpers ────────────────────────────────────────────────────────
+
+interface PageContext {
+  doc: PDFDocument
+  font: ReturnType<PDFDocument['embedFont']> extends Promise<infer F> ? F : never
+  boldFont: ReturnType<PDFDocument['embedFont']> extends Promise<infer F> ? F : never
+  pages: ReturnType<PDFDocument['addPage']>[]
+  currentPage: ReturnType<PDFDocument['addPage']>
+  y: number
+  pageNum: number
+}
+
+async function createPageContext(doc: PDFDocument): Promise<PageContext> {
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const boldFont = await doc.embedFont(StandardFonts.HelveticaBold)
+  const page = doc.addPage([595, 842])
+  return { doc, font, boldFont, pages: [page], currentPage: page, y: 800, pageNum: 1 }
+}
+
+function addNewPage(ctx: PageContext): void {
+  const page = ctx.doc.addPage([595, 842])
+  ctx.pages.push(page)
+  ctx.currentPage = page
+  ctx.y = 800
+  ctx.pageNum++
+}
+
+function ensureSpace(ctx: PageContext, needed: number): void {
+  if (ctx.y - needed < 60) addNewPage(ctx)
+}
+
+function drawText(
+  ctx: PageContext,
+  text: string,
+  opts: {
+    size?: number
+    bold?: boolean
+    color?: ReturnType<typeof rgb>
+    x?: number
+    indent?: number
+  }
+): void {
+  const size = opts.size ?? 10
+  const font = opts.bold ? ctx.boldFont : ctx.font
+  const color = opts.color ?? rgb(0.15, 0.15, 0.15)
+  const x = opts.x ?? opts.indent ?? 50
+  ctx.currentPage.drawText(text, { x, y: ctx.y, font, size, color })
+  ctx.y -= size + 5
+}
+
+function drawWrappedText(
+  ctx: PageContext,
+  text: string,
+  opts: { size?: number; bold?: boolean; maxWidth?: number; indent?: number; lineSpacing?: number }
+): void {
+  const size = opts.size ?? 10
+  const maxChars = opts.maxWidth ?? 88
+  const indent = opts.indent ?? 50
+  const lineH = size + (opts.lineSpacing ?? 5)
+  const font = opts.bold ? ctx.boldFont : ctx.font
+
+  const words = text.split(' ')
+  let line = ''
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word
+    if (test.length > maxChars) {
+      ensureSpace(ctx, lineH)
+      ctx.currentPage.drawText(line, {
+        x: indent,
+        y: ctx.y,
+        font,
+        size,
+        color: rgb(0.15, 0.15, 0.15),
+      })
+      ctx.y -= lineH
+      line = word
+    } else {
+      line = test
+    }
+  }
+  if (line) {
+    ensureSpace(ctx, lineH)
+    ctx.currentPage.drawText(line, {
+      x: indent,
+      y: ctx.y,
+      font,
+      size,
+      color: rgb(0.15, 0.15, 0.15),
+    })
+    ctx.y -= lineH
+  }
+}
+
+function drawHRule(ctx: PageContext, thickness = 0.5): void {
+  ctx.currentPage.drawLine({
+    start: { x: 50, y: ctx.y },
+    end: { x: 545, y: ctx.y },
+    thickness,
+    color: rgb(0.8, 0.8, 0.8),
+  })
+  ctx.y -= 12
+}
+
+function drawSection(ctx: PageContext, title: string, body: string[]): void {
+  ensureSpace(ctx, 40)
+  ctx.y -= 6
+  drawText(ctx, title, { bold: true, size: 10, color: rgb(0.07, 0.22, 0.37) })
+  ctx.y -= 2
+  for (const line of body) {
+    if (line === '') {
+      ctx.y -= 4
+      continue
+    }
+    drawWrappedText(ctx, line, { indent: 50 })
+  }
+}
+
+function drawPageNumbers(ctx: PageContext, total: number): void {
+  const small = ctx.font
+  for (let i = 0; i < ctx.pages.length; i++) {
+    ctx.pages[i].drawText(`Página ${i + 1} de ${total}`, {
+      x: 480,
+      y: 30,
+      font: small,
+      size: 8,
+      color: rgb(0.5, 0.5, 0.5),
+    })
+  }
+}
+
+// ── DPA PDF generation ────────────────────────────────────────────────────────
+
+/**
+ * Generate a complete Data Processing Agreement PDF for CLINIC or PHARMACY.
+ * Returns base64-encoded PDF.
+ */
+export async function generateDpaPdf(params: {
+  type: 'CLINIC' | 'PHARMACY'
+  party: ContractParty
+  date?: string
+}): Promise<string> {
+  const doc = await PDFDocument.create()
+  const ctx = await createPageContext(doc)
+  const { type, party } = params
+  const date = params.date ?? new Date().toLocaleDateString('pt-BR')
+  const dpaUrl =
+    type === 'PHARMACY'
+      ? `${CLINIPHARMA.site}/legal/dpa-farmacias`
+      : `${CLINIPHARMA.site}/legal/dpa-clinicas`
+
+  const title =
+    type === 'PHARMACY'
+      ? 'INSTRUMENTO DE ADESÃO AO ACORDO DE TRATAMENTO DE DADOS (DPA) — FARMÁCIA PARCEIRA'
+      : 'INSTRUMENTO DE ADESÃO AO ACORDO DE TRATAMENTO DE DADOS (DPA) — CLÍNICA PARCEIRA'
+
+  const partyRole =
+    type === 'PHARMACY' ? 'OPERADOR / CONTROLADOR INDEPENDENTE' : 'CONTROLADOR CONJUNTO'
+
+  // ── Cover ──────────────────────────────────────────────────────────────────
+  ctx.currentPage.drawText('CLINIPHARMA', {
+    x: 50,
+    y: ctx.y,
+    font: ctx.boldFont,
+    size: 18,
+    color: rgb(0.07, 0.22, 0.37),
+  })
+  ctx.y -= 26
+
+  drawWrappedText(ctx, title, { bold: true, size: 12, maxWidth: 70 })
+  ctx.y -= 6
+  drawHRule(ctx, 1)
+  ctx.y -= 4
+
+  // Parties block
+  drawText(ctx, 'PARTES', { bold: true, size: 10, color: rgb(0.07, 0.22, 0.37) })
+  ctx.y -= 2
+
+  drawText(ctx, `CONTROLADOR / PLATAFORMA:`, { bold: true, size: 9 })
+  drawWrappedText(
+    ctx,
+    `${CLINIPHARMA.razaoSocial}, CNPJ ${CLINIPHARMA.cnpj}, com sede em ${CLINIPHARMA.endereco} ("Clinipharma").`,
+    { indent: 50, size: 9 }
+  )
+  ctx.y -= 4
+
+  drawText(ctx, `${partyRole}:`, { bold: true, size: 9 })
+  const partyDesc = party.cpfCnpj
+    ? `${party.name}, CNPJ/CPF ${party.cpfCnpj}${party.email ? `, e-mail ${party.email}` : ''} ("Parceiro").`
+    : `${party.name}${party.email ? `, e-mail ${party.email}` : ''} ("Parceiro").`
+  drawWrappedText(ctx, partyDesc, { indent: 50, size: 9 })
+  ctx.y -= 8
+
+  drawHRule(ctx)
+
+  // ── Clause 1 – Object ──────────────────────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 1 — OBJETO', [
+    '1.1. O presente instrumento tem por objeto formalizar a adesão do Parceiro ao Acordo de Processamento de Dados (DPA) da Clinipharma, na versão vigente disponível em ' +
+      dpaUrl +
+      ', o qual regula o tratamento de dados pessoais realizados no âmbito da utilização da plataforma digital Clinipharma, nos termos da Lei 13.709/2018 (LGPD).',
+    '',
+    '1.2. O DPA incorporado é parte integrante e indissociável deste instrumento, tendo plena eficácia jurídica como se aqui transcrito estivesse.',
+  ])
+
+  // ── Clause 2 – Roles ──────────────────────────────────────────────────────
+  if (type === 'CLINIC') {
+    drawSection(ctx, 'CLÁUSULA 2 — QUALIFICAÇÃO DAS PARTES', [
+      '2.1. A Clinipharma e a Clínica Parceira atuam como CONTROLADORAS CONJUNTAS (art. 65, I, LGPD) em relação aos dados pessoais de pacientes inseridos na plataforma para fins de intermediação de pedidos de medicamentos.',
+      '',
+      '2.2. A Clínica é a originadora dos dados do paciente (nome, data de nascimento, prescrição médica), sendo responsável por obter o consentimento livre, informado e inequívoco do paciente antes de inserir seus dados na plataforma.',
+      '',
+      '2.3. A Clinipharma processa esses dados para execução do contrato (art. 7º, V, LGPD) — intermediação, faturamento e logística — e para cumprimento de obrigações legais.',
+    ])
+  } else {
+    drawSection(ctx, 'CLÁUSULA 2 — QUALIFICAÇÃO DAS PARTES', [
+      '2.1. A Farmácia Parceira atua como OPERADORA (art. 5º, VII, LGPD) em relação aos dados pessoais de pacientes transmitidos pela Clinipharma para fins de processamento e entrega de pedidos.',
+      '',
+      '2.2. A Farmácia atua adicionalmente como CONTROLADORA INDEPENDENTE em relação aos dados que deve manter por imposição legal (ANVISA, Portaria SVS/MS 344/1998, RDC 20/2011), sem subordinação à Clinipharma para esses fins.',
+      '',
+      '2.3. A Farmácia somente tratará os dados pessoais dos pacientes nas finalidades estritamente necessárias para executar o pedido e cumprir obrigações regulatórias, sendo vedado qualquer uso secundário sem base legal autônoma.',
+    ])
+  }
+
+  // ── Clause 3 – Data categories ────────────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 3 — CATEGORIAS DE DADOS TRATADOS', [
+    '3.1. São tratados no âmbito desta parceria:',
+    '  (a) DADOS COMUNS: nome, e-mail, telefone, endereço, CNPJ/CPF, dados de faturamento.',
+    '  (b) DADOS DE SAÚDE (sensíveis — art. 11 LGPD): prescrições médicas, CRM do prescritor, medicamentos, posologia, diagnóstico implícito.',
+    '',
+    '3.2. O tratamento de dados de saúde baseia-se em:',
+    '  • Tutela da saúde (art. 11, II, "f", LGPD) — para entrega do medicamento ao paciente.',
+    '  • Cumprimento de obrigação legal (art. 11, II, "a") — para escrituração nos livros de dispensação exigidos pela ANVISA.',
+    '',
+    '3.3. Nenhum dado de saúde será utilizado para fins de marketing, profiling ou inteligência comercial sem base legal autônoma e específica.',
+  ])
+
+  // ── Clause 4 – Key obligations ────────────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 4 — OBRIGAÇÕES DO PARCEIRO', [
+    '4.1. O Parceiro compromete-se a:',
+    '  (i) Tratar os dados pessoais exclusivamente nas finalidades previstas neste instrumento e no DPA incorporado;',
+    '  (ii) Implementar medidas técnicas e organizacionais adequadas (ABNT NBR ISO/IEC 27001) para proteger os dados contra acesso não autorizado, perda, alteração ou divulgação indevida;',
+    '  (iii) Notificar a Clinipharma, em até 48 horas, sobre qualquer incidente de segurança que possa afetar dados pessoais tratados nesta parceria;',
+    '  (iv) Não subcontratar o tratamento de dados a terceiros sem prévia autorização escrita da Clinipharma;',
+    '  (v) Submeter-se a auditorias realizadas pela Clinipharma ou por auditores independentes, mediante aviso prévio de 5 dias úteis;',
+    '  (vi) Ao término da parceria, destruir ou devolver, conforme solicitado, todos os dados pessoais, exceto quando a retenção for exigida por lei.',
+  ])
+
+  // ── Clause 5 – Security ───────────────────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 5 — SEGURANÇA DA INFORMAÇÃO', [
+    '5.1. A Clinipharma implementa os seguintes controles de segurança na plataforma:',
+    '  • Criptografia AES-256-GCM em repouso; TLS 1.3 em trânsito.',
+    '  • Autenticação JWT com refresh token rotation e revogação por evento.',
+    '  • Row Level Security (RLS) no banco de dados — cada entidade acessa apenas seus dados.',
+    '  • Rate limiting (100 req/min por IP) e circuit breaker em integrações externas.',
+    '  • Logs de auditoria imutáveis com retenção de 5 anos.',
+    '',
+    '5.2. A IA da plataforma (OpenAI GPT-4o Vision) opera com zero data retention — dados de prescrições não são usados para treinar modelos.',
+  ])
+
+  // ── Clause 6 – Data subject rights ───────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 6 — DIREITOS DOS TITULARES', [
+    '6.1. Os titulares de dados (pacientes, médicos) poderão exercer seus direitos previstos no art. 18 da LGPD (acesso, correção, portabilidade, eliminação, revogação) diretamente pela plataforma ou pelo e-mail privacidade@clinipharma.com.br.',
+    '',
+    '6.2. Ambas as partes cooperarão para atender solicitações de titulares no prazo de 15 dias corridos, conforme exigido pela ANPD.',
+  ])
+
+  // ── Clause 7 – Liability ──────────────────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 7 — RESPONSABILIDADE E PENALIDADES', [
+    '7.1. O descumprimento de qualquer cláusula deste instrumento ou do DPA incorporado sujeitará a parte infratora a:',
+    '  (i) Rescisão imediata desta parceria, sem ônus para a parte inocente;',
+    '  (ii) Indenização integral pelos danos diretos e indiretos causados à outra parte e a titulares de dados;',
+    '  (iii) Notificação à ANPD, quando a infração constituir violação grave à LGPD.',
+    '',
+    '7.2. A responsabilidade de cada parte por atos de seus próprios subprocessadores é solidária perante os titulares de dados, conforme art. 42 LGPD.',
+  ])
+
+  // ── Clause 8 – Term ───────────────────────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 8 — VIGÊNCIA', [
+    '8.1. Este instrumento entra em vigor na data de assinatura eletrônica por ambas as partes e permanece válido enquanto houver relação comercial ativa entre as partes.',
+    '',
+    '8.2. As obrigações de confidencialidade e proteção de dados subsistem por 5 anos após o término desta parceria ou pelo prazo exigido por lei, o que for maior.',
+  ])
+
+  // ── Clause 9 – Governing law ──────────────────────────────────────────────
+  drawSection(ctx, 'CLÁUSULA 9 — LEI APLICÁVEL E FORO', [
+    `9.1. Este instrumento é regido pelas leis da República Federativa do Brasil, em especial pela LGPD (Lei 13.709/2018) e legislação regulatória da ANVISA.`,
+    '',
+    `9.2. Fica eleito o Foro da ${CLINIPHARMA.foro} para dirimir quaisquer controvérsias decorrentes deste instrumento, renunciando as partes a qualquer outro, por mais privilegiado que seja.`,
+  ])
+
+  // ── Signature block ───────────────────────────────────────────────────────
+  ensureSpace(ctx, 140)
+  ctx.y -= 10
+  drawHRule(ctx)
+
+  drawText(ctx, `Brasília, DF, ${date}`, { size: 9, color: rgb(0.4, 0.4, 0.4) })
+  ctx.y -= 20
+
+  // Left sig
+  ctx.currentPage.drawLine({
+    start: { x: 50, y: ctx.y },
+    end: { x: 250, y: ctx.y },
+    thickness: 0.5,
+    color: rgb(0.3, 0.3, 0.3),
+  })
+  // Right sig
+  ctx.currentPage.drawLine({
+    start: { x: 300, y: ctx.y },
+    end: { x: 545, y: ctx.y },
+    thickness: 0.5,
+    color: rgb(0.3, 0.3, 0.3),
+  })
+  ctx.y -= 14
+  drawText(ctx, party.name.slice(0, 36), { size: 8, x: 50 })
+  ctx.currentPage.drawText('ALC INTERMEDIACAO E REPRESENTACAO LTDA', {
+    x: 300,
+    y: ctx.y + 14,
+    font: ctx.font,
+    size: 7,
+    color: rgb(0.15, 0.15, 0.15),
+  })
+  ctx.currentPage.drawText(`CNPJ ${CLINIPHARMA.cnpj}`, {
+    x: 300,
+    y: ctx.y,
+    font: ctx.font,
+    size: 7,
+    color: rgb(0.4, 0.4, 0.4),
+  })
+  ctx.y -= 12
+  if (party.cpfCnpj) {
+    ctx.currentPage.drawText(`CNPJ/CPF: ${party.cpfCnpj}`, {
+      x: 50,
+      y: ctx.y,
+      font: ctx.font,
+      size: 7,
+      color: rgb(0.4, 0.4, 0.4),
+    })
+  }
+
+  drawPageNumbers(ctx, ctx.pages.length)
+
+  const pdfBytes = await doc.save()
+  return Buffer.from(pdfBytes).toString('base64')
+}
+
 /** Generate a contract PDF and return base64 string.
- * Uses aiGeneratedBody if provided, otherwise falls back to static template text. */
+ * Uses aiGeneratedBody if provided, otherwise falls back to static template text.
+ * For CLINIC and PHARMACY types, delegates to generateDpaPdf for the full DPA document. */
 export async function generateContractPdf(params: {
   type: ContractType
   party: ContractParty
   date?: string
   aiGeneratedBody?: string
 }): Promise<string> {
+  // DPA types get the full multi-page LGPD-compliant PDF
+  if (params.type === 'CLINIC' || params.type === 'PHARMACY') {
+    return generateDpaPdf({ type: params.type, party: params.party, date: params.date })
+  }
+
   const pdfDoc = await PDFDocument.create()
   const page = pdfDoc.addPage([595, 842]) // A4
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
@@ -146,15 +506,8 @@ export async function generateContractPdf(params: {
   }
 
   const BODIES: Record<ContractType, string[]> = {
-    CLINIC: [
-      `Pelo presente instrumento, a clínica acima identificada ("Contratante") adere à`,
-      `plataforma Clinipharma ("Contratada"), concordando com os termos de uso, política`,
-      `de privacidade e regras operacionais vigentes, disponíveis em clinipharma.com.br.`,
-      ``,
-      `A Contratante autoriza a Clinipharma a intermediar pedidos de medicamentos e`,
-      `produtos farmacêuticos junto às farmácias parceiras, retendo a comissão de`,
-      `intermediação conforme tabela de preços vigente.`,
-    ],
+    CLINIC: [],
+    PHARMACY: [],
     DOCTOR: [
       `Pelo presente instrumento, o médico acima identificado ("Contratante") adere à`,
       `plataforma Clinipharma ("Contratada"), concordando com os termos de uso, política`,
@@ -163,15 +516,6 @@ export async function generateContractPdf(params: {
       `O Contratante declara possuir registro ativo no CRM e autoriza a Clinipharma a`,
       `processar pedidos de medicamentos em seu nome, vinculados à(s) clínica(s) à(s)`,
       `qual(is) está associado.`,
-    ],
-    PHARMACY: [
-      `Pelo presente instrumento, a farmácia acima identificada ("Contratada") firma`,
-      `parceria com a Clinipharma ("Contratante") para fornecimento de medicamentos e`,
-      `produtos farmacêuticos através da plataforma digital.`,
-      ``,
-      `A Contratada compromete-se a: (i) manter o catálogo de produtos atualizado;`,
-      `(ii) executar os pedidos dentro do prazo acordado; (iii) emitir NF-e para cada`,
-      `entrega; (iv) aceitar o repasse financeiro conforme tabela de comissões vigente.`,
     ],
     CONSULTANT: [
       `Pelo presente instrumento, o consultor acima identificado ("Contratado") firma`,
@@ -191,7 +535,6 @@ export async function generateContractPdf(params: {
   page.drawText(TITLES[type], { x: 50, y, font: boldFont, size: 13, color: rgb(0.1, 0.1, 0.1) })
   y -= 30
 
-  // Divider
   page.drawLine({
     start: { x: 50, y },
     end: { x: 545, y },
@@ -200,7 +543,6 @@ export async function generateContractPdf(params: {
   })
   y -= 20
 
-  // Party info
   page.drawText('PARTES:', { x: 50, y, font: boldFont, size: 10 })
   y -= 16
   page.drawText(`CONTRATANTE: ${party.name}`, { x: 50, y, font, size: 10 })
@@ -213,15 +555,15 @@ export async function generateContractPdf(params: {
     page.drawText(`E-mail: ${party.email}`, { x: 50, y, font, size: 10 })
     y -= 14
   }
-  page.drawText(`CONTRATADA: Clinipharma Ltda.`, { x: 50, y, font, size: 10 })
+  page.drawText(`CONTRATADA: ${CLINIPHARMA.razaoSocial}`, { x: 50, y, font, size: 10 })
+  y -= 14
+  page.drawText(`CNPJ: ${CLINIPHARMA.cnpj}`, { x: 50, y, font, size: 10 })
   y -= 25
 
-  // Body — prefer AI-generated personalized text, fall back to static template
   page.drawText('OBJETO E CONDIÇÕES:', { x: 50, y, font: boldFont, size: 10 })
   y -= 16
   const bodyLines = params.aiGeneratedBody
     ? params.aiGeneratedBody.split('\n').flatMap((line) => {
-        // Wrap long lines at ~90 chars to fit A4 width
         const words = line.split(' ')
         const wrapped: string[] = []
         let current = ''
@@ -241,7 +583,7 @@ export async function generateContractPdf(params: {
   for (const line of bodyLines) {
     page.drawText(line, { x: 50, y, font, size: 10, color: rgb(0.2, 0.2, 0.2) })
     y -= 15
-    if (y < 100) break // safety: avoid overflow
+    if (y < 100) break
   }
 
   y -= 20
@@ -253,8 +595,7 @@ export async function generateContractPdf(params: {
   })
   y -= 20
 
-  // Terms
-  page.drawText('Este contrato é regido pelas leis brasileiras. Foro: Comarca de São Paulo/SP.', {
+  page.drawText(`Este contrato é regido pelas leis brasileiras. Foro: ${CLINIPHARMA.foro}.`, {
     x: 50,
     y,
     font,
@@ -264,7 +605,6 @@ export async function generateContractPdf(params: {
   y -= 15
   page.drawText(`Data: ${date}`, { x: 50, y, font, size: 9, color: rgb(0.5, 0.5, 0.5) })
 
-  // Signature areas
   y -= 60
   page.drawLine({
     start: { x: 50, y },
@@ -280,7 +620,7 @@ export async function generateContractPdf(params: {
   })
   y -= 14
   page.drawText(party.name, { x: 50, y, font, size: 8 })
-  page.drawText('Clinipharma', { x: 300, y, font, size: 8 })
+  page.drawText(`${CLINIPHARMA.razaoSocial}`, { x: 300, y, font, size: 7 })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes).toString('base64')
@@ -318,12 +658,12 @@ export async function createAndSendContract(params: {
     cpf: params.party.cpfCnpj,
   })
 
-  // Optionally add Clinipharma representative
+  // Add Clinipharma representative as co-signer when provided
   if (params.clinipharmaRepEmail) {
     await addSigner({
       documentKey,
       email: params.clinipharmaRepEmail,
-      name: 'Clinipharma',
+      name: CLINIPHARMA.razaoSocial,
     })
   }
 

@@ -19,7 +19,7 @@ export const contractAutoSendJob = inngest.createFunction(
     timeouts: { finish: '3m' },
   },
   async ({ event, step }) => {
-    const { entityType, entityId, registrationId } = event.data
+    const { entityType, entityId } = event.data
 
     const entityData = await step.run('fetch-entity-data', async () => {
       const admin = createAdminClient()
@@ -86,9 +86,14 @@ export const contractAutoSendJob = inngest.createFunction(
         party: {
           name: party.name,
           email: party.email ?? '',
-          cpfCnpj: party.cnpj, // ContractParty in clicksign.ts uses cpfCnpj
+          cpfCnpj: party.cnpj,
         },
-        aiGeneratedBody: aiBody ?? undefined,
+        clinipharmaRepEmail:
+          process.env.CLINIPHARMA_REP_EMAIL ?? process.env.EMAIL_FROM?.match(/<(.+)>/)?.[1],
+        aiGeneratedBody:
+          entityType === 'DOCTOR' || entityType === 'CONSULTANT'
+            ? (aiBody ?? undefined)
+            : undefined,
       })
     })
 
@@ -97,11 +102,27 @@ export const contractAutoSendJob = inngest.createFunction(
       return { ok: false, reason: 'clicksign_error' }
     }
 
+    // Persist contract record in DB
+    await step.run('save-contract-record', async () => {
+      const admin = createAdminClient()
+      const contractType = `${entityType}_DPA` as const
+
+      await admin.from('contracts').insert({
+        type: contractType,
+        status: 'SENT',
+        entity_type: entityType,
+        entity_id: entityId,
+        clicksign_document_key: result.documentKey,
+        clicksign_request_signature_key: result.signerKey,
+        signers: [{ name: party.name, email: party.email, key: result.signerKey }],
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+    })
+
     // Notify entity user
     await step.run('notify-user', async () => {
       const admin = createAdminClient()
 
-      // Find user linked to this entity
       let userId: string | null = null
 
       if (entityType === 'CLINIC') {
@@ -113,6 +134,16 @@ export const contractAutoSendJob = inngest.createFunction(
           .limit(1)
           .maybeSingle()
         userId = member?.user_id ?? null
+      } else if (entityType === 'PHARMACY') {
+        const { data: pharmacy } = await admin
+          .from('pharmacies')
+          .select('profiles(id)')
+          .eq('id', entityId)
+          .maybeSingle()
+        const profiles = (pharmacy as Record<string, unknown> | null)?.profiles as {
+          id: string
+        } | null
+        userId = profiles?.id ?? null
       } else if (entityType === 'CONSULTANT') {
         const { data: consultant } = await admin
           .from('sales_consultants')
