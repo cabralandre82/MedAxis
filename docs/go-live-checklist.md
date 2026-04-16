@@ -231,7 +231,7 @@
    - `NUVEM_FISCAL_CLIENT_ID` = `Bu3gtVpg3cmInVWxwIZT`
    - `NUVEM_FISCAL_CLIENT_SECRET` = `eTXMxROBNLGL0asJeKXXp9I2bwP9QegZMEYZtA3Z`
    - `NUVEM_FISCAL_CNPJ` = `66279691000112`
-6. **🔴 PENDENTE:** Rodar migration `042_nfse_records.sql` no Supabase SQL Editor
+6. ✅ Migration `042_nfse_records.sql` aplicada no Supabase produção (2026-04-14)
 7. Orientar farmácias parceiras a emitir NF-e para a clínica em cada entrega
 
 ---

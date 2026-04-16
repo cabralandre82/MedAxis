@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS nfse_records_status_idx                 ON public.nfs
 -- Auto-update updated_at
 CREATE OR REPLACE TRIGGER nfse_records_updated_at
   BEFORE UPDATE ON public.nfse_records
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- RLS: only service role reads/writes (server-side only)
 ALTER TABLE public.nfse_records ENABLE ROW LEVEL SECURITY;
