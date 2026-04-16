@@ -10,7 +10,7 @@
   - ✅ **PRODUÇÃO CONFIGURADA (2026-04-14):** conta PJ criada, API Key de produção ativa no Vercel, webhook registrado em `https://clinipharma.com.br/api/payments/asaas/webhook`.
 
 - ~~Sem emissão fiscal~~ ✅ **Implementado na v6.8.0**: NFS-e via Nuvem Fiscal integrada. Emissão automática ao confirmar repasse à farmácia (comissão da plataforma) e ao consultor. Circuit breaker protege o fluxo — falha na NFS-e nunca bloqueia o repasse.
-  - **⚠️ PENDENTE CREDENCIAIS:** substituir `NUVEM_FISCAL_CLIENT_ID`, `NUVEM_FISCAL_CLIENT_SECRET` e `NUVEM_FISCAL_CNPJ` no Vercel + rodar migration `042`.
+  - **⚠️ PENDENTE:** Rodar migration `042_nfse_records.sql` no Supabase SQL Editor (credenciais já configuradas no Vercel em 2026-04-14).
 
 - **Repasse manual**: por design — admin aprova repasse antes de transferir (sem split automático).
 

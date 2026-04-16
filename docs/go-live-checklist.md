@@ -126,9 +126,9 @@
 - [ ] **🔴 AÇÃO PENDENTE:** Migrar `phone`/`crm` existentes de plaintext para `*_encrypted` (script de migração)
 - [ ] **🔴 AÇÃO PENDENTE:** DPA formal com farmácias e clínicas (advogado LGPD — pré go-live comercial)
 - [x] **Política de Privacidade em `/privacy` e Termos de Uso em `/terms`** — implementadas em v5.1.0; acesso público corrigido no middleware em v5.1.4
-- [ ] `NUVEM_FISCAL_CLIENT_ID` — **🔴 PENDENTE:** substituir `PENDING_CNPJ` pelo client_id gerado na aba Credenciais de API da Nuvem Fiscal.
-- [ ] `NUVEM_FISCAL_CLIENT_SECRET` — **🔴 PENDENTE:** substituir `PENDING_CNPJ` pelo client_secret gerado na aba Credenciais de API da Nuvem Fiscal.
-- [ ] `NUVEM_FISCAL_CNPJ` — **🔴 PENDENTE:** substituir `PENDING_CNPJ` pelo CNPJ da Clinipharma (14 dígitos, sem pontos).
+- [x] `NUVEM_FISCAL_CLIENT_ID` — ✅ configurada no Vercel (id: `Jo9YeeTl79GpYDdF`) e `.env.local` em 2026-04-14.
+- [x] `NUVEM_FISCAL_CLIENT_SECRET` — ✅ configurada no Vercel (id: `qDNONdPREYbz6AoE`) e `.env.local` em 2026-04-14.
+- [x] `NUVEM_FISCAL_CNPJ` = `66279691000112` — ✅ configurada no Vercel (id: `UzSkKepARhbh4sG1`) e `.env.local` em 2026-04-14.
 
 ### Variáveis opcionais — ✅ todas configuradas
 
@@ -227,10 +227,10 @@
 2. ✅ Conta criada na [Nuvem Fiscal](https://nuvemfiscal.com.br) (2026-04-14)
 3. ✅ Certificado A1 configurado na Nuvem Fiscal (2026-04-14)
 4. ✅ Código implementado (`lib/nuvem-fiscal.ts`, `services/nfse.ts`, migration `042`) — NFS-e emitida automaticamente ao confirmar repasse à farmácia e ao consultor (2026-04-14)
-5. **🔴 PENDENTE:** Gerar credenciais em Nuvem Fiscal → **Credenciais de API** → passar `client_id` + `client_secret` e substituir as 3 variáveis `PENDING_CNPJ` no Vercel:
-   - `NUVEM_FISCAL_CLIENT_ID` → client_id
-   - `NUVEM_FISCAL_CLIENT_SECRET` → client_secret
-   - `NUVEM_FISCAL_CNPJ` → CNPJ sem pontos (ex: `12345678000199`)
+5. ✅ Credenciais configuradas no Vercel e `.env.local` (2026-04-14):
+   - `NUVEM_FISCAL_CLIENT_ID` = `Bu3gtVpg3cmInVWxwIZT`
+   - `NUVEM_FISCAL_CLIENT_SECRET` = `eTXMxROBNLGL0asJeKXXp9I2bwP9QegZMEYZtA3Z`
+   - `NUVEM_FISCAL_CNPJ` = `66279691000112`
 6. **🔴 PENDENTE:** Rodar migration `042_nfse_records.sql` no Supabase SQL Editor
 7. Orientar farmácias parceiras a emitir NF-e para a clínica em cada entrega
 
