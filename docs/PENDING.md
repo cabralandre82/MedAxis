@@ -1,6 +1,6 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-14 | Versão da plataforma: **6.5.29** | **888 testes** | cobertura atualizada
+> Gerado em: 2026-04-16 | Versão da plataforma: **6.8.1** | **930 testes, 0 falhas** | cobertura atualizada
 >
 > **v6.5.29:** Fix silencioso no `handleOrderCancellationFinancials` — `update()` de `payments` e `transfers` não verificava o `error` retornado pelo Supabase JS client. Se o constraint de status rejeitasse o valor `CANCELED` (problema de nome de constraint no banco), a falha era engolida sem logs. Adicionado verificação explícita: se `paymentCancelErr` ou `transferCancelErr` não for null, lança exceção que propaga até o `logger.error` no `updateOrderStatus`. Diagnóstico e correção de constraint via SQL fornecidos (ver abaixo).
 >
@@ -101,15 +101,15 @@
 
 Sem estes itens a plataforma não pode operar comercialmente (jurídico, fiscal ou tecnicamente inviável).
 
-| #     | Pendência                                       | Razão                                                                           | Como resolver                                                                                       |
-| ----- | ----------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 1     | **CNPJ da empresa**                             | Pré-requisito de TUDO abaixo                                                    | Abrir empresa com contadora                                                                         |
-| 2     | **Asaas → Produção**                            | Sem CNPJ, zero pagamentos reais processados                                     | Conta Asaas PJ → API Key prod → atualizar `ASAAS_API_KEY` + `ASAAS_API_URL` no Vercel               |
-| ~~3~~ | ~~**NF-e / NFS-e**~~                            | ✅ **v6.8.0** — código pronto, aguarda credenciais Nuvem Fiscal + migration 042 |
-| 4     | **Clicksign → Produção**                        | Contratos sandbox não têm valor jurídico                                        | Conta empresarial Clicksign → token produção → atualizar `CLICKSIGN_ACCESS_TOKEN` + URL no Vercel   |
-| 5     | **DPA formal (LGPD)**                           | Obrigação legal com parceiros que processam dados                               | Elaborar com advogado LGPD — assinar com farmácias e clínicas antes do go-live                      |
-| ~~6~~ | ~~**Política de Privacidade + Termos de Uso**~~ | ~~LGPD Art. 8~~                                                                 | ✅ Implementado em `/privacy` e `/terms` — v5.1.0                                                   |
-| 7     | **Migração PII encrypted**                      | Dados existentes de `phone`/`crm` ainda em plaintext                            | Escrever e rodar script: ler plaintext → `encrypt()` → salvar em `*_encrypted` → atualizar services |
+| #     | Pendência                                       | Razão                                                                                              | Como resolver                                                                                       |
+| ----- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 1     | **CNPJ da empresa**                             | Pré-requisito de TUDO abaixo                                                                       | Abrir empresa com contadora                                                                         |
+| 2     | **Asaas → Produção**                            | Sem CNPJ, zero pagamentos reais processados                                                        | Conta Asaas PJ → API Key prod → atualizar `ASAAS_API_KEY` + `ASAAS_API_URL` no Vercel               |
+| ~~3~~ | ~~**NF-e / NFS-e**~~                            | ✅ **v6.8.0** — código pronto, aguarda credenciais Nuvem Fiscal + migration 042                    |
+| ~~4~~ | ~~**Clicksign → Produção**~~                    | ✅ **PRODUÇÃO CONFIGURADA (2026-04-16)** — pendência manual: registrar webhook no painel Clicksign | —                                                                                                   |
+| 5     | **DPA formal (LGPD)**                           | Obrigação legal com parceiros que processam dados                                                  | Elaborar com advogado LGPD — assinar com farmácias e clínicas antes do go-live                      |
+| ~~6~~ | ~~**Política de Privacidade + Termos de Uso**~~ | ~~LGPD Art. 8~~                                                                                    | ✅ Implementado em `/privacy` e `/terms` — v5.1.0                                                   |
+| 7     | **Migração PII encrypted**                      | Dados existentes de `phone`/`crm` ainda em plaintext                                               | Escrever e rodar script: ler plaintext → `encrypt()` → salvar em `*_encrypted` → atualizar services |
 
 ---
 
@@ -119,31 +119,30 @@ Não bloqueiam o primeiro cliente, mas impactam operação, conversão e complia
 
 ### Infraestrutura / DevOps
 
-| #     | Pendência                                                                          | Onde documentado                                                                                                                                      |
-| ----- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| ~~8~~ | ~~**Supabase Staging**~~                                                           | ✅ **CONCLUÍDO (2026-04-16)** — `clinipharma-staging` criado, 42 migrations aplicadas, seed executado                                                 | —   |
-| ~~9~~ | ~~**Branch `staging` → Vercel**~~                                                  | ✅ **CONCLUÍDO (2026-04-16)** — branch `staging` com deploy automático ativo. URL: `b2b-med-platform-7n3qv5itg-cabralandre-3009s-projects.vercel.app` | —   |
-| 10    | **Load testing com k6** — rodar contra staging após provisionamento                | `docs/load-testing.md`                                                                                                                                |
-| 11    | **DR simulação** — restore de backup em staging + medir RTO/RPO reais              | `docs/disaster-recovery.md`                                                                                                                           |
-| 12    | **Cloudflare WAF** — ativar OWASP Core Ruleset + rate limit 100 req/min em `/api/` | `docs/roadmap-90pts.md` A2                                                                                                                            |
-| 13    | **Inngest dashboard** — criar conta em app.inngest.com e sincronizar funções       | `docs/go-live-checklist.md`                                                                                                                           |
+| #      | Pendência                                                                                                                                                                                                     | Onde documentado                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --- |
+| ~~8~~  | ~~**Supabase Staging**~~                                                                                                                                                                                      | ✅ **CONCLUÍDO (2026-04-16)** — `clinipharma-staging` criado, 42 migrations aplicadas, seed executado | —   |
+| 9      | **Branch `staging` → Vercel auto-deploy** — configurar no painel Vercel: Settings → Git → branch `staging`                                                                                                    | `docs/staging-environment.md`                                                                         |
+| ~~10~~ | ~~**Load testing com k6**~~ — ✅ **CONCLUÍDO (2026-04-16)** — baseline executado: health p95=265ms ✅ SLO, auth rate-limit Supabase ✅ (esperado/segurança). list-orders/export aguardam dados reais em prod. | `docs/load-testing.md`                                                                                |
+| 11     | **DR simulação** — restore de backup em staging + medir RTO/RPO reais                                                                                                                                         | `docs/disaster-recovery.md`                                                                           |
+| 12     | **Cloudflare WAF** — ativar OWASP Core Ruleset + rate limit 100 req/min em `/api/`                                                                                                                            | `docs/roadmap-90pts.md` A2                                                                            |
+| ~~13~~ | ~~**Inngest Cloud**~~                                                                                                                                                                                         | ✅ **CONCLUÍDO (2026-04-16)** — keys configuradas, app synced, 7 funções registradas                  | —   |
 
 ### Notificações
 
-| #   | Pendência                                                                          | Onde documentado                    |
-| --- | ---------------------------------------------------------------------------------- | ----------------------------------- |
-| 14  | **Twilio → Produção** — test credentials não entregam SMS reais                    | `docs/go-live-checklist.md` item 4  |
-| 15  | **WhatsApp Evolution API** — adquirir número + deploy Docker + conectar QR         | `docs/infra/evolution-api-setup.md` |
-| 16  | **Clicksign webhook** — registrar `X-Clicksign-Secret` no painel Clicksign Sandbox | `docs/go-live-checklist.md`         |
+| #      | Pendência                                                                                                                                                                                                                                                                    | Onde documentado                                                                                             |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --- |
+| 14     | **Zenvia SMS + WhatsApp** — criar conta, obter token e senders, atualizar 3 vars Vercel. ⚠️ **Requer aprovação:** WhatsApp Business pode levar dias úteis (verificação Meta via Zenvia); SMS tende a ser mais rápido. Sandbox disponível imediatamente para testes internos. | `docs/go-live-checklist.md` item 3                                                                           |
+| ~~16~~ | ~~**Clicksign webhook**~~                                                                                                                                                                                                                                                    | ✅ **CONCLUÍDO** — URL registrada + HMAC SHA256 Secret configurado no painel Clicksign produção (2026-04-16) | —   |
 
 ### Observabilidade
 
-| #   | Pendência                                                                  | Onde documentado            |
-| --- | -------------------------------------------------------------------------- | --------------------------- |
-| 17  | **UptimeRobot** — configurar monitor `/api/health` a cada 1 min            | `docs/slos.md`              |
-| 18  | **Sentry alertas** — configurar regras de alerta no Sentry Dashboard       | `docs/slos.md` seção 3.1    |
-| 19  | **Vercel Log Drain** — conectar Logtail ou Axiom para persistência de logs | `docs/roadmap-90pts.md` A13 |
-| 20  | **OpenTelemetry** — integrar `@vercel/otel` para spans em queries Supabase | `docs/roadmap-90pts.md` A13 |
+| #      | Pendência                                                                  | Onde documentado                                                                                                                                                     |
+| ------ | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| ~~17~~ | ~~**UptimeRobot**~~                                                        | ✅ **CONCLUÍDO (2026-04-16)** — monitor `/api/health` ativo. Status page: https://stats.uptimerobot.com/gPxExgRxI7                                                   | —   |
+| ~~18~~ | ~~**Sentry alertas**~~                                                     | ✅ **CONCLUÍDO (2026-04-16)** — 2 alertas configurados: "High error rate" (>10x/hora) e "New issue in production". Alerta de métrica p95 requer plano pago — adiado. | —   |
+| 19     | **Vercel Log Drain** — conectar Logtail ou Axiom para persistência de logs | `docs/roadmap-90pts.md` A13                                                                                                                                          |
+| 20     | **OpenTelemetry** — integrar `@vercel/otel` para spans em queries Supabase | `docs/roadmap-90pts.md` A13                                                                                                                                          |
 
 ---
 
@@ -153,11 +152,11 @@ Sem impacto no go-live mas reduzem risco operacional e dívida técnica.
 
 ### Segurança
 
-| #   | Pendência                          | Detalhe                                                                                                                    |
-| --- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 21  | **Pentest externo**                | Contratar Tempest, Conviso ou Kondado (R$8k–20k). Obrigatório antes de clientes regulados. Ver `docs/roadmap-90pts.md` A17 |
-| 22  | **Circuit breaker para email/SMS** | Estender `lib/circuit-breaker.ts` para `lib/email`, `lib/sms.ts`, `lib/whatsapp.ts`                                        |
-| 23  | **Testes E2E contra staging real** | Rodar `BASE_URL=staging.clinipharma.com.br npx playwright test` após provisionar staging                                   |
+| #      | Pendência                              | Detalhe                                                                                                                                                             |
+| ------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| 21     | **Pentest externo**                    | Contratar Tempest, Conviso ou Kondado (R$8k–20k). Obrigatório antes de clientes regulados. Ver `docs/roadmap-90pts.md` A17                                          |
+| ~~22~~ | ~~**Circuit breaker para email/SMS**~~ | ✅ **CONCLUÍDO (2026-04-16)** — `lib/email/index.ts` (Resend, 3 falhas / 60s) e `lib/zenvia.ts` (SMS+WhatsApp, 3 falhas / 30s) protegidos com `withCircuitBreaker`. | —   |
+| 23     | **Testes E2E contra staging real**     | Rodar `BASE_URL=staging.clinipharma.com.br npx playwright test` após provisionar staging                                                                            |
 
 ### Produto / UX
 
@@ -173,10 +172,10 @@ Sem impacto no go-live mas reduzem risco operacional e dívida técnica.
 
 ### Cobertura de testes
 
-| #   | Pendência                        | Detalhe                                                                                                                                                                                                        |
-| --- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 30  | **Testes Inngest (integration)** | Jobs têm cobertura de registro e lógica de filtros em unit tests. Testar com `npx inngest-cli@latest dev` para fluxo completo.                                                                                 |
-| 31  | **Cobertura de branches**        | `branches: 73.8%` — melhorar cobertura de branches em `compliance.ts`, `rate-limit.ts` (Redis path), `services/consultants.ts`. `lib/orders/doctor-field-rules.ts` tem 100% de cobertura de branches (v6.4.1). |
+| #   | Pendência                        | Detalhe                                                                                                                                                                                                                                                          |
+| --- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 30  | **Testes Inngest (integration)** | Jobs têm cobertura de registro e lógica de filtros em unit tests. Testar com `npx inngest-cli@latest dev` para fluxo completo.                                                                                                                                   |
+| 31  | **Cobertura de branches**        | Melhorar cobertura de branches em `compliance.ts`, `rate-limit.ts` (Redis path), `services/consultants.ts`. `lib/orders/doctor-field-rules.ts` 100% branches (v6.4.1). `lib/nuvem-fiscal.ts` e `services/nfse.ts` cobertos com 18 testes unitários (2026-04-16). |
 
 ### Inteligência Artificial
 

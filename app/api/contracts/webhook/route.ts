@@ -1,24 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/db/admin'
 import { createNotification, createNotificationForRole } from '@/lib/notifications'
 
 /**
  * Clicksign webhook handler.
  * Configure in Clicksign: POST https://clinipharma.com.br/api/contracts/webhook
- * Set CLICKSIGN_WEBHOOK_SECRET env var and pass it as X-Clicksign-Secret header in Clicksign settings.
+ * Clicksign signs the raw body with HMAC SHA256 and sends:
+ *   Content-Hmac: sha256=<hex_digest>
+ * Set CLICKSIGN_WEBHOOK_SECRET to the HMAC SHA256 Secret shown in the Clicksign panel.
  */
-export async function POST(req: NextRequest) {
-  // Verify shared secret to prevent forged webhook events
+async function isValidHmac(req: NextRequest, rawBody: string): Promise<boolean> {
   const secret = process.env.CLICKSIGN_WEBHOOK_SECRET
-  if (secret) {
-    const receivedSecret =
-      req.headers.get('x-clicksign-secret') ?? req.nextUrl.searchParams.get('secret')
-    if (receivedSecret !== secret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!secret) return true // no secret configured — skip check in dev
+
+  const receivedHeader = req.headers.get('content-hmac') ?? ''
+  // Header format: "sha256=<hex>"
+  const receivedHex = receivedHeader.replace(/^sha256=/, '')
+  if (!receivedHex) return false
+
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex')
+  try {
+    return timingSafeEqual(Buffer.from(receivedHex, 'hex'), Buffer.from(expected, 'hex'))
+  } catch {
+    return false
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const rawBody = await req.text()
+
+  if (!(await isValidHmac(req, rawBody))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await req.json()
+  const body = JSON.parse(rawBody)
   const eventType: string = body.event?.name ?? ''
   const documentKey: string = body.document?.key ?? ''
 
@@ -64,17 +80,17 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  if (eventType === 'deadline_exceeded' || eventType === 'cancelled') {
+  if (eventType === 'deadline' || eventType === 'cancel') {
     await admin
       .from('contracts')
-      .update({ status: eventType === 'cancelled' ? 'CANCELLED' : 'EXPIRED' })
+      .update({ status: eventType === 'cancel' ? 'CANCELLED' : 'EXPIRED' })
       .eq('id', contract.id)
 
     if (contract.user_id) {
       await createNotification({
         userId: contract.user_id,
         type: 'GENERIC',
-        title: `Contrato ${eventType === 'cancelled' ? 'cancelado' : 'expirado'}`,
+        title: `Contrato ${eventType === 'cancel' ? 'cancelado' : 'expirado'}`,
         message: 'Seu contrato expirou ou foi cancelado. Entre em contato com a Clinipharma.',
         link: '/profile',
       })

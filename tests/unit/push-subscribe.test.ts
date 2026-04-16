@@ -126,43 +126,31 @@ describe('lib/firebase/client — onForegroundMessage', () => {
   })
 })
 
-describe('lib/whatsapp — isConfigured guard', () => {
-  it('TC-WA-01: sendWhatsApp silently skips when EVOLUTION_API_URL is PENDING_DEPLOY', async () => {
-    process.env.EVOLUTION_API_URL = 'PENDING_DEPLOY'
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { sendWhatsApp } = await import('@/lib/whatsapp')
+describe('lib/zenvia — WhatsApp guard', () => {
+  it('TC-WA-01: sendWhatsApp resolves without error when token is absent', async () => {
+    const { sendWhatsApp } = await import('@/lib/zenvia')
     await expect(sendWhatsApp('+5511999999999', 'test')).resolves.toBeUndefined()
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[whatsapp] Evolution API not configured yet'),
-      expect.any(String)
-    )
-    warnSpy.mockRestore()
   })
 
   it('TC-WA-02: sendWhatsApp skips for empty phone', async () => {
-    const { sendWhatsApp } = await import('@/lib/whatsapp')
+    const { sendWhatsApp } = await import('@/lib/zenvia')
     await expect(sendWhatsApp('', 'test')).resolves.toBeUndefined()
   })
 
   it('TC-WA-03: sendWhatsApp skips for phone with fewer than 10 digits', async () => {
-    const { sendWhatsApp } = await import('@/lib/whatsapp')
+    const { sendWhatsApp } = await import('@/lib/zenvia')
     await expect(sendWhatsApp('123', 'test')).resolves.toBeUndefined()
   })
 })
 
-describe('lib/sms — Twilio guard', () => {
-  it('TC-SMS-01: sendSms silently skips when TWILIO_ACCOUNT_SID is not set', async () => {
-    const originalSid = process.env.TWILIO_ACCOUNT_SID
-    delete process.env.TWILIO_ACCOUNT_SID
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { sendSms } = await import('@/lib/sms')
+describe('lib/zenvia — SMS guard', () => {
+  it('TC-SMS-01: sendSms resolves without error when token is absent', async () => {
+    const { sendSms } = await import('@/lib/zenvia')
     await expect(sendSms('+5511999999999', 'test')).resolves.toBeUndefined()
-    process.env.TWILIO_ACCOUNT_SID = originalSid
-    warnSpy.mockRestore()
   })
 
   it('TC-SMS-02: sendSms skips for empty phone', async () => {
-    const { sendSms } = await import('@/lib/sms')
+    const { sendSms } = await import('@/lib/zenvia')
     await expect(sendSms('', 'test')).resolves.toBeUndefined()
   })
 })

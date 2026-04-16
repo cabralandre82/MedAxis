@@ -67,8 +67,9 @@ vi.mock('@/lib/audit', () => ({
   AuditEntity: { ORDER: 'ORDER', PROFILE: 'PROFILE' },
   AuditAction: { UPDATE: 'UPDATE', CREATE: 'CREATE', STATUS_CHANGE: 'STATUS_CHANGE' },
 }))
-vi.mock('@/lib/sms', () => ({
+vi.mock('@/lib/zenvia', () => ({
   sendSms: vi.fn().mockResolvedValue(undefined),
+  sendWhatsApp: vi.fn().mockResolvedValue(undefined),
   SMS: {
     orderCreated: (c: string) => `Clinipharma: Pedido ${c} recebido`,
     orderReady: (c: string) => `Clinipharma: Pedido ${c} pronto`,
@@ -82,9 +83,6 @@ vi.mock('@/lib/sms', () => ({
     paymentConfirmed: (c: string) => `Clinipharma: ${c} pago`,
     staleOrder: (c: string, d: number) => `Clinipharma: ${c} parado ${d}d`,
   },
-}))
-vi.mock('@/lib/whatsapp', () => ({
-  sendWhatsApp: vi.fn().mockResolvedValue(undefined),
   WA: {
     orderCreated: (c: string, n: string) => `✅ Clinipharma — ${n} Pedido ${c}`,
     orderReady: (c: string) => `📦 Clinipharma — Pedido ${c} pronto`,
@@ -134,7 +132,7 @@ function makeAdminClient(tableOverrides: Record<string, unknown> = {}) {
 
 // ── SMS templates (test the real template functions inline) ───────────────────
 // We don't want to test the mock — we test the actual string-building logic.
-// Since vi.mock('@/lib/sms') replaces the module, we inline the template logic here.
+// Since vi.mock('@/lib/zenvia') replaces the module, we inline the template logic here.
 
 const SMS_IMPL = {
   orderCreated: (code: string) =>
@@ -165,7 +163,7 @@ const WA_IMPL = {
     `❌ *Clinipharma* — Olá, ${name}.\n\nInfelizmente seu cadastro não foi aprovado.\n\n*Motivo:* ${reason}`,
 }
 
-describe('SMS templates (lib/sms.ts)', () => {
+describe('SMS templates (lib/zenvia.ts)', () => {
   it('TC-GAP-09: orderCreated includes order code', () => {
     expect(SMS_IMPL.orderCreated('PED-001')).toContain('PED-001')
   })
@@ -194,7 +192,7 @@ describe('SMS templates (lib/sms.ts)', () => {
 
 // ── WhatsApp templates ────────────────────────────────────────────────────────
 
-describe('WhatsApp templates (lib/whatsapp.ts)', () => {
+describe('WhatsApp templates (lib/zenvia.ts)', () => {
   it('TC-GAP-15: orderCreated includes code and clinic name', () => {
     const msg = WA_IMPL.orderCreated('PED-001', 'Clínica Alfa')
     expect(msg).toContain('PED-001')

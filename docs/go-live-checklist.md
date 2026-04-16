@@ -42,15 +42,12 @@
 - [x] `ASAAS_API_KEY` — ✅ **produção** configurada no Vercel (id: `e8M2BKBBylCBgjf0`) e `.env.local` em 2026-04-14.
 - [x] `ASAAS_API_URL` = `https://api.asaas.com/v3` — ✅ **produção** configurada no Vercel (id: `Ha59rt0jVTvFFY64`) e `.env.local` em 2026-04-14.
 - [x] `ASAAS_WEBHOOK_SECRET` — ✅ **produção** configurada no Vercel (id: `59YdW0ce1NcycTwx`) e `.env.local` em 2026-04-14. URL do webhook no Asaas: `https://clinipharma.com.br/api/payments/asaas/webhook?accessToken=whsec_8AzQE_w7P99SIDhRCLktw3Pq4G6IcYtI7jxD3bUCbjs`
-- [x] `TWILIO_ACCOUNT_SID` (test)
-- [x] `TWILIO_AUTH_TOKEN` (test)
-- [x] `TWILIO_PHONE_NUMBER` = `+15005550006` (test number)
-- [x] `EVOLUTION_API_URL` = `PENDING_DEPLOY`
-- [x] `EVOLUTION_API_KEY` = `clinipharma_evolution_2026`
-- [x] `EVOLUTION_INSTANCE_NAME` = `clinipharma`
-- [x] `CLICKSIGN_ACCESS_TOKEN` (sandbox)
-- [x] `CLICKSIGN_API_URL` = `https://sandbox.clicksign.com/api/v1`
-- [x] `CLICKSIGN_WEBHOOK_SECRET` = `caeed4d59bc4ec8313fc3c9630e3fac0feb86026bda27a46aab055c1c1f14bb9` — ✅ configurada no Vercel. **Ação pendente:** registrar como header `X-Clicksign-Secret` no painel do Clicksign (Sandbox → Produção)
+- [x] `ZENVIA_API_TOKEN` — ⚠️ **PENDING** — criar token em app.zenvia.com → Developers → Tokens & Webhooks. Vercel id: `WCWL1B4O5e9guOOZ`
+- [x] `ZENVIA_SMS_FROM` — ⚠️ **PENDING** — shortcode ou alphanumeric sender aprovado pela Zenvia. Vercel id: `fYrN1vRC0mPF93Ne`
+- [x] `ZENVIA_WHATSAPP_FROM` — ⚠️ **PENDING** — número WhatsApp Business registrado na Zenvia (ex: `5511999999999`). Sandbox: usar keyword do painel. Vercel id: `qN5b0EH8Y0bouNYp`
+- [x] `CLICKSIGN_ACCESS_TOKEN` — ✅ **produção** configurada no Vercel (id: `eYo5lbCljCz6oKFu`) e `.env.local` em 2026-04-16
+- [x] `CLICKSIGN_API_URL` = `https://app.clicksign.com/api/v1` — ✅ **produção** configurada no Vercel (id: `9HsdfN0FtO7WGa6o`) em 2026-04-16
+- [x] `CLICKSIGN_WEBHOOK_SECRET` = HMAC SHA256 Secret gerado pelo painel Clicksign — ✅ configurada no Vercel (id: `B684F1veC2CQLq5j`) em 2026-04-16. Webhook handler atualizado para verificar header `Content-Hmac: sha256=<hex>` (padrão real da Clicksign)
 - [x] `OPENAI_API_KEY` — ✅ configurada no Vercel (Production + Preview) em 2026-04-12 via API REST com token de serviço. Necessária para todas as features de IA (v6.0.0): triagem de tickets, sentimento, OCR, contratos, recomendações.
 
 > **Como gerenciar variáveis via CLI/API (referência):**
@@ -93,12 +90,13 @@
 
 ## Background Jobs (Inngest)
 
-- [x] **Inngest v4** — `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` configuradas no Vercel (Production + Preview + Development). ✅
-- [x] **`/api/inngest` route** — serve endpoint registrado. Ativo em produção após redeploy.
+- [x] **`/api/inngest` route** — serve endpoint registrado com 7 funções: `export-orders`, `stale-orders`, `asaas-webhook`, `churn-detection`, `reorder-alerts`, `contract-auto-send`, `product-recommendations`.
 - [x] **`export-orders` job** — exportação CSV sem timeout, envia resultado por email.
 - [x] **`stale-orders` job** — alerta de pedidos parados com retry automático 3×.
 - [x] **`asaas-webhook` job** — webhook de pagamento enfileirado no Inngest, retorna 200 imediatamente.
-- [ ] Criar conta em [app.inngest.com](https://app.inngest.com) e sincronizar funções no dashboard (ação manual)
+- [x] **`INNGEST_EVENT_KEY`** — ✅ **produção configurada** (2026-04-16) no Vercel (id: `PR9V0fQTXo9EWT9A`) e `.env.local`. Key: `clinipharma`.
+- [x] **`INNGEST_SIGNING_KEY`** — ✅ **produção configurada** (2026-04-16) no Vercel (id: `oJfsDFsucA13Jreb`) e `.env.local`. Key: `default inngest key`.
+- [x] **App sincronizado** ✅ (2026-04-16) — 7 funções registradas no dashboard Inngest: `export-orders`, `stale-orders`, `asaas-webhook`, `churn-detection`, `reorder-alerts`, `contract-auto-send`, `product-recommendations`.
 
 ## Staging e Load Testing
 
@@ -165,56 +163,34 @@
 
 ### 📝 2. Clicksign — Trocar para conta de produção
 
-**Status:** sandbox ativo, assinaturas têm valor jurídico limitado  
-**O que fazer:**
+**Status:** ✅ **PRODUÇÃO CONFIGURADA** (2026-04-16) — credenciais de produção ativas no Vercel e `.env.local`  
+**Pendência restante (manual):** No painel Clicksign Produção → Configurações → Webhooks → Adicionar:
 
-1. Acessar [clicksign.com](https://clicksign.com) → criar conta empresarial
-2. Gerar access token de produção
-3. No Vercel → Environment Variables:
-   - Atualizar `CLICKSIGN_ACCESS_TOKEN` → token de produção
-   - Atualizar `CLICKSIGN_API_URL` → `https://app.clicksign.com/api/v1`
-4. No painel Clicksign → Configurações → Webhooks → Adicionar:
-   - URL: `https://clinipharma.com.br/api/contracts/webhook`
-   - Eventos: sign, deadline_exceeded, cancelled, auto_close
+- URL: `https://clinipharma.com.br/api/contracts/webhook`
+- HMAC SHA256 Secret: já gerado pelo painel e configurado na env var
+- Eventos: `sign`, `auto_close`, `deadline`, `cancel`
 
 ---
 
-### 📱 3. WhatsApp — Número dedicado + Evolution API
+### 📱 3. Zenvia — SMS + WhatsApp (provider unificado)
 
-**Status:** infraestrutura e templates prontos, sem número real  
+**Status:** código implementado (`lib/zenvia.ts`) — aguardando aprovação da conta Zenvia  
+**Por que Zenvia:** provider brasileiro, SMS e WhatsApp num único token REST, sem infraestrutura própria (sem Docker), sem complexidade de QR code. BSP oficial do Meta.
+
+> ⚠️ **Tempo de aprovação:** o cadastro da conta Zenvia é imediato e o **sandbox** funciona no mesmo dia. Para produção: SMS tende a ser aprovado em 1–2 dias úteis. WhatsApp Business requer verificação de conta Meta (CNPJ + razão social) e pode levar **5–10 dias úteis**. Inicie o processo o quanto antes.
+
 **O que fazer:**
 
-1. Adquirir chip com número dedicado para a Clinipharma (número que **não seja** usado pessoalmente)
-2. Deploy da Evolution API (requer plano pago em Render ou outro host Docker):
-   ```
-   Imagem Docker: atendai/evolution-api:v2.2.3
-   Porta: 8080
-   Variáveis obrigatórias:
-     AUTHENTICATION_TYPE=apikey
-     AUTHENTICATION_API_KEY=clinipharma_evolution_2026
-     SERVER_URL=https://<seu-dominio-evolution>
-     DATABASE_ENABLED=false
-   ```
-3. Após deploy, conectar o número WhatsApp:
-   - `GET https://<evolution-url>/instance/create` → criar instância `clinipharma`
-   - `GET https://<evolution-url>/instance/connect/clinipharma` → escanear QR code com o celular
-4. No Vercel → atualizar `EVOLUTION_API_URL` → URL pública da instância Evolution
-5. Configurar webhook da Evolution para receber confirmações:
-   - `POST /webhook/set/clinipharma` com `{ url: "https://clinipharma.com.br/api/webhooks/whatsapp" }`
-
----
-
-### 📨 4. Twilio SMS — Trocar para conta real
-
-**Status:** test credentials ativas (mensagens NÃO são entregues)  
-**O que fazer:**
-
-1. Em [console.twilio.com](https://console.twilio.com) → fazer upgrade para conta real
-2. Adquirir número brasileiro +55 (ou usar Alphanumeric Sender ID "Clinipharma" se Twilio permitir no Brasil)
-3. No Vercel → atualizar:
-   - `TWILIO_ACCOUNT_SID` → Account SID real (encontrar em console.twilio.com → Account Info)
-   - `TWILIO_AUTH_TOKEN` → Auth Token real da conta (encontrar em console.twilio.com → Account Info)
-   - `TWILIO_PHONE_NUMBER` → número adquirido no Twilio (ex: `+551140028922`)
+1. Criar conta em [app.zenvia.com](https://app.zenvia.com) (sandbox disponível imediatamente)
+2. Ir em **Developers → Tokens & Webhooks → Criar novo** → copiar o token gerado
+3. **SMS sender:** em **Canais → SMS** → obter o sender ID aprovado (alfanumérico "Clinipharma" ou número curto)
+4. **WhatsApp:** em **Canais → WhatsApp Business** → registrar número dedicado (requer verificação de conta Business)
+   - Até aprovação, usar a **keyword** do Sandbox em `app.zenvia.com/home/sandbox`
+5. No Vercel → atualizar os 3 placeholders com os valores reais:
+   - `ZENVIA_API_TOKEN` (id: `WCWL1B4O5e9guOOZ`) → token criado no passo 2
+   - `ZENVIA_SMS_FROM` (id: `fYrN1vRC0mPF93Ne`) → sender ID SMS do passo 3
+   - `ZENVIA_WHATSAPP_FROM` (id: `qN5b0EH8Y0bouNYp`) → número WhatsApp Business ou keyword sandbox
+6. Também atualizar `.env.local` com os mesmos valores para desenvolvimento local
 
 ---
 
@@ -241,7 +217,7 @@
 - [x] `npm run build` passa sem erros ✅
 - [x] `npm run lint` passa sem warnings críticos ✅
 - [x] TypeScript `tsc --noEmit` sem erros ✅
-- [x] Testes unitários passando — **644 testes, 45 suítes, cobertura 84.37% stmts / 85.51% lines** ✅
+- [x] Testes unitários passando — **930 testes, 67 suítes, 0 falhas** ✅ — inclui cobertura de `lib/nuvem-fiscal.ts`, `services/nfse.ts` e `app/api/contracts/webhook` (HMAC SHA256)
 - [x] Testes E2E Playwright configurados (`tests/e2e/`, 5 suítes, pronto para staging) ✅
 - [x] GitHub Actions CI workflow (`.github/workflows/ci.yml`) — unit + lint + TypeScript + E2E smoke ✅
 - [x] Deploy na Vercel bem-sucedido (status: Ready)
@@ -267,7 +243,7 @@
 - [x] Push notifications FCM (botão no header; VAPID key configurada ✅)
 - [x] SMS Twilio (test → produção pendente, ver item 4 acima)
 - [x] WhatsApp Evolution API (infraestrutura pronta → deploy pendente, ver item 3 acima)
-- [x] Assinatura eletrônica Clicksign (sandbox → produção pendente, ver item 2 acima)
+- [x] Assinatura eletrônica Clicksign — ✅ **produção ativa** (2026-04-16)
 - [x] Busca global (pedidos, clínicas, médicos, produtos)
 - [x] Exportação CSV/Excel com filtro de período
 - [x] Relatórios com Recharts interativo e DateRangePicker
@@ -281,7 +257,7 @@
 - [x] **Portal de rastreamento público** — `/track/[token]` sem login, timeline + ETA
 - [x] **Histórico de sessões** — log de acesso com detecção de novo dispositivo + alerta in-app
 - [x] Auto-cadastro público de clínicas/médicos com aprovação e docs
-- [x] Contratos digitais via Clicksign (sandbox → produção pendente)
+- [x] Contratos digitais via Clicksign — ✅ **produção ativa** (2026-04-16)
 
 ## Segurança
 
@@ -304,7 +280,7 @@
 - [x] **Rate limiter Redis-ready** — `lib/rate-limit.ts` detecta automaticamente `UPSTASH_REDIS_REST_URL`. ✅ Upstash ativo.
 - [x] **Upstash Redis** — `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` configuradas. Rate limit multi-instância ativo.
 - [x] **Sentry 100% operacional** — DSN + org (`cabralandre82s-org`) + project (`clinipharma`) + auth token configurados. Source maps e error tracking ativos.
-- [x] **`/api/health` endpoint** — verificação de Supabase + env vars + circuit breakers. Configurar UptimeRobot/Better Uptime para monitorar.
+- [x] **`/api/health` endpoint** — verificação de Supabase + env vars + circuit breakers. ✅ **UptimeRobot ativo (2026-04-16)** — monitor a cada 5 min. Status page público: https://stats.uptimerobot.com/gPxExgRxI7
 - [x] **Structured logging** — `lib/logger.ts` com JSON logs em todos os services críticos. `console.log/error` substituídos nas API routes.
 - [x] **SLOs documentados** — `docs/slos.md` com targets de disponibilidade, latência, error rate e alertas de negócio.
 - [x] **PWA manifest** — `public/manifest.json` ativo, shortcuts "Novo Pedido" e "Meus Pedidos".
@@ -325,9 +301,8 @@
 - [ ] Médicos vinculados às clínicas
 - [ ] Consultores de vendas cadastrados e vinculados às clínicas
 - [ ] **Asaas produção ativo** (ver item 1 acima) — obrigatório para receber pagamentos reais
-- [ ] **Clicksign produção ativo** (ver item 2 acima) — obrigatório para contratos com valor jurídico
-- [ ] **WhatsApp conectado** (ver item 3 acima) — recomendado para conversão
-- [ ] **Twilio produção** (ver item 4 acima) — recomendado para alertas críticos
+- [x] **Clicksign produção ativo** — ✅ credenciais + webhook registrado no painel Clicksign produção (HMAC SHA256, eventos: sign, auto_close, deadline, cancel). Totalmente operacional (2026-04-16).
+- [ ] **Zenvia SMS + WhatsApp** (ver item 3 acima) — criar conta, obter token e senders, atualizar 3 vars no Vercel
 - [ ] **NF-e ativo** (ver item 5 acima) — obrigatório para operação fiscal legal
 - [ ] Primeiro pedido de teste realizado de ponta a ponta em produção
 

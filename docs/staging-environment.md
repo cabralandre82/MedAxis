@@ -8,7 +8,7 @@ Ambiente isolado de staging para validar deploys antes de ir para produção, se
 
 - **Nunca testar fluxos destrutivos em produção** (ex: cancelamento de pedidos em massa, reset de dados)
 - Todo deploy vai primeiro para staging → QA → produção
-- Credenciais de staging são sempre de teste (Asaas Sandbox, Clicksign Sandbox, Twilio Test)
+- Credenciais de staging são sempre de teste (Asaas Sandbox, Clicksign Sandbox, Zenvia Sandbox)
 
 ## Setup (a fazer)
 
@@ -36,15 +36,19 @@ main ─────────────────────────
 
 ### 4. Variáveis de Ambiente de Staging
 
-| Variável                    | Valor de Staging                     |
-| --------------------------- | ------------------------------------ |
-| `SUPABASE_URL`              | URL do projeto staging               |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave do projeto staging             |
-| `ASAAS_API_KEY`             | Chave de **Sandbox** Asaas           |
-| `ASAAS_BASE_URL`            | `https://sandbox.asaas.com/api/v3`   |
-| `CLICKSIGN_TOKEN`           | Token de **Sandbox** Clicksign       |
-| `CLICKSIGN_BASE_URL`        | `https://sandbox.clicksign.com`      |
-| `NEXT_PUBLIC_APP_URL`       | `https://staging.clinipharma.com.br` |
+| Variável                        | Valor de Staging                       |
+| ------------------------------- | -------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | URL do projeto staging                 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave anon do projeto staging          |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Chave service role do projeto staging  |
+| `ASAAS_API_KEY`                 | Chave de **Sandbox** Asaas             |
+| `ASAAS_API_URL`                 | `https://sandbox.asaas.com/api/v3`     |
+| `CLICKSIGN_ACCESS_TOKEN`        | Token de **Sandbox** Clicksign         |
+| `CLICKSIGN_API_URL`             | `https://sandbox.clicksign.com/api/v1` |
+| `ZENVIA_API_TOKEN`              | Token **Sandbox** Zenvia               |
+| `ZENVIA_SMS_FROM`               | Keyword sandbox Zenvia                 |
+| `ZENVIA_WHATSAPP_FROM`          | Keyword sandbox Zenvia                 |
+| `NEXT_PUBLIC_APP_URL`           | `https://staging.clinipharma.com.br`   |
 
 ### 5. Dados de Teste (Seed)
 
@@ -107,19 +111,35 @@ git push origin staging
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave anon do projeto **staging**                          |
 | `ASAAS_API_KEY`                 | Chave **Sandbox** Asaas                                    |
 | `ASAAS_BASE_URL`                | `https://sandbox.asaas.com/api/v3`                         |
-| `CLICKSIGN_TOKEN`               | Token **Sandbox** Clicksign                                |
+| `CLICKSIGN_ACCESS_TOKEN`        | Token **Sandbox** Clicksign                                |
+| `CLICKSIGN_API_URL`             | `https://sandbox.clicksign.com/api/v1`                     |
+| `ZENVIA_API_TOKEN`              | Token **Sandbox** Zenvia                                   |
+| `ZENVIA_SMS_FROM`               | Keyword sandbox Zenvia                                     |
+| `ZENVIA_WHATSAPP_FROM`          | Keyword sandbox Zenvia                                     |
 | `NEXT_PUBLIC_APP_URL`           | `https://staging.clinipharma.com.br` ou URL preview Vercel |
 
 > As demais variáveis (Sentry, Resend, Inngest, Firebase) podem ser reutilizadas do ambiente de produção/preview atual.
 
+## Credenciais de Staging
+
+| Campo                       | Valor                                                                                                                                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Supabase projeto**        | `clinipharma-staging`                                                                                                                                                                                                         |
+| **Região**                  | South America (São Paulo) — `sa-east-1`                                                                                                                                                                                       |
+| **Database password**       | `dtLOMU2rOWVkcvq9`                                                                                                                                                                                                            |
+| **Project URL**             | `https://ghjexiyrqdtqhkolsyaw.supabase.co`                                                                                                                                                                                    |
+| **Anon key**                | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoamV4aXlycWR0cWhrb2xzeWF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNzU2ODEsImV4cCI6MjA5MTk1MTY4MX0.MmxwF0GwZw-K3Dq72d4TT37J39fBk8ePQt-YBLYfxA8`            |
+| **Service role key**        | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoamV4aXlycWR0cWhrb2xzeWF3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjM3NTY4MSwiZXhwIjoyMDkxOTUxNjgxfQ.uW9AUe7yIqI6nbVvkd2Ytyl95FHzQx950sqBW75eyY4` |
+| **Connection string (URI)** | `postgresql://postgres:dtLOMU2rOWVkcvq9@db.ghjexiyrqdtqhkolsyaw.supabase.co:5432/postgres`                                                                                                                                    |
+
 ## Status
 
-- [ ] Projeto Supabase `clinipharma-staging` criado
-- [ ] Migrations `001–022` aplicadas em staging
-- [ ] Seed de dados de teste executado
-- [ ] Branch `staging` criada no repositório
-- [ ] Deploy automático branch `staging` configurado no Vercel
-- [ ] Variáveis de ambiente de staging adicionadas no Vercel (scope Preview)
+- [x] Projeto Supabase `clinipharma-staging` criado ✅ (2026-04-16) — `ghjexiyrqdtqhkolsyaw`
+- [x] Migrations `001–042` aplicadas em staging ✅ (2026-04-16)
+- [x] Seed de dados de teste executado ✅ (2026-04-16) — 5 usuários criados (senha: `Clinipharma@2026`)
+- [x] Branch `staging` criada no repositório ✅ (2026-04-16)
+- [x] Variáveis de ambiente de staging adicionadas no Vercel (scope Preview, branch: staging) ✅ (2026-04-16)
+- [ ] Deploy automático branch `staging` configurado no Vercel (ação manual — ver abaixo)
 - [ ] Domínio `staging.clinipharma.com.br` configurado (opcional)
 
 ## Política de Promção

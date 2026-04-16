@@ -4,8 +4,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { Resend } from 'resend'
 import { logger } from '@/lib/logger'
 import { inngest } from '@/lib/inngest'
-import { sendSms, SMS } from '@/lib/sms'
-import { sendWhatsApp, WA } from '@/lib/whatsapp'
+import { sendSms, SMS, sendWhatsApp, WA } from '@/lib/zenvia'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const APP_URL = 'https://clinipharma.com.br'
