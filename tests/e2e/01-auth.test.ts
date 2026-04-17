@@ -25,8 +25,8 @@ test.describe('Authentication', () => {
     await login.goto()
     await login.login('invalid@example.com', 'wrong-password')
 
-    // Should show error message
-    await expect(page.getByText(/credenciais|inválido|senha|usuário/i)).toBeVisible({
+    // Should show error message — use .first() to avoid strict mode violation
+    await expect(page.getByText(/credenciais|inválido|senha|usuário/i).first()).toBeVisible({
       timeout: 8_000,
     })
     // Should not redirect away from login
@@ -71,9 +71,14 @@ test.describe('Authentication', () => {
     const login = new LoginPage(page)
     await login.goto()
 
-    const resetLink = page.getByRole('link', { name: /esqueceu|redefinir|recuperar/i })
-    await expect(resetLink).toBeVisible()
+    // Try multiple possible link texts/hrefs for the forgot password link
+    const resetLink = page
+      .getByRole('link', { name: /esqueceu|redefinir|recuperar|senha/i })
+      .or(page.locator('a[href*="forgot"], a[href*="recover"], a[href*="reset"]'))
+      .first()
+
+    await expect(resetLink).toBeVisible({ timeout: 8_000 })
     await resetLink.click()
-    await expect(page).toHaveURL(/recover|reset|forgot/, { timeout: 8_000 })
+    await expect(page).toHaveURL(/recover|reset|forgot|password/, { timeout: 8_000 })
   })
 })

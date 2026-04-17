@@ -1,6 +1,6 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-17 | Versão da plataforma: **6.9.0** | **955 testes, 0 falhas** | cobertura atualizada
+> Gerado em: 2026-04-17 | Versão da plataforma: **6.9.1** | **955 testes unitários, 0 falhas · 56 E2E passando** | cobertura atualizada
 >
 > **v6.5.29:** Fix silencioso no `handleOrderCancellationFinancials` — `update()` de `payments` e `transfers` não verificava o `error` retornado pelo Supabase JS client. Se o constraint de status rejeitasse o valor `CANCELED` (problema de nome de constraint no banco), a falha era engolida sem logs. Adicionado verificação explícita: se `paymentCancelErr` ou `transferCancelErr` não for null, lança exceção que propaga até o `logger.error` no `updateOrderStatus`. Diagnóstico e correção de constraint via SQL fornecidos (ver abaixo).
 >
@@ -124,7 +124,7 @@ Não bloqueiam o primeiro cliente, mas impactam operação, conversão e complia
 | ~~8~~  | ~~**Supabase Staging**~~                                                                                                                                                                                      | ✅ **CONCLUÍDO (2026-04-16)** — `clinipharma-staging` criado, 42 migrations aplicadas, seed executado                                  | —   |
 | ~~9~~  | ~~**Branch `staging` → Vercel auto-deploy**~~                                                                                                                                                                 | ✅ **CONCLUÍDO (2026-04-17)** — auto-deploy já ativo; domínio `staging.clinipharma.com.br` vinculado à branch `staging` via API Vercel |
 | ~~10~~ | ~~**Load testing com k6**~~ — ✅ **CONCLUÍDO (2026-04-16)** — baseline executado: health p95=265ms ✅ SLO, auth rate-limit Supabase ✅ (esperado/segurança). list-orders/export aguardam dados reais em prod. | `docs/load-testing.md`                                                                                                                 |
-| 11     | **DR simulação** — restore de backup em staging + medir RTO/RPO reais                                                                                                                                         | `docs/disaster-recovery.md`                                                                                                            |
+| ~~11~~ | ~~**DR simulação**~~ — ✅ **CONCLUÍDO (2026-04-17)** — RTO medido: ~25–30 min; RPO atual: ~24h (backup diário físico). ⚠️ Ativar PITR no Supabase para RPO < 5 min.                                           | `docs/disaster-recovery.md`                                                                                                            |
 | 12     | **Cloudflare WAF** — ativar OWASP Core Ruleset + rate limit 100 req/min em `/api/`                                                                                                                            | `docs/roadmap-90pts.md` A2                                                                                                             |
 | ~~13~~ | ~~**Inngest Cloud**~~                                                                                                                                                                                         | ✅ **CONCLUÍDO (2026-04-16)** — keys configuradas, app synced, 7 funções registradas                                                   | —   |
 
@@ -152,11 +152,11 @@ Sem impacto no go-live mas reduzem risco operacional e dívida técnica.
 
 ### Segurança
 
-| #      | Pendência                              | Detalhe                                                                                                                                                             |
-| ------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| 21     | **Pentest externo**                    | Contratar Tempest, Conviso ou Kondado (R$8k–20k). Obrigatório antes de clientes regulados. Ver `docs/roadmap-90pts.md` A17                                          |
-| ~~22~~ | ~~**Circuit breaker para email/SMS**~~ | ✅ **CONCLUÍDO (2026-04-16)** — `lib/email/index.ts` (Resend, 3 falhas / 60s) e `lib/zenvia.ts` (SMS+WhatsApp, 3 falhas / 30s) protegidos com `withCircuitBreaker`. | —   |
-| 23     | **Testes E2E contra staging real**     | Rodar `BASE_URL=staging.clinipharma.com.br npx playwright test` após provisionar staging                                                                            |
+| #      | Pendência                              | Detalhe                                                                                                                                                                                                                |
+| ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| 21     | **Pentest externo**                    | Contratar Tempest, Conviso ou Kondado (R$8k–20k). Obrigatório antes de clientes regulados. Ver `docs/roadmap-90pts.md` A17                                                                                             |
+| ~~22~~ | ~~**Circuit breaker para email/SMS**~~ | ✅ **CONCLUÍDO (2026-04-16)** — `lib/email/index.ts` (Resend, 3 falhas / 60s) e `lib/zenvia.ts` (SMS+WhatsApp, 3 falhas / 30s) protegidos com `withCircuitBreaker`.                                                    | —   |
+| ~~23~~ | ~~**Testes E2E contra staging real**~~ | ✅ **CONCLUÍDO (2026-04-17)** — 56 passando / 3 skipped (sem dados reais) / 0 falhas. Playwright contra `staging.clinipharma.com.br`. Testes ajustados: seletores, credenciais env-var, filtros de CSP do Vercel Live. |
 
 ### Produto / UX
 

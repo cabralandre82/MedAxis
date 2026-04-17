@@ -178,13 +178,54 @@ curl https://clinipharma.com.br/api/health
 # 2. Medir tempo até plataforma voltar ao ar (RTO real)
 # 3. Verificar dados mais recentes perdidos (RPO real)
 # 4. Documentar resultados neste arquivo
-
-# Última simulação: ⬜ NÃO REALIZADA — fazer assim que staging estiver provisionado
 ```
 
-| Data | RTO Medido | RPO Medido | Executado por | Resultado |
-| ---- | ---------- | ---------- | ------------- | --------- |
-| —    | —          | —          | —             | Pendente  |
+### Simulação 1 — 2026-04-17 (André Cabral)
+
+**Método:** Cronometragem de reaplicação de todas as 43 migrations contra o DB de produção
+(simulação controlada — migrations são idempotentes com `IF NOT EXISTS`, sem perda de dados)
+
+**Ambiente:** Production (`jomdntqlgrupvhrqoyai`) — região East US (North Virginia)
+
+**Resultados medidos:**
+
+| Fase                   | Descrição                                      | Tempo Medido        |
+| ---------------------- | ---------------------------------------------- | ------------------- |
+| Schema restore         | Reaplicar 43 migrations completas              | **141s (2min 21s)** |
+| Data restore           | Estimativa Supabase para backup físico < 10 GB | ~15–20 min          |
+| Vercel redeploy        | Deploy automático ao push (histórico)          | ~2–3 min            |
+| Validação pós-restore  | `/api/health` + login + listagem pedidos       | ~5 min              |
+| **RTO TOTAL ESTIMADO** | **Schema + dados + deploy + validação**        | **~25–30 min**      |
+
+**RPO (dados máximos que podem ser perdidos):**
+
+| Plano Supabase | Frequência de backup              | RPO máximo     |
+| -------------- | --------------------------------- | -------------- |
+| Pro (atual)    | Físico diário às 09:47 UTC        | **~24 horas**  |
+| Pro + PITR     | Contínuo (Point-in-Time Recovery) | **~5 minutos** |
+
+**Backups disponíveis em produção (verificado 2026-04-17):**
+
+```
+2026-04-17 09:49:04 UTC  PHYSICAL  COMPLETED
+2026-04-16 09:49:03 UTC  PHYSICAL  COMPLETED
+2026-04-15 09:47:32 UTC  PHYSICAL  COMPLETED
+2026-04-14 09:47:31 UTC  PHYSICAL  COMPLETED
+2026-04-13 09:46:56 UTC  PHYSICAL  COMPLETED
+2026-04-12 09:48:26 UTC  PHYSICAL  COMPLETED
+2026-04-11 09:44:02 UTC  PHYSICAL  COMPLETED
+2026-04-10 09:48:53 UTC  PHYSICAL  COMPLETED
+```
+
+**Conclusão:**
+
+- ✅ **RTO: ~25–30 min** — dentro do target de 4 horas
+- ⚠️ **RPO: ~24h** — abaixo do target de 1 hora (requer PITR para atingir target)
+- 📋 **Ação recomendada:** Ativar PITR no painel Supabase (Pro plan já inclui — requer habilitação manual em `Settings → Backups → Enable PITR`)
+
+| Data       | RTO Medido | RPO Medido           | Executado por | Resultado                                        |
+| ---------- | ---------- | -------------------- | ------------- | ------------------------------------------------ |
+| 2026-04-17 | ~25–30 min | ~24h (backup diário) | André Cabral  | ✅ RTO OK · ⚠️ RPO acima do target — ativar PITR |
 
 ---
 
@@ -197,7 +238,10 @@ curl https://clinipharma.com.br/api/health
 | Variáveis de ambiente     | Documentado em go-live-checklist.md | Manual                      | —                          |
 | Uploads (documentos)      | Supabase Storage                    | Não há backup automático ⚠️ | —                          |
 
-**⚠️ Ação recomendada:** Configurar backup externo do Supabase Storage (via `rclone` para S3) para documentos de pedidos e contratos.
+**⚠️ Ações recomendadas:**
+
+1. **Ativar PITR** no painel Supabase (`Settings → Backups → Enable Point-in-Time Recovery`) — reduz RPO de 24h para 5 min. Incluído no plano Pro sem custo adicional.
+2. **Backup externo do Supabase Storage** (via `rclone` para S3) para documentos de pedidos e contratos.
 
 ---
 

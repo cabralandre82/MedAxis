@@ -28,9 +28,15 @@ test.describe('Smoke: public routes', () => {
       // No React crashes (Next.js error overlay)
       await expect(page.locator('#nextjs-portal, [data-nextjs-dialog]')).not.toBeVisible()
 
-      // Filter out known 3rd-party noise
+      // Filter out known 3rd-party noise (Vercel Live feedback on preview, browser extensions)
       const criticalErrors = errors.filter(
-        (e) => !e.includes('chrome-extension') && !e.includes('favicon')
+        (e) =>
+          !e.includes('chrome-extension') &&
+          !e.includes('favicon') &&
+          !e.includes('vercel.live') && // Vercel Live feedback toolbar (preview only)
+          !e.includes('vercel-scripts') &&
+          !e.includes('_next-live') &&
+          !e.includes('Content Security Policy') // CSP blocks from Vercel injected preview scripts
       )
       expect(criticalErrors).toHaveLength(0)
     })
@@ -71,7 +77,11 @@ test.describe('Smoke: authenticated routes', () => {
         !e.includes('favicon') &&
         !e.includes('chrome-extension') &&
         !e.includes('gtm') &&
-        !e.includes('analytics')
+        !e.includes('analytics') &&
+        !e.includes('vercel.live') && // Vercel Live feedback toolbar (preview only)
+        !e.includes('_next-live') &&
+        !e.includes('vercel-scripts') &&
+        !e.includes('Content Security Policy') // CSP blocks from Vercel injected preview scripts
     )
     expect(meaningful).toHaveLength(0)
   })

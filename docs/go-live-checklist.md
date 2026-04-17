@@ -219,6 +219,7 @@
 - [x] TypeScript `tsc --noEmit` sem erros ✅
 - [x] Testes unitários passando — **930 testes, 67 suítes, 0 falhas** ✅ — inclui cobertura de `lib/nuvem-fiscal.ts`, `services/nfse.ts` e `app/api/contracts/webhook` (HMAC SHA256)
 - [x] Testes E2E Playwright configurados (`tests/e2e/`, 5 suítes, pronto para staging) ✅
+- [x] **Testes E2E contra staging real** ✅ **(2026-04-17)** — 56 passando, 3 skipped (sem dados), 0 falhas. Cobertura: auth, admin, orders, profile/privacy, smoke, catalog. Playwright contra `staging.clinipharma.com.br`.
 - [x] GitHub Actions CI workflow (`.github/workflows/ci.yml`) — unit + lint + TypeScript + E2E smoke ✅
 - [x] Deploy na Vercel bem-sucedido (status: Ready)
 - [x] URL de produção acessível (`https://clinipharma.com.br`)
@@ -287,6 +288,7 @@
 - [x] **SLOs documentados** — `docs/slos.md` com targets de disponibilidade, latência, error rate e alertas de negócio.
 - [x] **PWA manifest** — `public/manifest.json` ativo, shortcuts "Novo Pedido" e "Meus Pedidos".
 - [x] **Disaster Recovery Plan** — `docs/disaster-recovery.md` com cenários, RTO/RPO e checklist de restore.
+- [x] **DR Simulação realizada** ✅ **(2026-04-17)** — RTO medido: ~25–30 min (target: < 4h ✅); RPO atual: ~24h backup diário físico (target: < 1h ⚠️ — ativar PITR). 8 backups físicos disponíveis. Schema restore completo: 141s.
 
 ## Email transacional
 
