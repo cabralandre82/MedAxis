@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
 import { doctorSchema, type DoctorFormData } from '@/lib/validators'
+import { encrypt } from '@/lib/crypto'
 import type { EntityStatus } from '@/types'
 
 export async function createDoctor(
@@ -18,7 +19,11 @@ export async function createDoctor(
     const adminClient = createAdminClient()
     const { data: doctor, error } = await adminClient
       .from('doctors')
-      .insert({ ...parsed.data, status: 'ACTIVE' })
+      .insert({
+        ...parsed.data,
+        crm_encrypted: encrypt(parsed.data.crm ?? null),
+        status: 'ACTIVE',
+      })
       .select('id')
       .single()
 
@@ -75,7 +80,11 @@ export async function updateDoctor(
 
     const { error } = await adminClient
       .from('doctors')
-      .update({ ...data, updated_at: new Date().toISOString() })
+      .update({
+        ...data,
+        ...(data.crm !== undefined ? { crm_encrypted: encrypt(data.crm ?? null) } : {}),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', id)
 
     if (error) return { error: 'Erro ao atualizar médico' }

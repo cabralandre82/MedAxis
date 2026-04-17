@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
+// ── ENCRYPTION_KEY — required by lib/crypto for PII encrypt/decrypt ──────────
+// Use vi.stubEnv so tests that call vi.unstubAllEnvs() can clear it cleanly.
+vi.stubEnv('ENCRYPTION_KEY', 'a'.repeat(64))
+
 // ── server-only: must be mocked first ────────────────────────────────────────
 vi.mock('server-only', () => ({}))
 

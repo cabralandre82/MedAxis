@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { Resend } from 'resend'
 import { registrationLimiter } from '@/lib/rate-limit'
+import { encrypt } from '@/lib/crypto'
 import { logger } from '@/lib/logger'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -106,7 +107,13 @@ export async function POST(req: NextRequest) {
     // 6. Create registration request
     const { data: request, error: reqError } = await admin
       .from('registration_requests')
-      .insert({ type, form_data: formData, user_id: userId, status: registrationStatus })
+      .insert({
+        type,
+        form_data: formData,
+        form_data_encrypted: encrypt(formDataRaw),
+        user_id: userId,
+        status: registrationStatus,
+      })
       .select('id')
       .single()
 

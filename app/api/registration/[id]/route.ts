@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import { logger } from '@/lib/logger'
 import { inngest } from '@/lib/inngest'
 import { sendSms, SMS, sendWhatsApp, WA } from '@/lib/zenvia'
+import { encrypt } from '@/lib/crypto'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const APP_URL = 'https://clinipharma.com.br'
@@ -145,6 +146,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           .insert({
             full_name: fullName,
             crm: formData.crm,
+            crm_encrypted: encrypt(formData.crm ?? null),
             crm_state: formData.crm_state,
             specialty: formData.specialty ?? null,
             email: formData.email,

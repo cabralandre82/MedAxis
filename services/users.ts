@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { requireRole } from '@/lib/rbac'
 import { revokeAllUserTokens } from '@/lib/token-revocation'
+import { encrypt } from '@/lib/crypto'
 import { z } from 'zod'
 import { Resend } from 'resend'
 import type { UserRole } from '@/types'
@@ -229,11 +230,13 @@ export async function updateUserProfile(
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
 
     const adminClient = createAdminClient()
+    const phone = parsed.data.phone ?? null
     const { error } = await adminClient
       .from('profiles')
       .update({
         full_name: parsed.data.full_name,
-        phone: parsed.data.phone ?? null,
+        phone,
+        phone_encrypted: encrypt(phone),
         updated_at: new Date().toISOString(),
       })
       .eq('id', userId)
@@ -246,7 +249,7 @@ export async function updateUserProfile(
       entityType: AuditEntity.PROFILE,
       entityId: userId,
       action: AuditAction.UPDATE,
-      newValues: parsed.data as Record<string, unknown>,
+      newValues: { full_name: parsed.data.full_name } as Record<string, unknown>,
     })
 
     revalidatePath('/users')
@@ -393,11 +396,13 @@ export async function updateOwnProfile(
     if (!user || user.id !== userId) return { error: 'Sem permissão' }
 
     const adminClient = createAdminClient()
+    const phone = data.phone ?? null
     const { error } = await adminClient
       .from('profiles')
       .update({
         full_name: data.full_name,
-        phone: data.phone ?? null,
+        phone,
+        phone_encrypted: encrypt(phone),
         updated_at: new Date().toISOString(),
       })
       .eq('id', userId)
