@@ -10,7 +10,7 @@ Ambiente isolado de staging para validar deploys antes de ir para produção, se
 - Todo deploy vai primeiro para staging → QA → produção
 - Credenciais de staging são sempre de teste (Asaas Sandbox, Clicksign Sandbox, Zenvia Sandbox)
 
-## Setup (a fazer)
+## Setup
 
 ### 1. Supabase — Projeto de Staging
 
@@ -19,12 +19,11 @@ Ambiente isolado de staging para validar deploys antes de ir para produção, se
 3. Rodar seed de dados de teste: `npx tsx scripts/setup-production.ts`
 4. Configurar variáveis de ambiente de staging (ver abaixo)
 
-### 2. Vercel — Environment de Staging
+### 2. Vercel — Environment de Staging ✅ CONCLUÍDO (2026-04-17)
 
-1. No painel Vercel → Settings → Environment Variables
-2. Adicionar variáveis com escopo **Preview** (não Production)
-3. Ou criar projeto Vercel separado `clinipharma-staging`
-4. Configurar deploy automático do branch `staging` → staging environment
+- Auto-deploy da branch `staging` já ativo — qualquer push dispara um deploy automaticamente
+- Domínio `staging.clinipharma.com.br` vinculado à branch `staging` via API Vercel (`gitBranch: "staging"`, status: `verified`)
+- Cada push para `staging` atualiza automaticamente `https://staging.clinipharma.com.br`
 
 ### 3. Branch Strategy
 
