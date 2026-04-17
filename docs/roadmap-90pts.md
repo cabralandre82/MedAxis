@@ -218,10 +218,10 @@
 - [x] `lib/logger.ts`: `logger.info/warn/error/debug` + `logger.child()` com campos `requestId`, `userId`, `action`, `durationMs` — output JSON estruturado
 - [x] Substituir `console.error` por `logger.error` em services críticos (orders, payments, consultants, users, settings)
 - [x] `X-Request-ID` já propagado em todos os responses via middleware
-- [ ] Integrar `@vercel/otel` para OpenTelemetry (spans em queries Supabase e APIs externas)
-- [ ] Logtail ou Axiom como destino de logs via Vercel Log Drain (configuração manual no painel Vercel)
+- [x] **`@vercel/otel` instalado (2026-04-14)** — `instrumentation.ts` auto-instrumenta todos os `fetch()` outgoing (Supabase, OpenAI, Clicksign, Asaas, Zenvia) e rotas HTTP de entrada; `lib/tracing.ts` com `withSpan`/`withDbSpan`/`withHttpSpan`; spans em `order.create`, `order.updateStatus`, health check DB
+- [x] **Log persistente (2026-04-14)** — Vercel Log Drain requer plano Pro pago; solução alternativa gratuita: `logger.error/warn` em produção persiste fire-and-forget em `server_logs` (Supabase, migration 043, 90-day retention); cron semanal de purge; página admin `/server-logs` com filtros
 
-**Esforço:** 3 dias | **Status:** ✅ logger implementado (2026-04-08) | ⬜ Log Drain + OTel pendente
+**Esforço:** 3 dias | **Status:** ✅ **CONCLUÍDO (2026-04-14)** — OTel + logs persistentes implementados. 955 testes passando.
 
 ---
 

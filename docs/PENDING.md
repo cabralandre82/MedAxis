@@ -1,6 +1,6 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-17 | Versão da plataforma: **6.9.0** | **930 testes, 0 falhas** | cobertura atualizada
+> Gerado em: 2026-04-17 | Versão da plataforma: **6.9.0** | **955 testes, 0 falhas** | cobertura atualizada
 >
 > **v6.5.29:** Fix silencioso no `handleOrderCancellationFinancials` — `update()` de `payments` e `transfers` não verificava o `error` retornado pelo Supabase JS client. Se o constraint de status rejeitasse o valor `CANCELED` (problema de nome de constraint no banco), a falha era engolida sem logs. Adicionado verificação explícita: se `paymentCancelErr` ou `transferCancelErr` não for null, lança exceção que propaga até o `logger.error` no `updateOrderStatus`. Diagnóstico e correção de constraint via SQL fornecidos (ver abaixo).
 >
@@ -109,7 +109,7 @@ Sem estes itens a plataforma não pode operar comercialmente (jurídico, fiscal 
 | ~~4~~ | ~~**Clicksign → Produção**~~                    | ✅ **PRODUÇÃO CONFIGURADA (2026-04-16)** — pendência manual: registrar webhook no painel Clicksign                                                                                                                          | —                                                                              |
 | 5     | **DPA formal (LGPD)**                           | Obrigação legal com parceiros que processam dados                                                                                                                                                                           | Elaborar com advogado LGPD — assinar com farmácias e clínicas antes do go-live |
 | ~~6~~ | ~~**Política de Privacidade + Termos de Uso**~~ | ~~LGPD Art. 8~~                                                                                                                                                                                                             | ✅ Implementado em `/privacy` e `/terms` — v5.1.0                              |
-| ~~7~~ | ~~**Migração PII encrypted**~~                  | ✅ **CONCLUÍDO (2026-04-17)** — `ENCRYPTION_KEY` AES-256-GCM configurada no Vercel; dual-write em `phone_encrypted`, `crm_encrypted`, `form_data_encrypted`; 6 CRMs e 1 form_data migrados em produção; 930 testes passando | —                                                                              |
+| ~~7~~ | ~~**Migração PII encrypted**~~                  | ✅ **CONCLUÍDO (2026-04-17)** — `ENCRYPTION_KEY` AES-256-GCM configurada no Vercel; dual-write em `phone_encrypted`, `crm_encrypted`, `form_data_encrypted`; 6 CRMs e 1 form_data migrados em produção; 955 testes passando | —                                                                              |
 
 ---
 

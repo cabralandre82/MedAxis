@@ -5,10 +5,12 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'debug').mockImplementation(() => {})
+  vi.unstubAllEnvs()
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('logger', () => {
@@ -81,6 +83,115 @@ describe('logger', () => {
     logger.debug('verbose detail')
     expect(console.debug).not.toHaveBeenCalled()
     vi.unstubAllEnvs()
+  })
+
+  describe('persistLog (Supabase fire-and-forget)', () => {
+    it('does NOT call fetch in non-production environment', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 201 }))
+      vi.stubEnv('NODE_ENV', 'test')
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://x.supabase.co')
+      vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-key')
+
+      const { logger } = await import('@/lib/logger')
+      logger.error('should not persist outside production')
+
+      // Allow microtasks to flush
+      await new Promise((r) => setTimeout(r, 10))
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('calls fetch with correct Supabase REST endpoint in production', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 201 }))
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://proj.supabase.co')
+      vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'svc-key')
+
+      const { logger } = await import('@/lib/logger')
+      logger.error('prod error message', { path: '/api/orders' })
+
+      await new Promise((r) => setTimeout(r, 20))
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://proj.supabase.co/rest/v1/server_logs',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            apikey: 'svc-key',
+            'Content-Type': 'application/json',
+          }),
+        })
+      )
+
+      const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string)
+      expect(body.level).toBe('error')
+      expect(body.message).toBe('prod error message')
+      expect(body.route).toBe('/api/orders')
+    })
+
+    it('also persists warn level in production', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 201 }))
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://proj.supabase.co')
+      vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'svc-key')
+
+      const { logger } = await import('@/lib/logger')
+      logger.warn('high memory usage')
+
+      await new Promise((r) => setTimeout(r, 20))
+      expect(fetchSpy).toHaveBeenCalledOnce()
+      const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string)
+      expect(body.level).toBe('warn')
+    })
+
+    it('does NOT persist info or debug levels in production', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 201 }))
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://proj.supabase.co')
+      vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'svc-key')
+
+      const { logger } = await import('@/lib/logger')
+      logger.info('routine info')
+      logger.debug('verbose debug')
+
+      await new Promise((r) => setTimeout(r, 20))
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('silently ignores fetch failures (never throws)', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network error'))
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://proj.supabase.co')
+      vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'svc-key')
+
+      const { logger } = await import('@/lib/logger')
+      // Must not throw
+      expect(() => logger.error('fetch will fail')).not.toThrow()
+      await new Promise((r) => setTimeout(r, 20))
+    })
+
+    it('skips fetch when env vars are missing', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 201 }))
+      vi.stubEnv('NODE_ENV', 'production')
+      // Explicitly clear Supabase env vars (may be set from .env.local)
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
+      vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
+
+      const { logger } = await import('@/lib/logger')
+      logger.error('missing env vars')
+
+      await new Promise((r) => setTimeout(r, 20))
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
   })
 
   describe('logger.child', () => {

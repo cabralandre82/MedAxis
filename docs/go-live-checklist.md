@@ -282,6 +282,8 @@
 - [x] **Sentry 100% operacional** — DSN + org (`cabralandre82s-org`) + project (`clinipharma`) + auth token configurados. Source maps e error tracking ativos.
 - [x] **`/api/health` endpoint** — verificação de Supabase + env vars + circuit breakers. ✅ **UptimeRobot ativo (2026-04-16)** — monitor a cada 5 min. Status page público: https://stats.uptimerobot.com/gPxExgRxI7
 - [x] **Structured logging** — `lib/logger.ts` com JSON logs em todos os services críticos. `console.log/error` substituídos nas API routes.
+- [x] **OpenTelemetry (2026-04-14)** — `@vercel/otel` + `instrumentation.ts`; auto-instrumenta todos os `fetch()` (Supabase, OpenAI, Clicksign, Asaas); spans customizados em `order.create`, `order.updateStatus`; traces visíveis no painel Vercel → Observability.
+- [x] **Log persistente (2026-04-14)** — `logger.error/warn` em produção persiste fire-and-forget em `server_logs` (Supabase, 90 dias); cron semanal de purge; página admin `/server-logs` com filtros por nível/mensagem. Migration 043 aplicada.
 - [x] **SLOs documentados** — `docs/slos.md` com targets de disponibilidade, latência, error rate e alertas de negócio.
 - [x] **PWA manifest** — `public/manifest.json` ativo, shortcuts "Novo Pedido" e "Meus Pedidos".
 - [x] **Disaster Recovery Plan** — `docs/disaster-recovery.md` com cenários, RTO/RPO e checklist de restore.
