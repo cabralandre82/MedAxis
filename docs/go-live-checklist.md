@@ -121,8 +121,8 @@
 - [x] **Cron mensal de retenção** — `0 2 1 * *` anonimiza e purga dados vencidos automaticamente.
 - [x] **`docs/lgpd-registro-atividades.md`** — registro formal de atividades (Art. 37) + suboperadores.
 - [x] **`docs/disaster-recovery.md`** — plano DR completo (cenários, procedimentos, checklist pós-restore).
-- [ ] **🔴 AÇÃO PENDENTE:** Migrar `phone`/`crm` existentes de plaintext para `*_encrypted` (script de migração)
-- [ ] **🔴 AÇÃO PENDENTE:** DPA formal com farmácias e clínicas (advogado LGPD — pré go-live comercial)
+- [x] **Migração PII encrypted** ✅ **(2026-04-17)** — dual-write ativo em todos os services; `scripts/migrate-pii-encryption.ts` executado em produção (6 CRMs + 1 form_data); `ENCRYPTION_KEY` configurada no Vercel.
+- [ ] **🔴 AÇÃO PENDENTE:** DPA formal — revisão por advogado LGPD + assinatura com primeiras farmácias/clínicas (auto-envio via Clicksign implementado)
 - [x] **Política de Privacidade em `/privacy` e Termos de Uso em `/terms`** — implementadas em v5.1.0; acesso público corrigido no middleware em v5.1.4
 - [x] `NUVEM_FISCAL_CLIENT_ID` — ✅ configurada no Vercel (id: `Jo9YeeTl79GpYDdF`) e `.env.local` em 2026-04-14.
 - [x] `NUVEM_FISCAL_CLIENT_SECRET` — ✅ configurada no Vercel (id: `qDNONdPREYbz6AoE`) e `.env.local` em 2026-04-14.

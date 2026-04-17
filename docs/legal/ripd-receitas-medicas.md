@@ -128,25 +128,25 @@ O risco R04 (falsificação) é **transferido contratualmente** para a clínica,
 
 ## 5. MEDIDAS DE MITIGAÇÃO IMPLEMENTADAS
 
-| Medida                                                    | Status            | Responsável               |
-| --------------------------------------------------------- | ----------------- | ------------------------- |
-| Criptografia AES-256-GCM em repouso (campos PII)          | ✅ Implementado   | Clinipharma               |
-| TLS 1.3 em trânsito                                       | ✅ Implementado   | Clinipharma + Cloudflare  |
-| RLS por entidade (farmácia acessa apenas seus pedidos)    | ✅ Implementado   | Clinipharma               |
-| URLs pré-assinadas 5 min para receitas                    | ✅ Implementado   | Clinipharma               |
-| Imutabilidade de receitas (sem UPDATE/DELETE por RLS)     | ✅ Implementado   | Clinipharma               |
-| OCR apenas sob demanda explícita de SUPER_ADMIN           | ✅ Implementado   | Clinipharma               |
-| Zero data retention OpenAI para API                       | ✅ Contratado     | Clinipharma + OpenAI      |
-| JWT blacklist + revogação imediata de sessão              | ✅ Implementado   | Clinipharma               |
-| Rate limiting de autenticação                             | ✅ Implementado   | Clinipharma               |
-| Logs de auditoria de todos os acessos a receitas          | ✅ Implementado   | Clinipharma               |
-| DPA com farmácias (proibição de uso indevido)             | ✅ Este documento | DPO                       |
-| DPA com clínicas (responsabilidade por autenticidade)     | ✅ Este documento | DPO                       |
-| Cláusula de treinamento de colaboradores no DPA Farmácias | ✅ Incluído       | DPO                       |
-| RIPD disponível para consulta por clínicas parceiras      | ✅ Este documento | DPO                       |
-| **Pentest externo**                                       | ⬜ Pendente       | Clinipharma (contratação) |
-| **Migração PII de plaintext para colunas criptografadas** | ⬜ Pendente       | Clinipharma (dev)         |
-| **MFA obrigatório** para usuários com acesso a receitas   | ⬜ Pendente       | Clinipharma (produto)     |
+| Medida                                                    | Status                    | Responsável               |
+| --------------------------------------------------------- | ------------------------- | ------------------------- |
+| Criptografia AES-256-GCM em repouso (campos PII)          | ✅ Implementado           | Clinipharma               |
+| TLS 1.3 em trânsito                                       | ✅ Implementado           | Clinipharma + Cloudflare  |
+| RLS por entidade (farmácia acessa apenas seus pedidos)    | ✅ Implementado           | Clinipharma               |
+| URLs pré-assinadas 5 min para receitas                    | ✅ Implementado           | Clinipharma               |
+| Imutabilidade de receitas (sem UPDATE/DELETE por RLS)     | ✅ Implementado           | Clinipharma               |
+| OCR apenas sob demanda explícita de SUPER_ADMIN           | ✅ Implementado           | Clinipharma               |
+| Zero data retention OpenAI para API                       | ✅ Contratado             | Clinipharma + OpenAI      |
+| JWT blacklist + revogação imediata de sessão              | ✅ Implementado           | Clinipharma               |
+| Rate limiting de autenticação                             | ✅ Implementado           | Clinipharma               |
+| Logs de auditoria de todos os acessos a receitas          | ✅ Implementado           | Clinipharma               |
+| DPA com farmácias (proibição de uso indevido)             | ✅ Este documento         | DPO                       |
+| DPA com clínicas (responsabilidade por autenticidade)     | ✅ Este documento         | DPO                       |
+| Cláusula de treinamento de colaboradores no DPA Farmácias | ✅ Incluído               | DPO                       |
+| RIPD disponível para consulta por clínicas parceiras      | ✅ Este documento         | DPO                       |
+| **Pentest externo**                                       | ⬜ Pendente               | Clinipharma (contratação) |
+| **Migração PII de plaintext para colunas criptografadas** | ✅ Concluído (2026-04-17) | Clinipharma (dev)         |
+| **MFA obrigatório** para usuários com acesso a receitas   | ⬜ Pendente               | Clinipharma (produto)     |
 
 ---
 
@@ -184,7 +184,7 @@ Após análise dos riscos identificados, das medidas de controle implementadas e
 
 **(c)** As medidas técnicas e administrativas implementadas são adequadas ao estado da arte para plataformas SaaS no setor de saúde;
 
-**(d)** O tratamento pode prosseguir com as salvaguardas documentadas, **sujeito à implementação** das medidas pendentes (pentest, migração PII, MFA).
+**(d)** O tratamento pode prosseguir com as salvaguardas documentadas, **sujeito à implementação** das medidas pendentes (pentest, MFA).
 
 ### 7.2 Prazo de Revisão
 

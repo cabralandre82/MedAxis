@@ -1,6 +1,6 @@
 # Clinipharma — Lista Consolidada de Pendências
 
-> Gerado em: 2026-04-16 | Versão da plataforma: **6.8.1** | **930 testes, 0 falhas** | cobertura atualizada
+> Gerado em: 2026-04-17 | Versão da plataforma: **6.9.0** | **930 testes, 0 falhas** | cobertura atualizada
 >
 > **v6.5.29:** Fix silencioso no `handleOrderCancellationFinancials` — `update()` de `payments` e `transfers` não verificava o `error` retornado pelo Supabase JS client. Se o constraint de status rejeitasse o valor `CANCELED` (problema de nome de constraint no banco), a falha era engolida sem logs. Adicionado verificação explícita: se `paymentCancelErr` ou `transferCancelErr` não for null, lança exceção que propaga até o `logger.error` no `updateOrderStatus`. Diagnóstico e correção de constraint via SQL fornecidos (ver abaixo).
 >
@@ -101,15 +101,15 @@
 
 Sem estes itens a plataforma não pode operar comercialmente (jurídico, fiscal ou tecnicamente inviável).
 
-| #     | Pendência                                       | Razão                                                                                              | Como resolver                                                                                       |
-| ----- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| ~~1~~ | ~~**CNPJ da empresa**~~                         | ✅ **CONCLUÍDO** — CNPJ registrado                                                                 | —                                                                                                   |
-| ~~2~~ | ~~**Asaas → Produção**~~                        | ✅ **CONCLUÍDO** — API Key produção configurada no Vercel                                          | —                                                                                                   |
-| ~~3~~ | ~~**NF-e / NFS-e**~~                            | ✅ **v6.8.0** — código pronto, aguarda credenciais Nuvem Fiscal + migration 042                    |
-| ~~4~~ | ~~**Clicksign → Produção**~~                    | ✅ **PRODUÇÃO CONFIGURADA (2026-04-16)** — pendência manual: registrar webhook no painel Clicksign | —                                                                                                   |
-| 5     | **DPA formal (LGPD)**                           | Obrigação legal com parceiros que processam dados                                                  | Elaborar com advogado LGPD — assinar com farmácias e clínicas antes do go-live                      |
-| ~~6~~ | ~~**Política de Privacidade + Termos de Uso**~~ | ~~LGPD Art. 8~~                                                                                    | ✅ Implementado em `/privacy` e `/terms` — v5.1.0                                                   |
-| 7     | **Migração PII encrypted**                      | Dados existentes de `phone`/`crm` ainda em plaintext                                               | Escrever e rodar script: ler plaintext → `encrypt()` → salvar em `*_encrypted` → atualizar services |
+| #     | Pendência                                       | Razão                                                                                                                                                                                                                       | Como resolver                                                                  |
+| ----- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| ~~1~~ | ~~**CNPJ da empresa**~~                         | ✅ **CONCLUÍDO** — CNPJ registrado                                                                                                                                                                                          | —                                                                              |
+| ~~2~~ | ~~**Asaas → Produção**~~                        | ✅ **CONCLUÍDO** — API Key produção configurada no Vercel                                                                                                                                                                   | —                                                                              |
+| ~~3~~ | ~~**NF-e / NFS-e**~~                            | ✅ **v6.8.0** — código pronto, aguarda credenciais Nuvem Fiscal + migration 042                                                                                                                                             |
+| ~~4~~ | ~~**Clicksign → Produção**~~                    | ✅ **PRODUÇÃO CONFIGURADA (2026-04-16)** — pendência manual: registrar webhook no painel Clicksign                                                                                                                          | —                                                                              |
+| 5     | **DPA formal (LGPD)**                           | Obrigação legal com parceiros que processam dados                                                                                                                                                                           | Elaborar com advogado LGPD — assinar com farmácias e clínicas antes do go-live |
+| ~~6~~ | ~~**Política de Privacidade + Termos de Uso**~~ | ~~LGPD Art. 8~~                                                                                                                                                                                                             | ✅ Implementado em `/privacy` e `/terms` — v5.1.0                              |
+| ~~7~~ | ~~**Migração PII encrypted**~~                  | ✅ **CONCLUÍDO (2026-04-17)** — `ENCRYPTION_KEY` AES-256-GCM configurada no Vercel; dual-write em `phone_encrypted`, `crm_encrypted`, `form_data_encrypted`; 6 CRMs e 1 form_data migrados em produção; 930 testes passando | —                                                                              |
 
 ---
 
@@ -219,13 +219,13 @@ Itens do roadmap que dependem de CNPJ ativo para implementar:
 
 ## Resumo executivo
 
-| Categoria                             | Qtd    | Responsável               |
-| ------------------------------------- | ------ | ------------------------- |
-| 🔴 Bloqueantes (pré-primeiro-cliente) | 7      | Fundador + Jurídico + Dev |
-| 🟡 Importantes (30 dias)              | 13     | Dev + Fundador            |
-| 🟠 Recomendados (próximo sprint)      | 16     | Dev                       |
-| 🟢 Onboarding (após go-live)          | 7      | Comercial + Fundador      |
-| **Total**                             | **43** |                           |
+| Categoria                             | Qtd    | Responsável          |
+| ------------------------------------- | ------ | -------------------- |
+| 🔴 Bloqueantes (pré-primeiro-cliente) | 1      | Jurídico + Dev       |
+| 🟡 Importantes (30 dias)              | 6      | Dev + Fundador       |
+| 🟠 Recomendados (próximo sprint)      | 16     | Dev                  |
+| 🟢 Onboarding (após go-live)          | 7      | Comercial + Fundador |
+| **Total**                             | **30** |                      |
 
 ### Funcionalidades entregues (v4.7.0 → v6.1.1)
 
@@ -274,7 +274,7 @@ Itens do roadmap que dependem de CNPJ ativo para implementar:
 
 **O que está 100% pronto:** plataforma técnica, autenticação, pedidos, pagamentos sandbox, notificações (push/email/SMS/push), LGPD portal, auditoria, compliance CNPJ, suporte por tickets com IA, cupons de desconto, gerenciamento de categorias, SKU automático, Política de Privacidade, Termos de Uso, E2E tests, CI/CD, documentação, **8 features de IA em produção**, **enforcement completo de receitas médicas com controle por produto e por unidade**, **atualizações em tempo real via Supabase Realtime** (status do pedido sincronizado automaticamente entre clínica, farmácia e admin).
 
-**O que bloqueia lançamento comercial:** CNPJ da empresa → Asaas produção → NF-e → DPA/LGPD (itens 1–5 e 7).
+**O que bloqueia lançamento comercial:** DPA/LGPD (item 5) — revisão por advogado e assinatura com parceiros.
 
 ---
 

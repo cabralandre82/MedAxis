@@ -175,10 +175,10 @@
 - [x] `ENCRYPTION_KEY` gerada (`a48b6d26...`) e configurada no Vercel (Production + Preview + Development)
 - [x] Migration `023_pii_encryption_columns.sql`: colunas `phone_encrypted`, `crm_encrypted`, `form_data_encrypted` adicionadas
 - [x] `GET /api/lgpd/export`: exporta dados decriptados automaticamente
-- [ ] Migrar dados existentes: script para ler `phone`/`crm` em plaintext → encriptar → salvar em `*_encrypted`
-- [ ] Atualizar services que leem/escrevem `phone` e `crm` para usar `*_encrypted`
+- [x] Migrar dados existentes: `scripts/migrate-pii-encryption.ts` executado em produção (2026-04-17) — 6 CRMs + 1 form_data
+- [x] Atualizar services (dual-write): `updateUserProfile`, `updateOwnProfile`, `createDoctor`, `updateDoctor`, `registration/submit`, `registration/[id]` approve
 
-**Esforço:** 3 dias | **Status:** ✅ infra criada (2026-04-08) | ⬜ migração de dados e atualização de services pendente
+**Esforço:** 3 dias | **Status:** ✅ **CONCLUÍDO (2026-04-17)** — infra + migration + dual-write + dados existentes migrados
 
 ---
 
@@ -191,7 +191,7 @@
 - [x] `POST /api/admin/lgpd/anonymize/:userId`: anonimiza PII, revoga sessões, preserva dados financeiros
 - [x] `/profile/privacy`: portal com botões de exportação e solicitação de exclusão
 - [x] `docs/lgpd-registro-atividades.md`: registro formal de atividades de tratamento (Art. 37) + tabela de retenção + suboperadores
-- [ ] DPA formal com farmácias e clínicas (elaborar com advogado LGPD — pré go-live comercial)
+- [x] DPA formal com farmácias e clínicas — contratos redigidos (`docs/legal/dpa-farmacias.md`, `dpa-clinicas.md`, `ripd-receitas-medicas.md`) + auto-envio via Clicksign implementado (2026-04-17). Pendente: revisão por advogado + assinatura.
 
 **Esforço:** 4 dias | **Status:** ✅ concluído (2026-04-08)
 

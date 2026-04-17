@@ -152,7 +152,8 @@
 
 ## 5. Medidas de Segurança Implementadas
 
-- ✅ Criptografia AES-256-GCM para campos PII (telefone, CRM, form_data)
+- ✅ Criptografia AES-256-GCM em repouso para campos PII: `phone_encrypted` (profiles), `crm_encrypted` (doctors), `form_data_encrypted` (registration_requests) — dual-write ativo desde 2026-04-17; dados existentes migrados via `scripts/migrate-pii-encryption.ts`
+- ✅ `ENCRYPTION_KEY` (256 bits) gerenciada como secret no Vercel — não exposta em logs
 - ✅ TLS 1.3 em trânsito (Vercel + Cloudflare)
 - ✅ RLS (Row Level Security) em todas as tabelas Supabase
 - ✅ Revogação imediata de sessões ao desativar usuário
@@ -162,9 +163,10 @@
 - ✅ Circuit breaker para integrações externas (incluindo OpenAI — falha graciosa)
 - ✅ Headers de segurança HTTP (CSP, HSTS, X-Frame-Options)
 - ✅ Tratamento de IA com dados mínimos — sem envio de PII sensível à OpenAI
-- ⬜ Pentest externo (contratar antes go-live comercial)
-- ⬜ DPA formal com farmácias e clínicas (elaborar com advogado LGPD)
-- ⬜ Cláusula de tratamento automatizado (Art. 20) a incluir no DPA e nos Termos de Uso
+- ✅ DPA formal redigido para farmácias (`docs/legal/dpa-farmacias.md`) e clínicas (`docs/legal/dpa-clinicas.md`) com RIPD (`ripd-receitas-medicas.md`); auto-envio via Clicksign implementado
+- ⬜ Pentest externo (contratar antes go-live comercial — Tempest, Conviso ou Kondado)
+- ⬜ DPA — revisão final por advogado LGPD + assinatura com primeiros parceiros
+- ⬜ Migration 024: dropar colunas plaintext (`phone`, `crm`, `form_data`) após período de estabilização
 
 ---
 

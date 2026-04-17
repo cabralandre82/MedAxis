@@ -104,7 +104,7 @@
 
 - ~~Sem portal de privacidade~~ ✅ **v3.0.0**: `/profile/privacy` com exportação e solicitação de exclusão (LGPD Art. 18).
 - ~~Sem política de retenção técnica~~ ✅ **v3.0.0**: cron mensal anonimiza PII (5 anos) e preserva financeiros (10 anos).
-- ~~Sem encriptação de PII~~ ✅ **v3.0.0**: colunas `*_encrypted` criadas com AES-256-GCM. **⚠️ PENDENTE:** migrar dados existentes de plaintext.
+- ~~Sem encriptação de PII~~ ✅ **v3.0.0** infra + **v6.9.0** completo: colunas `*_encrypted` com AES-256-GCM; dual-write ativo; dados existentes migrados via `scripts/migrate-pii-encryption.ts` (2026-04-17). Próximo passo: migration 024 para dropar colunas plaintext após período de estabilização.
 - **DPA formal pendente**: elaborar com advogado LGPD e assinar com farmácias/clínicas antes do go-live comercial.
 - ~~**Política de Privacidade / Termos de Uso**~~ ✅ **v5.1.0**: páginas `/privacy` e `/terms` implementadas. **v5.1.4**: `/terms` adicionado às rotas públicas do middleware (bug de acesso sem autenticação corrigido).
 
