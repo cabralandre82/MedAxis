@@ -439,6 +439,27 @@ Slack removido do escopo em 2026-04-17 (decisão do fundador). Falhas dos workfl
 - Nenhum Route Handler foi explicitamente envolto com `withRouteContext` (só cron). Adoção gradual em waves subsequentes quando cada rota for tocada.
 - Feature flag `observability.log_sampling` pode entrar em Wave 6 para sampling probabilístico em volume alto.
 
-**Commit único:** `feat(wave-1): structured logger with PII redaction and ALS correlation`.
+**Commits:**
+
+- `2e567e8` — feat(logger): structured logs with PII redaction and ALS correlation (Wave 1)
+- `983371f` — chore(security): allowlist synthetic redactor fixtures in gitleaks
+
+**CI / Quality Gates (run `24590888596`, `24590888599` @ `983371f`):**
+
+| Job                         | Status | Notas                                                                                                                                                                                                                                                                         |
+| --------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint & Type Check           | 🟢     | `tsc --noEmit` + eslint — 0 erros                                                                                                                                                                                                                                             |
+| Unit Tests (Vitest)         | 🟢     | 1044 passing, thresholds novos (75% branches, 86% funcs) OK                                                                                                                                                                                                                   |
+| Gitleaks (secret scan)      | 🟢     | `.gitleaks.toml` com allowlist estrita (redactor tests)                                                                                                                                                                                                                       |
+| SBOM (CycloneDX)            | 🟢     | regenerado                                                                                                                                                                                                                                                                    |
+| npm audit                   | 🟢     | 0 high/critical                                                                                                                                                                                                                                                               |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos                                                                                                                                                                                                                                                            |
+| Trivy (filesystem + config) | 🟢     | sem findings novos                                                                                                                                                                                                                                                            |
+| License check (production)  | 🟢     | nenhuma licença proibida                                                                                                                                                                                                                                                      |
+| E2E Smoke (Playwright)      | 🔴     | **pré-existente**, falha em ≥10 commits anteriores a Wave 1 — `webServer` não sobe porque faltam `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` no ambiente de CI pra esse job. Não bloqueia Wave 1, já registrado como débito em `implementation-plan.md` (Wave 5 — Tests avançados). |
+
+**Achado durante validação:**
+
+- Gitleaks 8.24 flagou as fixtures sintéticas do próprio redator (`tests/unit/lib/logger-redact.test.ts` linha 82: JWT falso; linha 103: `sk_live_` falso). Tentativa inicial com `[[allowlists]]` + `targetRules` não surtiu efeito na v8.24; substituída por `[allowlist]` singular com `paths` estritos — apenas o test file específico é permitido, todas as outras rules continuam ativas pro arquivo. Full-history scan identifica 14 leaks em outros arquivos (docs/staging/demo fixtures) — fora do escopo de Wave 1, mas registrado pra um sprint de higiene futuro.
 
 ---
