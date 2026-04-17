@@ -42,9 +42,9 @@
 - [x] `ASAAS_API_KEY` — ✅ **produção** configurada no Vercel (id: `e8M2BKBBylCBgjf0`) e `.env.local` em 2026-04-14.
 - [x] `ASAAS_API_URL` = `https://api.asaas.com/v3` — ✅ **produção** configurada no Vercel (id: `Ha59rt0jVTvFFY64`) e `.env.local` em 2026-04-14.
 - [x] `ASAAS_WEBHOOK_SECRET` — ✅ **produção** configurada no Vercel (id: `59YdW0ce1NcycTwx`) e `.env.local` em 2026-04-14. URL do webhook no Asaas: `https://clinipharma.com.br/api/payments/asaas/webhook?accessToken=whsec_8AzQE_w7P99SIDhRCLktw3Pq4G6IcYtI7jxD3bUCbjs`
-- [x] `ZENVIA_API_TOKEN` — ⚠️ **PENDING** — criar token em app.zenvia.com → Developers → Tokens & Webhooks. Vercel id: `WCWL1B4O5e9guOOZ`
-- [x] `ZENVIA_SMS_FROM` — ⚠️ **PENDING** — shortcode ou alphanumeric sender aprovado pela Zenvia. Vercel id: `fYrN1vRC0mPF93Ne`
-- [x] `ZENVIA_WHATSAPP_FROM` — ⚠️ **PENDING** — número WhatsApp Business registrado na Zenvia (ex: `5511999999999`). Sandbox: usar keyword do painel. Vercel id: `qN5b0EH8Y0bouNYp`
+- [x] `ZENVIA_API_TOKEN` — ✅ **CONCLUÍDO (2026-04-17)** — token `AFOTY18T...` configurado. Vercel id: `WCWL1B4O5e9guOOZ`
+- [x] `ZENVIA_SMS_FROM` — ✅ **CONCLUÍDO (2026-04-17)** — sender `Clinipharma` ativo. Vercel id: `fYrN1vRC0mPF93Ne`
+- [ ] `ZENVIA_WHATSAPP_FROM` — ⏳ **ADIADO** — conectar WABA quando a plataforma estiver em operação real. WhatsApp Business existente disponível para iniciar o processo. Vercel id: `qN5b0EH8Y0bouNYp`
 - [x] `CLICKSIGN_ACCESS_TOKEN` — ✅ **produção** configurada no Vercel (id: `eYo5lbCljCz6oKFu`) e `.env.local` em 2026-04-16
 - [x] `CLICKSIGN_API_URL` = `https://app.clicksign.com/api/v1` — ✅ **produção** configurada no Vercel (id: `9HsdfN0FtO7WGa6o`) em 2026-04-16
 - [x] `CLICKSIGN_WEBHOOK_SECRET` = HMAC SHA256 Secret gerado pelo painel Clicksign — ✅ configurada no Vercel (id: `B684F1veC2CQLq5j`) em 2026-04-16. Webhook handler atualizado para verificar header `Content-Hmac: sha256=<hex>` (padrão real da Clicksign)
@@ -306,7 +306,7 @@
 - [ ] Consultores de vendas cadastrados e vinculados às clínicas
 - [ ] **Asaas produção ativo** (ver item 1 acima) — obrigatório para receber pagamentos reais
 - [x] **Clicksign produção ativo** — ✅ credenciais + webhook registrado no painel Clicksign produção (HMAC SHA256, eventos: sign, auto_close, deadline, cancel). Totalmente operacional (2026-04-16).
-- [ ] **Zenvia SMS + WhatsApp** (ver item 3 acima) — criar conta, obter token e senders, atualizar 3 vars no Vercel
+- [x] **Zenvia SMS** ✅ CONCLUÍDO (2026-04-17) — conta criada, token e sender `Clinipharma` ativos, vars Vercel atualizadas. **WhatsApp adiado** para quando a plataforma estiver em operação real.
 - [ ] **NF-e ativo** (ver item 5 acima) — obrigatório para operação fiscal legal
 - [ ] Primeiro pedido de teste realizado de ponta a ponta em produção
 
