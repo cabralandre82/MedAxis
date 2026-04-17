@@ -52,11 +52,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install PostgreSQL client 16 and age
+        # awscli is pre-installed on ubuntu-latest (v2) — only add what's missing.
         run: |
           sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client-16 age awscli
+          sudo apt-get install -y postgresql-client-16 age
+          aws --version
 
       - name: Compute snapshot metadata
         id: meta
