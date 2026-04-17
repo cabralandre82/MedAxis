@@ -1,0 +1,172 @@
+name: Security Scan
+
+# Runs a battery of static security scanners on every push to main/develop,
+# every PR targeting them, and on a weekly schedule so newly-disclosed CVEs
+# are caught even without code changes.
+#
+# Jobs are independent and fail individually so we see the full picture in one
+# run. A failure here does NOT block merge by default — see
+# docs/implementation-plan.md Wave 0.2 for the promotion path.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # 06:00 UTC every Monday — catches weekend CVEs before Brazilian business hours.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  security-events: write  # required for CodeQL and Trivy SARIF upload
+  actions: read
+
+jobs:
+  # ─── CodeQL: semantic analysis for JS/TS ─────────────────────────────────
+  codeql:
+    name: CodeQL (JavaScript/TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
+
+  # ─── Gitleaks: secret scanning across history ─────────────────────────────
+  gitleaks:
+    name: Gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # full history so gitleaks can scan commits beyond HEAD
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # License is required for org-level use but optional on public repos
+          # and for single-repo personal use. Leaving unset is supported.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # ─── npm audit: known vulnerabilities in dependency tree ──────────────────
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run npm audit (production deps, high severity)
+        run: npm audit --omit=dev --audit-level=high
+        # Non-blocking: a CVE in a transitive dep shouldn't gate a deploy until
+        # we explicitly promote this check. It still surfaces the issue.
+        continue-on-error: true
+
+      - name: Run npm audit (all deps, moderate+) — report-only
+        run: npm audit --audit-level=moderate || true
+
+  # ─── Trivy: filesystem + misconfiguration scan ────────────────────────────
+  trivy-fs:
+    name: Trivy (filesystem + config)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.33.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs-results.sarif
+          # Trivy exits non-zero when CRITICAL/HIGH findings exist; we want a
+          # full report so we soften to informational in this phase.
+          exit-code: '0'
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always() && hashFiles('trivy-fs-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs-results.sarif
+          category: trivy-fs
+
+  # ─── License check (flag GPL/AGPL contamination) ──────────────────────────
+  license-check:
+    name: License check (production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: License summary
+        run: |
+          npx --yes license-checker-rseidelsohn \
+            --production \
+            --summary \
+            --excludePrivatePackages \
+            > license-summary.txt
+          cat license-summary.txt
+
+      - name: Fail on copyleft licenses (AGPL/GPL/SSPL)
+        run: |
+          if grep -E '^(AGPL|GPL|SSPL)' license-summary.txt; then
+            echo "::error::Copyleft license detected in production dependencies."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: license-summary
+          path: license-summary.txt
+          retention-days: 30
+
+  # ─── SBOM (CycloneDX) — useful evidence for audits ────────────────────────
+  sbom:
+    name: SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Generate SBOM
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-format json --output-file sbom.cdx.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: 90

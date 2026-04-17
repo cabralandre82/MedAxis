@@ -1,0 +1,191 @@
+name: Offsite Backup
+
+# Weekly offsite backup of the Supabase production database plus critical
+# Storage buckets. Cipher the artefacts with `age` using a recipient key held
+# by the founder offline — only that key can decrypt.
+#
+# Target: Cloudflare R2 (S3-compatible, zero egress fees).
+# Retention: last 12 weeklies + last 6 monthlies (enforced by lifecycle rule
+# on the R2 bucket — see docs/disaster-recovery.md).
+#
+# Triggers:
+#   - Sundays 04:00 BRT (07:00 UTC)
+#   - Manual dispatch when we need a pre-change snapshot
+
+on:
+  schedule:
+    - cron: '0 7 * * 0'
+  workflow_dispatch:
+    inputs:
+      label:
+        description: 'Custom label for this backup (optional)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offsite-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Snapshot, encrypt, upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      TZ: America/Sao_Paulo
+      # Required secrets (configured on the repository):
+      #   SUPABASE_DB_URL        postgres URL with credentials for pg_dump
+      #   AGE_PUBLIC_KEY         age recipient (starts with `age1...`)
+      #   R2_ACCOUNT_ID          Cloudflare R2 account id
+      #   R2_ACCESS_KEY_ID       R2 S3-compatible access key
+      #   R2_SECRET_ACCESS_KEY   R2 S3-compatible secret
+      #   R2_BUCKET              bucket name (e.g. clinipharma-offsite)
+      #   SUPABASE_PROJECT_REF   project ref for Storage download (e.g. jomdntqlgrupvhrqoyai)
+      #   SUPABASE_ACCESS_TOKEN  personal access token with Storage read
+      R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client 16 and age
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-16 age awscli
+
+      - name: Compute snapshot metadata
+        id: meta
+        run: |
+          STAMP="$(date -u +'%Y%m%dT%H%M%SZ')"
+          LABEL="${{ github.event.inputs.label }}"
+          [ -z "$LABEL" ] && LABEL="weekly"
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
+          echo "archive_dir=$RUNNER_TEMP/backup-$STAMP" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/backup-$STAMP"
+
+      - name: Database snapshot (pg_dump custom format)
+        env:
+          PGPASSWORD_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          OUT="${{ steps.meta.outputs.archive_dir }}/db-${{ steps.meta.outputs.stamp }}.dump"
+          pg_dump \
+            --format=custom \
+            --compress=9 \
+            --no-owner --no-privileges \
+            --file="$OUT" \
+            "$PGPASSWORD_URL"
+          echo "Dumped $(stat --printf='%s bytes' "$OUT")"
+
+      - name: Storage snapshot (contracts + prescriptions + order-documents)
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          OUT_DIR="${{ steps.meta.outputs.archive_dir }}/storage"
+          mkdir -p "$OUT_DIR"
+
+          # Minimal Storage export: list + download every object in the
+          # buckets that matter. We do NOT capture public buckets (product
+          # images) — those can be re-uploaded from source of truth.
+          for BUCKET in contracts order-documents; do
+            mkdir -p "$OUT_DIR/$BUCKET"
+            echo "Listing $BUCKET…"
+            PAGE=0
+            while :; do
+              RESP=$(curl -fsS \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "apikey: $TOKEN" \
+                -H 'Content-Type: application/json' \
+                -d "{\"limit\": 1000, \"offset\": $((PAGE * 1000))}" \
+                "https://$PROJECT_REF.supabase.co/storage/v1/object/list/$BUCKET")
+              COUNT=$(echo "$RESP" | jq 'length')
+              [ "$COUNT" = "0" ] && break
+              echo "$RESP" | jq -r '.[].name' | while read -r KEY; do
+                [ -z "$KEY" ] && continue
+                SAFE=$(echo "$KEY" | tr '/' '_')
+                curl -fsS \
+                  -H "Authorization: Bearer $TOKEN" \
+                  -H "apikey: $TOKEN" \
+                  "https://$PROJECT_REF.supabase.co/storage/v1/object/$BUCKET/$KEY" \
+                  -o "$OUT_DIR/$BUCKET/$SAFE"
+              done
+              PAGE=$((PAGE + 1))
+              [ "$COUNT" -lt 1000 ] && break
+            done
+          done
+
+          tar -czf "${{ steps.meta.outputs.archive_dir }}/storage-${{ steps.meta.outputs.stamp }}.tgz" \
+            -C "${{ steps.meta.outputs.archive_dir }}" storage
+          rm -rf "$OUT_DIR"
+
+      - name: Generate manifest and checksums
+        run: |
+          set -euo pipefail
+          cd "${{ steps.meta.outputs.archive_dir }}"
+          sha256sum * > manifest-sha256.txt
+          cat manifest-sha256.txt
+          cat > manifest.json <<EOF
+          {
+            "stamp": "${{ steps.meta.outputs.stamp }}",
+            "label": "${{ steps.meta.outputs.label }}",
+            "commit": "${{ github.sha }}",
+            "ref": "${{ github.ref }}",
+            "files": $(ls -1 . | jq -R . | jq -s .)
+          }
+          EOF
+
+      - name: Encrypt with age
+        run: |
+          set -euo pipefail
+          cd "${{ steps.meta.outputs.archive_dir }}"
+          echo "${{ secrets.AGE_PUBLIC_KEY }}" > recipient.age
+          for f in *.dump *.tgz manifest.json manifest-sha256.txt; do
+            [ -f "$f" ] || continue
+            age -R recipient.age -o "$f.age" "$f"
+            rm -f "$f"
+          done
+          ls -lh *.age
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail
+          cd "${{ steps.meta.outputs.archive_dir }}"
+          PREFIX="${{ steps.meta.outputs.label }}/${{ steps.meta.outputs.stamp }}"
+          for f in *.age; do
+            aws --endpoint-url="$R2_ENDPOINT" \
+              s3 cp "$f" "s3://${{ secrets.R2_BUCKET }}/$PREFIX/$f" \
+              --no-progress
+          done
+          echo "Uploaded $(ls *.age | wc -l) files to s3://${{ secrets.R2_BUCKET }}/$PREFIX/"
+
+      - name: Notify Slack on success
+        if: success() && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_OPS }}
+        run: |
+          curl -fsS -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"✅ Offsite backup OK — label=${{ steps.meta.outputs.label }} stamp=${{ steps.meta.outputs.stamp }}\"}" \
+            || true
+
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_OPS }}
+        run: |
+          curl -fsS -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"🔴 Offsite backup FAILED — run ${{ github.run_id }} — investigate immediately\"}" \
+            || true

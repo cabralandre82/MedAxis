@@ -231,22 +231,65 @@ curl https://clinipharma.com.br/api/health
 
 ## 5. Backups
 
-| Dado                      | Onde                                | Frequência                  | Retenção                   |
-| ------------------------- | ----------------------------------- | --------------------------- | -------------------------- |
-| Banco de dados (Supabase) | Supabase managed                    | Automático a cada 1h        | 7 dias (free) / PITR (Pro) |
-| Código-fonte              | GitHub (`clinipharma`)              | A cada push                 | Ilimitado                  |
-| Variáveis de ambiente     | Documentado em go-live-checklist.md | Manual                      | —                          |
-| Uploads (documentos)      | Supabase Storage                    | Não há backup automático ⚠️ | —                          |
+| Dado                      | Onde                                                  | Frequência                    | Retenção                    |
+| ------------------------- | ----------------------------------------------------- | ----------------------------- | --------------------------- |
+| Banco de dados (Supabase) | Supabase managed                                      | Automático a cada 1h          | 7 dias (free) / PITR (Pro)  |
+| **DB offsite**            | **Cloudflare R2 (bucket `clinipharma-offsite`)**      | **Semanal (domingo 04h BRT)** | **12 semanais + 6 mensais** |
+| **Storage offsite**       | **R2 `clinipharma-offsite/weekly/.../storage-*.tgz`** | **Semanal**                   | **12 semanais + 6 mensais** |
+| Código-fonte              | GitHub (`clinipharma`)                                | A cada push                   | Ilimitado                   |
+| Variáveis de ambiente     | Documentado em go-live-checklist.md                   | Manual                        | —                           |
 
-**Ações recomendadas:**
+### Backup offsite (Cloudflare R2 + age cipher)
+
+**Configurado na Wave 0.4 da auditoria 2026-04.**
+
+- Workflow: `.github/workflows/offsite-backup.yml` — roda toda madrugada de domingo (04h BRT) ou por dispatch manual antes de mudanças de alto risco.
+- Cipher: `age` com recipient guardado **offline** pelo fundador. Só com a identidade privada em `AGE_PRIVATE_KEY` o dump decripta.
+- Buckets cobertos no Storage: `contracts`, `order-documents` (críticos para fiscalização e disputas; `product-images` é reconstrutível).
+- Manifest com `sha256sum` incluso em cada snapshot.
+
+**Restore drill:** `.github/workflows/restore-drill.yml` roda dia 1 de cada mês e:
+
+1. Lista o snapshot mais recente em R2.
+2. Decripta com `AGE_PRIVATE_KEY`.
+3. Valida `sha256` de cada arquivo.
+4. Restaura o `pg_dump` em Postgres 16 efêmero do runner.
+5. Roda queries de integridade (counts em `auth.users`, `orders`, `payments`, `audit_logs`).
+6. Valida header do tarball de Storage (restore completo é exercitado em staging trimestralmente).
+7. Reporta duração do restore (RTO real) no `GITHUB_STEP_SUMMARY`.
+8. Notifica Slack (`SLACK_WEBHOOK_OPS`) em sucesso e **alerta em falha**.
+
+### Secrets necessários no repositório (uma vez)
+
+| Secret                  | Finalidade                                                          |
+| ----------------------- | ------------------------------------------------------------------- |
+| `SUPABASE_DB_URL`       | Postgres URL com senha para `pg_dump`                               |
+| `SUPABASE_ACCESS_TOKEN` | Personal access token para download do Storage                      |
+| `SUPABASE_PROJECT_REF`  | `jomdntqlgrupvhrqoyai`                                              |
+| `AGE_PUBLIC_KEY`        | Recipient `age1...` para cifrar backups                             |
+| `AGE_PRIVATE_KEY`       | Identidade `AGE-SECRET-KEY-1...` — **usar apenas no restore drill** |
+| `R2_ACCOUNT_ID`         | Cloudflare R2 account id                                            |
+| `R2_ACCESS_KEY_ID`      | S3-compatível                                                       |
+| `R2_SECRET_ACCESS_KEY`  | S3-compatível                                                       |
+| `R2_BUCKET`             | `clinipharma-offsite`                                               |
+| `SLACK_WEBHOOK_OPS`     | Webhook para canal `#ops-alerts` (opcional)                         |
+
+### Lifecycle no bucket R2
+
+Configurar no dashboard Cloudflare: regras de retenção por prefixo.
+
+- `weekly/` → remover após 84 dias (12 semanas).
+- `monthly/` → remover após 180 dias (6 meses).
+- `manual/` → nunca remover automaticamente (operador decide).
+
+### Ações recomendadas (além do offsite)
 
 1. **⏳ Ativar PITR — adiar até ter clientes reais ativos**
    - Custo: $100/mês (7 dias) · $200/mês (14 dias) · $400/mês (28 dias)
    - Recomendação: **7 dias** é suficiente, assim que houver pedidos e pagamentos reais em produção
    - Como ativar: `Supabase Dashboard → Project clinipharma → Settings → Add-ons → Point in Time Recovery`
-   - Justificativa para adiar: volume de dados mínimo, nenhum cliente real onboardado ainda, backup diário suficiente para esta fase
 
-2. **Backup externo do Supabase Storage** (via `rclone` para S3) para documentos de pedidos e contratos.
+2. **Testar restore em staging manualmente** a cada trimestre — o drill automatizado garante decriptação e estrutura; o teste manual valida Storage completo em uma instância Supabase real.
 
 ---
 

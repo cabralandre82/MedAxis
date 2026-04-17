@@ -55,6 +55,9 @@ export default defineConfig({
       // These are only needed at runtime (Redis-backed rate limiter).
       '@upstash/ratelimit': resolve(__dirname, 'tests/__mocks__/@upstash/ratelimit.ts'),
       '@upstash/redis': resolve(__dirname, 'tests/__mocks__/@upstash/redis.ts'),
+      // `server-only` isn't installed in the test environment — stub it so
+      // modules guarded by it (lib/features, lib/ai, …) can be imported.
+      'server-only': resolve(__dirname, 'tests/__mocks__/server-only.ts'),
     },
   },
 })

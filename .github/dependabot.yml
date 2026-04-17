@@ -1,0 +1,66 @@
+version: 2
+
+# Dependabot keeps dependencies fresh. We receive grouped PRs to avoid the
+# "one PR per patch" noise. Security updates are always individual.
+# Reviewers/assignees are set per-ecosystem; the CODEOWNERS file guarantees
+# the tech owner is always pulled in.
+
+updates:
+  # ─── npm (app dependencies) ──────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      prefix: deps
+      include: scope
+    # Group patch/minor of unrelated libraries into a single PR per week.
+    # Majors stay individual — they need manual review.
+    groups:
+      production-minor-and-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      development-minor-and-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # React majors require a dedicated upgrade playbook — keep separate.
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      # Next.js majors likewise.
+      - dependency-name: next
+        update-types: ['version-update:semver-major']
+
+  # ─── GitHub Actions ──────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:30'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch

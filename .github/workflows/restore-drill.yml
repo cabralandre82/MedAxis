@@ -1,0 +1,192 @@
+name: Restore Drill
+
+# Monthly automated drill: fetch the latest offsite backup, decrypt, restore
+# into a temporary PostgreSQL instance spun up in the workflow, and verify
+# integrity against a set of sanity SQL checks. Records measured RTO.
+#
+# Storage buckets are NOT restored here — we only verify that the encrypted
+# tarball decrypts and has a valid `tar` header (full restore is exercised in
+# staging quarterly by hand).
+#
+# Triggers:
+#   - 1st of each month at 05:00 BRT (08:00 UTC)
+#   - Manual dispatch
+
+on:
+  schedule:
+    - cron: '0 8 1 * *'
+  workflow_dispatch:
+    inputs:
+      backup_prefix:
+        description: 'Specific backup prefix to restore (e.g. weekly/20260414T070000Z). Defaults to newest.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    name: Restore drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: drill
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TZ: America/Sao_Paulo
+      R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-16 age awscli jq
+
+      - name: Locate backup prefix
+        id: find
+        run: |
+          set -euo pipefail
+          PREFIX="${{ github.event.inputs.backup_prefix }}"
+          if [ -z "$PREFIX" ]; then
+            PREFIX=$(aws --endpoint-url="$R2_ENDPOINT" \
+              s3api list-objects-v2 \
+              --bucket "${{ secrets.R2_BUCKET }}" \
+              --prefix weekly/ \
+              --query 'Contents[].Key' \
+              --output text | tr '\t' '\n' | grep -E '\.age$' | sed 's|/[^/]*$||' | sort -u | tail -1)
+          fi
+          if [ -z "$PREFIX" ]; then
+            echo "::error::No backups found in R2 bucket"
+            exit 1
+          fi
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+          echo "Using prefix: $PREFIX"
+
+      - name: Fetch backup artefacts
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/restore"
+          aws --endpoint-url="$R2_ENDPOINT" \
+            s3 sync "s3://${{ secrets.R2_BUCKET }}/${{ steps.find.outputs.prefix }}/" \
+            "$RUNNER_TEMP/restore/" \
+            --no-progress
+          ls -lh "$RUNNER_TEMP/restore/"
+
+      - name: Decrypt with age private key
+        env:
+          AGE_PRIVATE_KEY: ${{ secrets.AGE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/restore"
+          echo "$AGE_PRIVATE_KEY" > identity.age
+          chmod 600 identity.age
+          for f in *.age; do
+            plain="${f%.age}"
+            age -d -i identity.age -o "$plain" "$f"
+          done
+          rm -f identity.age
+          ls -lh
+
+      - name: Verify checksums
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/restore"
+          sha256sum -c manifest-sha256.txt
+
+      - name: Restore database
+        env:
+          PGPASSWORD: drill
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/restore"
+          DUMP=$(ls db-*.dump | head -1)
+          START=$(date +%s)
+          pg_restore \
+            --no-owner --no-privileges \
+            --clean --if-exists \
+            --dbname=postgresql://drill:drill@localhost:5432/drill \
+            --jobs=4 \
+            "$DUMP"
+          END=$(date +%s)
+          DURATION=$((END - START))
+          echo "restore_seconds=$DURATION" >> "$GITHUB_ENV"
+          echo "Restore took ${DURATION}s"
+
+      - name: Storage archive structural check
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/restore"
+          STG=$(ls storage-*.tgz | head -1)
+          tar -tzf "$STG" >/dev/null
+          echo "Storage archive header OK"
+
+      - name: Integrity queries
+        env:
+          PGPASSWORD: drill
+        run: |
+          set -euo pipefail
+          PSQL="psql postgresql://drill:drill@localhost:5432/drill -v ON_ERROR_STOP=1 -X -A -t -c"
+          echo "Tables present:"      && $PSQL "SELECT count(*) FROM pg_tables WHERE schemaname='public';"
+          echo "Users:"                && $PSQL "SELECT count(*) FROM auth.users;" || true
+          echo "Orders:"               && $PSQL "SELECT count(*) FROM public.orders;"
+          echo "Payments:"             && $PSQL "SELECT count(*) FROM public.payments;"
+          echo "Audit logs:"           && $PSQL "SELECT count(*) FROM public.audit_logs;"
+          echo "Max audit timestamp:"  && $PSQL "SELECT max(created_at) FROM public.audit_logs;"
+          echo "Feature flags present:" && $PSQL "SELECT count(*) FROM public.feature_flags;" || true
+
+      - name: Write drill result to summary
+        run: |
+          {
+            echo "# Restore drill — $(date -Iseconds)"
+            echo ""
+            echo "**Source prefix:** ${{ steps.find.outputs.prefix }}"
+            echo ""
+            echo "**Restore duration:** ${restore_seconds:-?} s"
+            echo ""
+            echo "**Status:** ✅ completed"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify Slack on success
+        if: success() && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_OPS }}
+        run: |
+          curl -fsS -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"✅ Restore drill OK — ${{ steps.find.outputs.prefix }} restored in ${restore_seconds:-?}s\"}" \
+            || true
+
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_OPS }}
+        run: |
+          curl -fsS -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"🔴 Restore drill FAILED — investigate run ${{ github.run_id }}\"}" \
+            || true

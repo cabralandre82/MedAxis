@@ -1,0 +1,58 @@
+# CODEOWNERS — required reviewers per area.
+#
+# GitHub enforces this only when branch protection is configured with
+# "Require review from Code Owners" (see docs/branch-protection.md).
+#
+# Syntax: pattern  @owner1 @owner2
+# More-specific patterns below override more-general ones above.
+#
+# Owner legend:
+#   @cabralandre82  — founder / tech owner of everything
+
+# Global default — fallback for anything not matched below.
+*                                   @cabralandre82
+
+# ─── Critical infrastructure ────────────────────────────────────────────────
+# Database schema changes, RPCs, RLS policies.
+/supabase/migrations/**             @cabralandre82
+
+# GitHub Actions workflows — touching CI/CD or secrets.
+/.github/workflows/**               @cabralandre82
+/.github/CODEOWNERS                 @cabralandre82
+/.github/dependabot.yml             @cabralandre82
+
+# Dependencies and build config — supply chain gate.
+/package.json                       @cabralandre82
+/package-lock.json                  @cabralandre82
+/next.config.ts                     @cabralandre82
+/vercel.json                        @cabralandre82
+
+# ─── Security-sensitive code ────────────────────────────────────────────────
+/lib/db/admin.ts                    @cabralandre82
+/lib/crypto.ts                      @cabralandre82
+/lib/rbac/**                        @cabralandre82
+/lib/audit/**                       @cabralandre82
+/lib/token-revocation.ts            @cabralandre82
+/middleware.ts                      @cabralandre82
+/app/api/inngest/**                 @cabralandre82
+/app/api/payments/**                @cabralandre82
+/app/api/cron/**                    @cabralandre82
+
+# ─── Feature flags & observability ──────────────────────────────────────────
+/lib/features/**                    @cabralandre82
+/lib/logger.ts                      @cabralandre82
+/lib/metrics.ts                     @cabralandre82
+/lib/alerts.ts                      @cabralandre82
+/lib/tracing.ts                     @cabralandre82
+/instrumentation.ts                 @cabralandre82
+
+# ─── Legal / compliance documents ───────────────────────────────────────────
+/docs/legal/**                      @cabralandre82
+/docs/lgpd-registro-atividades.md   @cabralandre82
+/docs/disaster-recovery.md          @cabralandre82
+
+# ─── Audit artefacts from this cycle ────────────────────────────────────────
+/docs/audit-fine-tooth-comb-2026-04.md  @cabralandre82
+/docs/implementation-plan.md            @cabralandre82
+/docs/execution-log.md                  @cabralandre82
+/docs/runbooks/**                       @cabralandre82

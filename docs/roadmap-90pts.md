@@ -3,6 +3,8 @@
 > **Objetivo:** Atingir ≥ 90/100 em cada uma das 9 camadas arquiteturais.
 > **Baseline:** Avaliação de 2026-04-08 (score geral 61/100).
 > **Restrição documentada:** NF-e, WhatsApp Business API, Asaas produção e integração formal ANVISA bloqueados até obtenção de CNPJ, certificado digital e número de telefone empresarial.
+>
+> 🔎 **Update 2026-04-17:** auditoria total "Fine-Tooth Comb" em 20 lentes executou varredura de 187 sub-itens e identificou correções **complementares** a este roadmap (RBAC granular, hash-chain no audit, 4-eyes, schema em cents/bigint, particionamento, observability enterprise). Os Blocos A e B deste documento permanecem válidos; a auditoria adiciona 11 sprints de hardening estrutural em `docs/implementation-plan.md` referenciando `docs/audit-fine-tooth-comb-2026-04.md`.
 
 ---
 
