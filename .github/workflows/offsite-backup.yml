@@ -142,17 +142,26 @@ jobs:
 
             mkdir -p "$OUT_DIR/$BUCKET"
             echo "Listing $BUCKET…"
+            # Supabase Storage list endpoint requires a body with `prefix`
+            # (empty string to list root), `limit`, `offset` and `sortBy`.
+            # Omitting `prefix` or `sortBy` returns 400 Bad Request.
             PAGE=0
             while :; do
+              BODY=$(jq -cn \
+                --arg prefix "" \
+                --argjson limit 1000 \
+                --argjson offset $((PAGE * 1000)) \
+                '{prefix: $prefix, limit: $limit, offset: $offset, sortBy: {column: "name", order: "asc"}}')
               RESP=$(curl -fsS \
                 -H "Authorization: Bearer $SERVICE_KEY" \
                 -H "apikey: $SERVICE_KEY" \
                 -H 'Content-Type: application/json' \
-                -d "{\"limit\": 1000, \"offset\": $((PAGE * 1000))}" \
+                -d "$BODY" \
                 "$BASE/object/list/$BUCKET")
               COUNT=$(echo "$RESP" | jq 'length')
+              echo "  page=$PAGE count=$COUNT"
               [ "$COUNT" = "0" ] && break
-              echo "$RESP" | jq -r '.[].name' | while read -r KEY; do
+              echo "$RESP" | jq -r '.[] | select(.name != null) | .name' | while read -r KEY; do
                 [ -z "$KEY" ] && continue
                 SAFE=$(echo "$KEY" | tr '/' '_')
                 curl -fsS \
