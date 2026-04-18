@@ -152,6 +152,101 @@
           "expr": "sum by (rpc) (increase(atomic_rpc_fallback_total[1h]))"
         }
       ]
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "SLO-09 · Backup age (weekly)",
+      "gridPos": { "x": 0, "y": 20, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 604800 },
+              { "color": "red", "value": 777600 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "age",
+          "expr": "max(backup_age_seconds{kind=\"BACKUP\",label=\"weekly\"})"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "SLO-09 · Restore drill age (monthly)",
+      "gridPos": { "x": 6, "y": 20, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2592000 },
+              { "color": "red", "value": 3024000 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "age",
+          "expr": "max(backup_age_seconds{kind=\"RESTORE_DRILL\",label=\"monthly\"})"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Backup chain breaks (30d)",
+      "gridPos": { "x": 12, "y": 20, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{kind}}",
+          "expr": "sum by (kind) (increase(backup_chain_break_total[30d]))"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Backup size (weekly)",
+      "gridPos": { "x": 18, "y": 20, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "size",
+          "expr": "backup_last_size_bytes{label=\"weekly\"}"
+        }
+      ]
     }
   ]
 }

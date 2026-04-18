@@ -184,6 +184,41 @@ export async function GET(req: NextRequest) {
     checks.webhookBacklog = { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
+  // ── Backup freshness (Wave 12) ─────────────────────────────────────────
+  // Cheap: single SELECT against `backup_latest_view`. We intentionally
+  // consider this check NON-FATAL (the flag `backup.freshness_enforce`
+  // drives the cron's paging level; the deep-health response always
+  // tells the truth but only flips `ok=false` when the enforcement
+  // flag is ON, mirroring the cron behaviour).
+  try {
+    const { getBackupFreshness, BACKUP_SLA } = await import('@/lib/backup')
+    const freshness = await getBackupFreshness()
+    const enforce = await isFeatureEnabled('backup.freshness_enforce', {}).catch(() => false)
+    const breaches = freshness.filter((r) => {
+      if (r.outcome !== 'ok') return true
+      if (r.kind === 'BACKUP' && r.age_seconds > BACKUP_SLA.BACKUP_MAX_AGE_S) return true
+      if (r.kind === 'RESTORE_DRILL' && r.age_seconds > BACKUP_SLA.RESTORE_DRILL_MAX_AGE_S)
+        return true
+      return false
+    })
+    checks.backupFreshness = {
+      ok: breaches.length === 0 || !enforce,
+      details: {
+        enforce,
+        streams: freshness.length,
+        breaches: breaches.map((b) => ({
+          kind: b.kind,
+          label: b.label,
+          outcome: b.outcome,
+          ageSeconds: b.age_seconds,
+        })),
+      },
+      error: breaches.length > 0 ? `${breaches.length} stream(s) outside SLA` : undefined,
+    }
+  } catch (err) {
+    checks.backupFreshness = { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+
   const allOk = Object.values(checks).every((c) => c.ok)
   const totalMs = Date.now() - start
   observeHistogram(Metrics.HEALTH_CHECK_DURATION_MS, totalMs, { endpoint: 'deep' })

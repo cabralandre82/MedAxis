@@ -29,6 +29,9 @@ const PUBLIC_ROUTES = [
   '/api/health',
   // Metrics scrape — gated by METRICS_SECRET, not user session (Wave 11)
   '/api/metrics',
+  // Backup ledger ingest — gated by BACKUP_LEDGER_SECRET, called
+  // only by GitHub workflows, not user session (Wave 12)
+  '/api/backups/record',
   // LGPD public pages
   '/privacy',
   '/terms',

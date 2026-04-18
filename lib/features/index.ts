@@ -36,6 +36,7 @@ export type FeatureFlagKey =
   | 'observability.deep_health'
   | 'security.csrf_enforce'
   | 'security.turnstile_enforce'
+  | 'backup.freshness_enforce'
   | 'dsar.sla_enforce'
   // Future waves extend this union. String literal `string & {}` keeps callers
   // type-safe while allowing new keys without churning this file.

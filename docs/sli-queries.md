@@ -163,6 +163,38 @@ sum(rate(http_outbound_total{service="clicksign"}[5m]))
 Use `fetchWithTrace({ serviceName: 'asaas' })` at the call site
 so the label is set — see `lib/trace.ts`.
 
+## SLO-09 — Backup recoverability (hard)
+
+Primary SLI (binary — either fresh or not):
+
+```promql
+# Weekly backup must be < 9 d old, monthly drill < 35 d old.
+# Gauges are emitted by `/api/cron/backup-freshness` daily.
+max by (label) (backup_age_seconds{kind="BACKUP"})        < (9 * 86400)
+and
+max by (label) (backup_age_seconds{kind="RESTORE_DRILL"}) < (35 * 86400)
+```
+
+Supplementary:
+
+```promql
+# Direct freshness signal — any stream over SLA pages P1/P2.
+sum(increase(backup_freshness_breach_total[1d]))
+
+# Chain break counter — should stay at 0.
+sum(increase(backup_chain_break_total[30d]))
+
+# Last recorded size — sudden drop > 50 % is a red flag.
+backup_last_size_bytes{label="weekly"}
+
+# Record endpoint health — a silent workflow is the #1 miss.
+sum(rate(backup_record_total{kind="BACKUP",outcome="ok"}[7d]))
+```
+
+Burn-rate: SLO-09 is hard — treat any non-zero
+`backup_freshness_breach_total` over a 24 h window as the error
+budget exhausted.
+
 ## Observability meta-SLO
 
 We also track the observability stack itself:

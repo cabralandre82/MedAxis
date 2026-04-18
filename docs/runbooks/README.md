@@ -36,6 +36,7 @@
 | `dsar-sla-missed.md`           | LGPD DSAR > 15 dias sem fulfill/reject (Wave 9)                      | `dsar_sla_breach_total` + cron           |
 | `rate-limit-abuse.md`          | Spike de HTTP 429 > 10 IPs/h ou credential stuffing (Wave 10)        | `rate_limit_suspicious_ips_total` + cron |
 | `observability-gap.md`         | Dashboards vazios ou `/api/metrics` sem coleta por >15 min (Wave 11) | Synthetic scrape + deep health           |
+| `backup-missing.md`            | Backup fresco > 9 d ou restore drill > 35 d ou chain break (Wave 12) | `backup_freshness_breach_total` + cron   |
 
 ### 🟡 P3 — Degradação silenciosa (backlog)
 

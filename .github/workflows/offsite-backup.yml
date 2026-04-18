@@ -260,6 +260,79 @@ jobs:
           done
           echo "Uploaded $(ls *.age | wc -l) files to s3://${{ secrets.R2_BUCKET }}/$PREFIX/"
 
+      - name: Compute artefact digest
+        id: digest
+        if: always()
+        run: |
+          set -euo pipefail
+          ARCHIVE="${{ steps.meta.outputs.archive_dir }}"
+          SIZE=0
+          FILES_SHA=""
+          if [ -d "$ARCHIVE" ]; then
+            SIZE=$(find "$ARCHIVE" -maxdepth 1 -type f -name '*.age' -printf '%s\n' 2>/dev/null | awk '{s+=$1} END{print s+0}')
+            # Checksum the encrypted .age artefacts — that is what
+            # actually landed in R2 and what restore-drill will
+            # consume. Up to 32 KiB concatenated; truncate to keep
+            # the ledger payload small.
+            FILES_SHA=$(cd "$ARCHIVE" 2>/dev/null && sha256sum *.age 2>/dev/null | head -c 32768 || true)
+          fi
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+          {
+            echo "files_sha<<DIGEST_EOF"
+            echo "$FILES_SHA"
+            echo "DIGEST_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Record outcome to platform ledger
+        if: always()
+        env:
+          LEDGER_URL: ${{ secrets.BACKUP_LEDGER_URL }}
+          LEDGER_SECRET: ${{ secrets.BACKUP_LEDGER_SECRET }}
+        run: |
+          # Skip silently when the platform ledger is not configured
+          # yet (first-run bootstrap). The workflow still succeeds so
+          # backups keep flowing; the freshness cron will alert once
+          # the ledger is wired up.
+          if [ -z "${LEDGER_URL:-}" ] || [ -z "${LEDGER_SECRET:-}" ]; then
+            echo "::warning::BACKUP_LEDGER_URL/SECRET unset — skipping ledger record"
+            exit 0
+          fi
+          OUTCOME=ok
+          [ "${{ job.status }}" = "success" ] || OUTCOME=fail
+          PREFIX="${{ steps.meta.outputs.label }}/${{ steps.meta.outputs.stamp }}"
+          BODY=$(jq -cn \
+            --arg kind "BACKUP" \
+            --arg label "${{ steps.meta.outputs.label }}" \
+            --arg prefix "$PREFIX" \
+            --arg files "${{ steps.digest.outputs.files_sha }}" \
+            --argjson size ${{ steps.digest.outputs.size || 0 }} \
+            --arg outcome "$OUTCOME" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg commit "${{ github.sha }}" \
+            --arg stamp "${{ steps.meta.outputs.stamp }}" \
+            '{kind: $kind, label: $label, r2_prefix: $prefix, files_sha256: $files, size_bytes: $size, outcome: $outcome, source_url: $url, metadata: {commit: $commit, stamp: $stamp}}')
+          # Retry with exponential backoff — one transient 5xx from
+          # the platform must not mark a healthy backup as missing.
+          for DELAY in 2 5 15 0; do
+            HTTP=$(curl -sS -o /tmp/ledger.json -w '%{http_code}' \
+              -X POST "$LEDGER_URL" \
+              -H "Authorization: Bearer $LEDGER_SECRET" \
+              -H 'Content-Type: application/json' \
+              -d "$BODY") || HTTP=000
+            if [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ]; then
+              echo "Ledger recorded: $(cat /tmp/ledger.json)"
+              exit 0
+            fi
+            echo "::warning::ledger POST returned $HTTP, retrying in ${DELAY}s"
+            [ "$DELAY" = "0" ] || sleep "$DELAY"
+          done
+          echo "::error::failed to record run into platform ledger"
+          cat /tmp/ledger.json || true
+          # Do NOT fail the backup because of ledger trouble — the
+          # artefact is safely in R2, which is what matters. The
+          # freshness cron will page if the ledger gap persists.
+          exit 0
+
       - name: Write run summary
         if: always()
         run: |
@@ -269,6 +342,7 @@ jobs:
             echo "**Label:** ${{ steps.meta.outputs.label }}"
             echo "**Commit:** ${{ github.sha }}"
             echo "**Outcome:** ${{ job.status }}"
+            echo "**Size:** ${{ steps.digest.outputs.size }} bytes"
             echo ""
             echo "Failures on this workflow trigger an email to the repository's"
             echo "notification address (via GitHub Actions default behaviour)."

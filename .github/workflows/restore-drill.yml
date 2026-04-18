@@ -163,7 +163,46 @@ jobs:
           echo "Max audit timestamp:"  && $PSQL "SELECT max(created_at) FROM public.audit_logs;"
           echo "Feature flags present:" && $PSQL "SELECT count(*) FROM public.feature_flags;" || true
 
+      - name: Record outcome to platform ledger
+        if: always()
+        env:
+          LEDGER_URL: ${{ secrets.BACKUP_LEDGER_URL }}
+          LEDGER_SECRET: ${{ secrets.BACKUP_LEDGER_SECRET }}
+        run: |
+          if [ -z "${LEDGER_URL:-}" ] || [ -z "${LEDGER_SECRET:-}" ]; then
+            echo "::warning::BACKUP_LEDGER_URL/SECRET unset — skipping ledger record"
+            exit 0
+          fi
+          OUTCOME=ok
+          [ "${{ job.status }}" = "success" ] || OUTCOME=fail
+          BODY=$(jq -cn \
+            --arg kind "RESTORE_DRILL" \
+            --arg label "monthly" \
+            --arg prefix "${{ steps.find.outputs.prefix }}" \
+            --arg outcome "$OUTCOME" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --argjson dur "${restore_seconds:-0}" \
+            --arg commit "${{ github.sha }}" \
+            '{kind: $kind, label: $label, r2_prefix: $prefix, outcome: $outcome, source_url: $url, metadata: {restore_seconds: $dur, commit: $commit}}')
+          for DELAY in 2 5 15 0; do
+            HTTP=$(curl -sS -o /tmp/ledger.json -w '%{http_code}' \
+              -X POST "$LEDGER_URL" \
+              -H "Authorization: Bearer $LEDGER_SECRET" \
+              -H 'Content-Type: application/json' \
+              -d "$BODY") || HTTP=000
+            if [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ]; then
+              echo "Ledger recorded: $(cat /tmp/ledger.json)"
+              exit 0
+            fi
+            echo "::warning::ledger POST returned $HTTP, retrying in ${DELAY}s"
+            [ "$DELAY" = "0" ] || sleep "$DELAY"
+          done
+          echo "::error::failed to record restore-drill into platform ledger"
+          cat /tmp/ledger.json || true
+          exit 0
+
       - name: Write drill result to summary
+        if: always()
         run: |
           {
             echo "# Restore drill — $(date -Iseconds)"
@@ -172,6 +211,6 @@ jobs:
             echo ""
             echo "**Restore duration:** ${restore_seconds:-?} s"
             echo ""
-            echo "**Status:** ✅ completed"
+            echo "**Status:** ${{ job.status }}"
           } >> "$GITHUB_STEP_SUMMARY"
 

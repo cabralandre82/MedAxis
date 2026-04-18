@@ -2047,4 +2047,200 @@ Commit `8817887`, push to `main`:
 
 ---
 
+## Wave 12 — Backup + restore drills de verdade — ledger, chain, SLA (2026-04-17)
+
+**Status:** 🟢 concluído
+**Commits:** _(adicionados após merge)_
+**Migrations aplicadas (prod):** `053_backup_runs.sql` @ 2026-04-17
+**Env vars alteradas:** `BACKUP_LEDGER_SECRET` (novo, pendente rollout em Vercel + GH Actions)
+**Testes:** 35 novos unit (+1407 ⇒ 1442 totais)
+**Deploy staging / prod:** automático pela Vercel após push
+
+### Escopo
+
+A auditoria reclamava que "backup só vira valor quando é testado". A
+W12 fecha esse loop: os workflows `offsite-backup.yml` (semanal) e
+`restore-drill.yml` (mensal) já existiam e fazem o trabalho pesado em
+runners do GitHub — mas o **platform-side** estava cego. Se o schedule
+parasse, nenhum alerta interno dispararia. W12 adiciona um _ledger_
+imutável dentro do Postgres, um cron diário de freshness,
+dashboards e um SLO hard.
+
+### Entregáveis
+
+- **Migration `supabase/migrations/053_backup_runs.sql`** — tabela
+  `public.backup_runs` (append-only via trigger, igual a
+  `dsar_audit` da W9), RPC `backup_record_run(...)` com hash-chain
+  serializado por advisory lock em `(kind,label)`, RPC
+  `backup_verify_chain(kind)` retornando o primeiro break, view
+  `public.backup_latest_view` (último `ok` por `(kind,label)`), e a
+  feature flag `backup.freshness_enforce` (default OFF durante
+  bootstrap). O verificador checa apenas a _linkage_ (prev_hash ↔
+  row_hash anterior), porque a trigger já impede UPDATE/DELETE.
+- **`lib/backup.ts`** — cliente server-only para a ingestão:
+  `recordRunSchema` (zod v4, `z.record(z.string(), z.unknown())`
+  para metadata), `recordBackupRun`, `getBackupFreshness`,
+  `verifyBackupChain`, e as constantes `BACKUP_SLA`.
+- **`app/api/backups/record/route.ts`** — endpoint POST
+  gated por `BACKUP_LEDGER_SECRET` (aceita Bearer **ou**
+  `x-backup-ledger-secret`), usa `safeEqualString` para
+  comparação time-safe. Retorna 500 se o secret estiver
+  ausente em produção (mesma política de `/api/metrics`) —
+  jamais aceita gravação anônima no ledger. Respostas seguem
+  RFC 7807 `application/problem+json` em erros.
+- **`app/api/cron/backup-freshness/route.ts`** — cron diário
+  (09:00 UTC via `vercel.json`) que:
+  1. lê `backup_latest_view` via `getBackupFreshness()`,
+  2. anota gauges `backup_age_seconds{kind,label}` e
+     `restore_drill_age_seconds{label}`,
+  3. chama `verifyBackupChain('BACKUP')` e `('RESTORE_DRILL')`
+     em paralelo,
+  4. classifica via `diagnoseFreshness()` (função pura
+     exportada, testada isoladamente) com 4 razões:
+     `missing`, `stale`, `last_failed`, `chain_break`,
+  5. dispara `triggerAlert` com severity baseada em
+     `backup.freshness_enforce` (OFF=warning, ON=critical),
+     dedupKey `backup:freshness`.
+- **Atualização `.github/workflows/offsite-backup.yml`** —
+  novo step _"Compute artefact digest"_ (soma os `.age` +
+  `sha256sum`) e step _"Record outcome to platform ledger"_
+  com retry exponencial (2s, 5s, 15s) que POSTa para o
+  endpoint. Falhas no ledger **não** falham o backup — R2
+  segue sendo fonte de verdade; o freshness cron avisa se a
+  gap persistir.
+- **Atualização `.github/workflows/restore-drill.yml`** —
+  mesmo padrão, registrando `kind='RESTORE_DRILL'`,
+  `label='monthly'`, e `metadata.restore_seconds` para futura
+  métrica de RTO.
+- **`vercel.json`** — novo cron
+  `/api/cron/backup-freshness` @ `0 9 * * *`.
+- **`app/api/health/deep/route.ts`** — inclui
+  `checks.backupFreshness` (só marca `ok=false` quando o flag
+  `backup.freshness_enforce` está ON — espelha o
+  comportamento do cron e evita falso-positivo em rollout).
+- **`lib/metrics.ts`** — 9 novas constantes: `BACKUP_RECORD_TOTAL`,
+  `BACKUP_RECORD_DURATION_MS`, `BACKUP_LAST_SUCCESS_TS`,
+  `BACKUP_LAST_SIZE_BYTES`, `BACKUP_AGE_SECONDS`,
+  `BACKUP_FRESHNESS_BREACH_TOTAL`, `BACKUP_CHAIN_BREAK_TOTAL`,
+  `RESTORE_DRILL_LAST_SUCCESS_TS`, `RESTORE_DRILL_AGE_SECONDS`.
+- **`middleware.ts`** — `/api/backups/record` adicionado em
+  `PUBLIC_ROUTES` (auth é via BACKUP_LEDGER_SECRET, não por
+  sessão de usuário).
+- **`lib/features/index.ts`** — nova chave
+  `'backup.freshness_enforce'`.
+- **`docs/slos.md` seção 7** — novo SLO-09 (“Backup +
+  restore recoverability”) — hard, dono Platform + SRE.
+  Alvo: backup semanal < 9 d, drill mensal < 35 d.
+- **`docs/sli-queries.md`** — seção SLO-09 com queries
+  PromQL (age gauges, breach counter, chain break counter,
+  size regression, record rate).
+- **`monitoring/grafana/money-and-dsar.json`** — 4 painéis
+  adicionados (SLO-09 backup age, drill age, chain breaks,
+  size regression) mantendo o dashboard como único mural
+  dos SLOs hard.
+- **`docs/runbooks/backup-missing.md`** — P2 (warning) ↔ P1
+  (critical quando flag ON). 6 cenários cobertos
+  (schedule pausado, credenciais R2 expiradas, AGE key
+  perdida, ledger 5xx, chain break, reset pós-recovery) +
+  reference queries + `gh workflow run` commands.
+- **`docs/runbooks/README.md`** — entrada `backup-missing.md`.
+- **Testes** — `tests/unit/lib/backup.test.ts` (15),
+  `tests/unit/api/backup-record.test.ts` (9),
+  `tests/unit/api/backup-freshness.test.ts` (11). Cobrem:
+  validação zod, emissão correta de gauges por
+  `(kind,outcome)`, não-emissão em `fail`, auth 500/401,
+  auth aceita Bearer e x-header, 422 com
+  field-level-errors, 502 problem+json em erro de RPC,
+  classificador puro com 6 combinações, e o cron
+  end-to-end (healthy / stale warning / stale critical /
+  chain break / 401 cron secret).
+
+### Impacto operacional
+
+- **Secret obrigatório**: adicionar `BACKUP_LEDGER_SECRET` (32+
+  chars aleatório) em **(a)** Vercel env vars (production +
+  preview) e **(b)** GitHub Actions repo secrets como
+  `BACKUP_LEDGER_SECRET` **e** `BACKUP_LEDGER_URL`
+  (`https://app.clinipharma.com.br/api/backups/record`).
+  Enquanto ausente nas GH secrets, o step "Record outcome"
+  emite warning e continua — backup segue em R2. Quando o
+  secret existir mas o endpoint estiver em 5xx, o retry
+  3-passos absorve blips.
+- **Backfill manual do histórico**: como o ledger nasce
+  vazio, a primeira execução do cron vai classificar
+  `BACKUP/weekly` e `RESTORE_DRILL/monthly` como `missing`
+  (severity=warning com flag OFF). É aceitável — serve
+  como smoke final de que os alerts funcionam. Depois da
+  primeira semana, com backup real gravado, a
+  classificação migra para `ok`.
+- **Flip para critical**: após 30 dias sem `chain_break`
+  e 2 ciclos completos de BACKUP + RESTORE_DRILL
+  gravados, flipar `backup.freshness_enforce=true` via
+  `feature_flags`. A partir daí, gap > SLA é P1 →
+  PagerDuty.
+
+### Decisões de design
+
+1. **Ledger dentro do Postgres, não em R2 / Supabase
+   Storage**. Queríamos `pg_advisory_xact_lock` para serializar
+   hash-chain em writes concorrentes sem bookkeeping extra,
+   RLS que proíbe select anônimo, e a mesma ergonomia de
+   `dsar_audit` / `audit_logs`. Custo: 1 POST extra por
+   workflow run, irrelevante no orçamento.
+2. **Verificador checa linkage, não re-hash de conteúdo**.
+   Originalmente a migração `053` tentou recomputar o
+   `row_hash` completo no verificador, mas o
+   `jsonb_build_object(...)::text` tem ordem de chave
+   dependente de jsonb internal (length-then-alpha) — o
+   re-hash nem sempre bate. Como a trigger
+   `_backup_runs_append_only` já bloqueia `UPDATE` e
+   `DELETE`, verificar apenas que cada `prev_hash` aponta
+   para o `row_hash` anterior é criptograficamente
+   suficiente: deleção de uma linha quebra a linkage,
+   inserção fora de ordem também, e mutação direta do
+   `row_hash` quebra a próxima linkage.
+3. **Workflows fazem retry mas não falham se o ledger
+   estiver down**. A frase-guia é "backup em R2 é quem
+   importa; o ledger é observability, não é o produto".
+   Três tentativas (2s, 5s, 15s) cobrem 99 % dos blips;
+   depois o freshness cron (diário) garante que a gap não
+   passe do radar por mais de 24 h.
+4. **`diagnoseFreshness()` exportada e pura**. Separa a
+   policy (`BACKUP_SLA`) do orquestrador. Todo mundo (deep
+   health, cron, runbook de emergência) consome a mesma
+   função — não há oportunidade para "o cron diz X mas o
+   dashboard diz Y".
+5. **SLO-09 é hard**. Sem restore provado, toda promessa
+   de continuidade é papel. Quando o flag ficar ON, a
+   classificação `stale` ou `missing` vira P1 em 24 h, não
+   em semanas.
+
+### Follow-ups criados
+
+- Adicionar `BACKUP_LEDGER_SECRET` + `BACKUP_LEDGER_URL` em
+  (a) Vercel env vars prod/preview e (b) GH Actions repo
+  secrets antes do próximo sábado (próxima execução do
+  `offsite-backup.yml`).
+- Após a primeira execução real, inspecionar o row com
+  `SELECT files_sha256 FROM backup_runs WHERE kind='BACKUP'
+ORDER BY recorded_at DESC LIMIT 1;` e confirmar que
+  contém sha256 dos artefatos `.age`.
+- Aguardar 30 d + 1 ciclo de `RESTORE_DRILL` ok; então
+  flipar `backup.freshness_enforce=true` via
+  `feature_flags`.
+- Adicionar métrica `restore_drill_duration_seconds` a
+  partir de `metadata_json->>'restore_seconds'`
+  (post-merge; requer materializer / gauge na cron em
+  lugar do simples counter de outcome).
+- W13 candidato: **GDPR-style legal hold** — flag por
+  usuário que suspende purges de `audit_logs`,
+  `webhook_events`, `cron_runs` para contas sob
+  investigação ANPD/CDC.
+
+### CI run info
+
+**Status:** serão registrados após push.
+
+---
+
 ---

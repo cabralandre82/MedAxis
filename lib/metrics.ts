@@ -264,6 +264,15 @@ export const Metrics = {
   HTTP_REQUEST_DURATION_MS: 'http_request_duration_ms',
   HTTP_REQUEST_TOTAL: 'http_request_total',
   METRICS_SCRAPE_TOTAL: 'metrics_scrape_total',
+  BACKUP_RECORD_TOTAL: 'backup_record_total',
+  BACKUP_RECORD_DURATION_MS: 'backup_record_duration_ms',
+  BACKUP_LAST_SUCCESS_TS: 'backup_last_success_ts',
+  BACKUP_LAST_SIZE_BYTES: 'backup_last_size_bytes',
+  BACKUP_AGE_SECONDS: 'backup_age_seconds',
+  BACKUP_FRESHNESS_BREACH_TOTAL: 'backup_freshness_breach_total',
+  BACKUP_CHAIN_BREAK_TOTAL: 'backup_chain_break_total',
+  RESTORE_DRILL_LAST_SUCCESS_TS: 'restore_drill_last_success_ts',
+  RESTORE_DRILL_AGE_SECONDS: 'restore_drill_age_seconds',
 } as const
 
 // ── Surge detector ───────────────────────────────────────────────────────────
