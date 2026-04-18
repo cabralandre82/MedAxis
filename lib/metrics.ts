@@ -245,6 +245,14 @@ export const Metrics = {
   MONEY_DRIFT_TOTAL: 'money_drift_total',
   MONEY_RECONCILE_DURATION_MS: 'money_reconcile_duration_ms',
   MONEY_RECONCILE_LAST_RUN_TS: 'money_reconcile_last_run_ts',
+  DSAR_OPENED_TOTAL: 'dsar_opened_total',
+  DSAR_DUPLICATE_OPEN_TOTAL: 'dsar_duplicate_open_total',
+  DSAR_TRANSITION_TOTAL: 'dsar_transition_total',
+  DSAR_TRANSITION_ERROR_TOTAL: 'dsar_transition_error_total',
+  DSAR_TRANSITION_DURATION_MS: 'dsar_transition_duration_ms',
+  DSAR_SLA_BREACH_TOTAL: 'dsar_sla_breach_total',
+  DSAR_SLA_WARNING_TOTAL: 'dsar_sla_warning_total',
+  DSAR_EXPIRED_TOTAL: 'dsar_expired_total',
 } as const
 
 // ── Surge detector ───────────────────────────────────────────────────────────

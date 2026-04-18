@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { requireRole } from '@/lib/rbac'
-import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
+import { createAuditLog, AuditAction, AuditEntity, logPiiView } from '@/lib/audit'
 import { revokeAllUserTokens } from '@/lib/token-revocation'
 import { logger } from '@/lib/logger'
+import { transitionDsarRequest, hashCanonicalBundle } from '@/lib/dsar'
 
 /**
  * POST /api/admin/lgpd/anonymize/:userId
@@ -41,7 +42,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       )
     }
 
-    // 2. Anonymize profile PII
+    // Record that we read this subject's PII as part of the admin
+    // anonymisation workflow (Wave 9). Best-effort; never blocks.
+    await logPiiView({
+      actorUserId: actor.id,
+      actorRole: actor.roles[0],
+      subjectUserId: userId,
+      scope: ['full_name', 'email', 'phone'],
+      reason: 'lgpd_anonymize_pre_read',
+      ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined,
+      userAgent: req.headers.get('user-agent') ?? undefined,
+    })
+
+    // 2. Anonymize profile PII. We set anonymized_at so downstream
+    // code can tell a live user from a tombstoned one without
+    // string-matching on the email placeholder.
+    const nowIso = new Date().toISOString()
     const { error: profileAnonErr } = await admin
       .from('profiles')
       .update({
@@ -50,7 +66,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         phone: null,
         phone_encrypted: null,
         status: 'INACTIVE',
-        updated_at: new Date().toISOString(),
+        anonymized_at: nowIso,
+        anonymized_by: actor.id,
+        updated_at: nowIso,
       })
       .eq('id', userId)
     if (profileAnonErr)
@@ -106,11 +124,60 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       newValues: { anonymized: true, reason: 'LGPD Art. 18 VI — solicitação de exclusão' },
     })
 
+    // 8. Close any open ERASURE DSAR request for this subject.
+    //    We compute the delivery_hash over the anonymisation result
+    //    so the FULFILLED row carries proof-of-completion.
+    let dsarRequestId: string | null = null
+    try {
+      const { data: openReq } = await admin
+        .from('dsar_requests')
+        .select('id, status, kind')
+        .eq('subject_user_id', userId)
+        .eq('kind', 'ERASURE')
+        .in('status', ['RECEIVED', 'PROCESSING'])
+        .order('requested_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (openReq?.id) {
+        dsarRequestId = openReq.id
+        // RECEIVED → PROCESSING first if needed.
+        if (openReq.status === 'RECEIVED') {
+          await transitionDsarRequest(openReq.id, 'PROCESSING', {
+            actorUserId: actor.id,
+            actorRole: actor.roles[0],
+          })
+        }
+        const deliveryHash = hashCanonicalBundle({
+          subject_user_id: userId,
+          anonymized_at: nowIso,
+          anonymized_by: actor.id,
+          preserved: ['orders', 'payments', 'commissions', 'audit_logs'],
+        })
+        await transitionDsarRequest(openReq.id, 'FULFILLED', {
+          actorUserId: actor.id,
+          actorRole: actor.roles[0],
+          deliveryHash,
+          deliveryRef: `anonymized:${userId}`,
+          metadata: {
+            reason: 'LGPD Art. 18 VI',
+            preserved: ['orders', 'payments', 'commissions', 'audit_logs'],
+          },
+        })
+      }
+    } catch (dsarErr) {
+      logger.error('[lgpd/anonymize] failed to close DSAR request', {
+        userId,
+        error: dsarErr,
+      })
+    }
+
     return NextResponse.json(
       {
         ok: true,
         anonymized: userId,
         preserved: ['orders', 'payments', 'commissions', 'audit_logs'],
+        dsar_request_id: dsarRequestId,
         message: 'PII anonimizada. Dados financeiros preservados conforme CTN Art. 195.',
       },
       { headers: { 'X-Request-ID': requestId } }

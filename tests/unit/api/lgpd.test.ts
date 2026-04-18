@@ -16,8 +16,9 @@ vi.mock('@/lib/notifications', () => ({
 }))
 vi.mock('@/lib/audit', () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
+  logPiiView: vi.fn().mockResolvedValue(undefined),
   AuditAction: { CREATE: 'CREATE', DELETE: 'DELETE' },
-  AuditEntity: { PROFILE: 'PROFILE' },
+  AuditEntity: { PROFILE: 'PROFILE', DSAR_REQUEST: 'DSAR_REQUEST' },
 }))
 vi.mock('@/lib/token-revocation', () => ({
   revokeAllUserTokens: vi.fn().mockResolvedValue(undefined),
@@ -42,7 +43,7 @@ function makeAuthClient(user: { id: string } | null) {
 }
 
 function makeAdminWithData(overrides: Record<string, unknown> = {}) {
-  const defaultChain = {
+  const defaultChain: Record<string, unknown> = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
@@ -54,9 +55,24 @@ function makeAdminWithData(overrides: Record<string, unknown> = {}) {
     ilike: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
+    // Wave 9 — createDsarRequest() does
+    //   admin.from('dsar_requests').insert(...).select('*').single()
+    // and lgpd/export reads ongoing dsar_requests via
+    //   admin.from('dsar_requests').select(...).order(...)
+    insert: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: { id: 'dsar-test-1', sla_due_at: '2099-01-01T00:00:00Z' },
+          error: null,
+        }),
+      }),
+    }),
   }
   return {
     from: vi.fn().mockReturnValue(defaultChain),
+    rpc: vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'dsar-test-1', status: 'FULFILLED' }, error: null }),
     auth: {
       admin: {
         updateUserById: vi.fn().mockResolvedValue({ error: null }),

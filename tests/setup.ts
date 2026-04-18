@@ -136,6 +136,7 @@ vi.mock('@/lib/email/templates', () => ({
 // ── lib/audit ────────────────────────────────────────────────────────────────
 vi.mock('@/lib/audit', () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
+  logPiiView: vi.fn().mockResolvedValue(undefined),
   AuditAction: {
     CREATE: 'CREATE',
     UPDATE: 'UPDATE',
@@ -156,6 +157,7 @@ vi.mock('@/lib/audit', () => ({
     TRANSFER: 'TRANSFER',
     PROFILE: 'PROFILE',
     APP_SETTING: 'APP_SETTING',
+    DSAR_REQUEST: 'DSAR_REQUEST',
   },
 }))
 

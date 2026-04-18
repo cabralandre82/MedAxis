@@ -56,6 +56,10 @@
     {
       "path": "/api/cron/money-reconcile",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/dsar-sla-check",
+      "schedule": "0 * * * *"
     }
   ]
 }

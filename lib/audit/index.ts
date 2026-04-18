@@ -81,4 +81,49 @@ export const AuditEntity = {
   TRANSFER: 'TRANSFER',
   COMMISSION: 'COMMISSION',
   APP_SETTING: 'APP_SETTING',
+  DSAR_REQUEST: 'DSAR_REQUEST',
 } as const
+
+/**
+ * Record a server-side read of PII fields for LGPD accountability (Wave 9).
+ *
+ * Emit this from any code path that reads personal identifiable
+ * information (full_name, email, phone, CPF, prescriptions, audit
+ * logs of other users, etc.) on behalf of an operator — typically
+ * admin dashboards, support screens, or exports.
+ *
+ * Unlike `createAuditLog` this helper uses the stable action name
+ * `VIEW_PII` and forces a `scope` field in metadata so we can
+ * answer "which PII fields were surfaced in this view" for auditing.
+ *
+ * Never blocks the main operation — failures are logged and
+ * swallowed (the audit trail is important but not at the cost of
+ * user-visible breakage; the audit chain's hash-verify cron
+ * detects missing rows after-the-fact).
+ */
+export async function logPiiView(params: {
+  actorUserId: string
+  actorRole?: string | null
+  subjectUserId: string
+  scope: string[]
+  reason?: string
+  ip?: string
+  userAgent?: string
+}): Promise<void> {
+  if (!params.scope || params.scope.length === 0) {
+    return
+  }
+  await createAuditLog({
+    actorUserId: params.actorUserId,
+    actorRole: params.actorRole ?? undefined,
+    entityType: AuditEntity.PROFILE,
+    entityId: params.subjectUserId,
+    action: 'VIEW_PII',
+    metadata: {
+      scope: params.scope,
+      reason: params.reason ?? null,
+    },
+    ip: params.ip,
+    userAgent: params.userAgent,
+  })
+}

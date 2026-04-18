@@ -1310,3 +1310,226 @@ Total novos: **60 unit tests**. Regressão integral:
 | License check (production)  | 🟢     | OK (9s)                                                                  |
 
 ---
+
+## Wave 9 — LGPD DSAR queue + SLA + `logPiiView` (2026-04-17)
+
+**Objetivo:** formalizar o pipeline LGPD Art. 18, que até aqui
+vivia apenas como pares de rows em `audit_logs` + notificação ao
+`SUPER_ADMIN`, sem queue, sem state-machine, sem SLA. Também
+tornar a entrega do export _não-repudiável_ (assinatura HMAC
+sobre canonical JSON) e deixar rastro auditável de todo acesso
+server-side a PII via `logPiiView()`.
+
+Pré-req: W3 (auditoria imutável hash-chained) e W4 (RBAC
+fine-grained) — ambos ✓.
+
+### Inventário prévio
+
+- `/api/lgpd/export` — dumpa profile + orders + notifications +
+  audit_logs. Sem assinatura, sem tracking.
+- `/api/lgpd/deletion-request` — cria um `audit_logs` row + notifica
+  SUPER_ADMIN. Sem queue, qualquer usuário pode abrir 20 em
+  sequência.
+- `/api/admin/lgpd/anonymize/:userId` — anonimização manual por
+  SUPER_ADMIN. Não marcava `anonymized_at` (inferência por
+  string-match de `anon-…@deleted.clinipharma.invalid`).
+- `lib/audit::createAuditLog()` já emite rows hash-chained via
+  trigger de W3, mas não havia ação canônica `VIEW_PII`.
+- Nenhum SLA. Nenhum alerta de breach.
+
+### Entregas
+
+1. **Migration 051** (aplicada staging `ghjexiyrqdtqhkolsyaw` +
+   prod `jomdntqlgrupvhrqoyai`):
+   - `profiles.anonymized_at`, `profiles.anonymized_by` +
+     `idx_profiles_anonymized_at` (parcial WHERE IS NOT NULL).
+   - `public.dsar_requests` com state graph
+     RECEIVED → PROCESSING → FULFILLED | REJECTED | EXPIRED
+     (terminais). Unique partial index
+     `uq_dsar_requests_open_by_kind` bloqueia múltiplas requests
+     abertas do mesmo kind para o mesmo subject.
+   - `public.dsar_audit` — append-only hash-chained (mesmo design
+     de `audit_logs`, migration 046). UPDATE/DELETE bloqueados pelo
+     trigger `trg_dsar_audit_immutable`.
+   - Trigger `trg_dsar_requests_state_guard` impõe o state graph
+     no banco: INSERT forçado em RECEIVED, UPDATE só via GUC
+     `clinipharma.dsar_transition_ok=true` (setada pelo RPC).
+     REJECTED exige `reject_code`; FULFILLED exige `delivery_hash`
+     e `fulfilled_at`.
+   - RPC SECURITY DEFINER `public.dsar_transition(uuid, text, jsonb)`:
+     valida target state via trigger, escreve no `dsar_requests`,
+     anexa row hash-chained em `dsar_audit`, retorna jsonb com
+     `{id, status, row_hash, ...}`.
+   - RPC `public.dsar_expire_stale(int)` itera rows cujo SLA
+     estourou > `grace_days` e chama `dsar_transition → EXPIRED`
+     — usado pelo cron quando o flag está ON.
+   - Feature flag `dsar.sla_enforce` (default OFF) para rollout
+     seguro: com flag OFF, breaches paginam P2 e não auto-expiram;
+     com ON, P1 + auto-expire em grace+30.
+   - RLS: subject lê só suas próprias rows; insert exige que o
+     caller seja o próprio subject (defence-in-depth com a ligação
+     de rota).
+   - Smoke structural no migration (tables=2, functions=4,
+     triggers=2, flag=OFF) + smoke funcional via script Python
+     sobre staging (happy path, direct-UPDATE bloqueado, terminal
+     → PROCESSING bloqueado, REJECTED-sem-código bloqueado,
+     direct-INSERT em audit bloqueado, FULFILLED-sem-hash
+     bloqueado).
+
+2. **`lib/dsar.ts`** (server-only):
+   - `createDsarRequest()` insere via admin client; mapeia código
+     Postgres `23505` (unique violation) para reason estável
+     `duplicate_open`; emite counter `dsar_opened_total{kind}` /
+     `dsar_duplicate_open_total{kind}`.
+   - `transitionDsarRequest()` chama `dsar_transition` RPC;
+     traduz mensagens PL/pgSQL em reasons enum-estáveis
+     (`invalid_transition`, `reject_code_required`,
+     `delivery_hash_required`, `direct_update_forbidden`,
+     `audit_append_only`, `not_found`, `bad_initial_state`,
+     `unknown_target_status`, `unknown`); emite
+     `dsar_transition_total{to}` + histogram
+     `dsar_transition_duration_ms`.
+   - `hashCanonicalBundle()` — SHA-256 sobre forma canonical JSON
+     (chaves ordenadas alfabeticamente, `undefined` removido,
+     arrays preservados). Deterministic sob reorder/whitespace.
+   - `signCanonicalBundle()` / `verifyCanonicalBundle()` — HMAC
+     sobre `LGPD_EXPORT_HMAC_KEY` (exige ≥ 32 chars; throw se
+     faltar). Verificação em `timingSafeEqual` com checagem de
+     comprimento prévia. Prefixo `sha256=<hex>` seguindo convenção
+     de webhooks do codebase.
+
+3. **`lib/audit::logPiiView()`**:
+   - Wrapper sobre `createAuditLog` com `action='VIEW_PII'` fixo
+     e metadata obrigatório `{scope, reason}`.
+   - Escopo vazio → no-op (nada a auditar).
+   - Falhas de banco são swallowed (nunca bloqueia o caminho
+     principal; o cron de verify-audit-chain detecta lacunas
+     after-the-fact).
+   - Nova `AuditEntity.DSAR_REQUEST` e flag
+     `dsar.sla_enforce` adicionada ao union de
+     `FeatureFlagKey`.
+
+4. **Rotas atualizadas:**
+   - `/api/lgpd/deletion-request` agora abre row na queue
+     (`kind=ERASURE`); retorna 409 com `duplicate_open` quando há
+     ERASURE aberta; resposta inclui `dsar_request_id` e
+     `sla_due_at`.
+   - `/api/lgpd/export` agora:
+     - registra self-view em `audit_logs` via `logPiiView`;
+     - abre/reusa EXPORT DSAR request;
+     - calcula HMAC sobre o canonical bundle;
+     - injeta `_signature` e `_hash` no body + header
+       `X-LGPD-Export-Signature: sha256=<hex>`;
+     - transiciona o DSAR → PROCESSING → FULFILLED com
+       `delivery_hash = hash` e `delivery_ref = self-export:<date>`;
+     - failure de assinatura (env key ausente) loga erro e serve o
+       bundle sem assinatura — mantém disponibilidade sobre
+       assinatura, que é desejável durante rollout.
+   - `/api/admin/lgpd/anonymize/:userId` agora:
+     - emite `logPiiView` ao ler o perfil (actor ≠ subject);
+     - popula `anonymized_at = now()` e `anonymized_by = actor.id`;
+     - localiza ERASURE DSAR aberta do subject e:
+       - força RECEIVED → PROCESSING (se ainda não triado);
+       - calcula delivery_hash canônico sobre
+         `{subject_user_id, anonymized_at, anonymized_by, preserved}`;
+       - transiciona → FULFILLED com metadata e preserved list.
+
+5. **Cron `/api/cron/dsar-sla-check`** (hourly, `0 * * * *`):
+   - Classifica rows não-terminais em BREACH (`sla_due_at <= now`)
+     / WARNING (`sla_due_at <= now + 3d`) / OK. BREACH + WARNING
+     coexistindo dispara só o BREACH alert (ladder).
+   - Dedup keys estáveis `lgpd:dsar:sla:breach` e
+     `lgpd:dsar:sla:warning`.
+   - Severity dinâmica: `critical` com flag ON, `warning` com
+     flag OFF.
+   - `dsar_expire_stale(EXPIRE_GRACE_DAYS=30)` só com flag ON —
+     RECEIVED/PROCESSING com 45+ dias vira EXPIRED terminal.
+   - Counters `dsar_sla_breach_total{kind}`,
+     `dsar_sla_warning_total{kind}`, `dsar_expired_total{via="cron"}`.
+   - Query error → 500 sem alert (evita eco; cron guard já emite
+     `cron_runs.status=failed`).
+   - Alert-dispatch failure não mascara o resultado da query
+     (log-only fallback).
+
+6. **Runbook `docs/runbooks/dsar-sla-missed.md`**:
+   - Decision tree por tamanho de backlog (≤3 / 4-20 / >20 /
+     expirando).
+   - 4 estratégias de mitigação: (a) fulfill manual via RPC,
+     (b) reject com legal hold code, (c) kill-switch flag OFF,
+     (d) recovery de erasure parcial.
+   - Tabela de reject_codes: `NFSE_10Y` (CTN Art. 195, 10y
+     fiscal), `RDC_22_2014` (Anvisa 5y), `ART_37_LGPD` (consent
+     records).
+   - Playbook de escalação: P1 → DPO em 2h com flag ON + breach;
+     P2 next-business-day; >5 breach simultâneos → notificação
+     ANPD Art. 48.
+
+### Impacto operacional
+
+- Zero downtime — trigger + tabelas são aditivos, flag OFF não
+  altera comportamento externo.
+- Novo SECRET: `LGPD_EXPORT_HMAC_KEY` (≥ 32 chars). Se não
+  setado, export continua disponível mas sem assinatura e DSAR
+  fica em PROCESSING (admin fecha manualmente).
+- Novas métricas Prometheus-ready (já expostas em
+  `/api/metrics`):
+  - `dsar_opened_total{kind}`, `dsar_duplicate_open_total{kind}`
+  - `dsar_transition_total{to}`, `dsar_transition_error_total{reason,to}`
+  - `dsar_transition_duration_ms` (histogram)
+  - `dsar_sla_breach_total{kind}`, `dsar_sla_warning_total{kind}`
+  - `dsar_expired_total{via}`
+
+### Decisões-chave
+
+1. **State graph no banco via GUC** (`clinipharma.dsar_transition_ok`).
+   Alternativa considerada: trigger de auditoria duplo. Rejeitada
+   porque deixa janela para UPDATE direto que só bate no audit
+   trigger depois — a GUC bloqueia já no state-guard, antes do
+   audit ser anexado.
+2. **DSAR append-only** segue o padrão `audit_logs` de W3: mesmo
+   guard (GUC + DELETE/UPDATE bloqueados), mesma chain hash de
+   `prev_hash || row_hash`, mesmo SQL de auditoria em
+   `docs/runbooks/audit-chain-tampered.md`.
+3. **Canonicalização simples** (key sort + undefined strip), NÃO
+   JCS RFC 8785. Justificativa: não precisamos interop com
+   verifiers externos, e o esquema simples é ~40 linhas de TS vs.
+   centenas para JCS. Se algum parceiro pedir JCS no futuro, é
+   trivial trocar — os testes de idempotência já existem.
+4. **Flag `dsar.sla_enforce` default OFF** — evita paging P1
+   durante rollout com staging pollution residual (os 2 rows de
+   smoke ficaram em staging). Plano: flipar após 7 dias de cron
+   rodando com `breach=0` + triagem humana validada.
+5. **EXPIRED é terminal não-fulfilled** — não anonimiza, não
+   exporta. Sinaliza "ANPD poderá cobrar se nos auditarem". O
+   cron só expira após grace de 30 dias (total 45 dias desde
+   request), dando janela ampla para recuperação humana.
+6. **HMAC sobre canonical bundle (não sobre o texto pretty-print).**
+   O bundle retornado ao usuário é `JSON.stringify(bundle, null, 2)`
+   (indentado, key order original), mas o signature é calculado
+   sobre a forma canonical. O usuário verifica re-canonicalizando —
+   mesmo código TS, função exportada `canonicalize` em
+   `_internal`. Separado porque whitespace/ordem do pretty-print
+   poderia mudar entre deploys.
+
+### Pendências pós-merge
+
+- Setar `LGPD_EXPORT_HMAC_KEY` em prod (hoje só staging).
+  Rodando sem a env, cada export loga um `[lgpd/export] signing
+failed` — tolerável por 48h.
+- Monitorar `dsar_opened_total` por 72h. Normal é 0-5 por
+  semana; spike >10/dia é sinal de abuso ou form publicado.
+- Flipar `dsar.sla_enforce=true` após 7 dias zero-breach.
+- Limpar as 2 rows de smoke do staging (`reason_text ILIKE
+'W9_SMOKE_%' OR reason_text ILIKE 'functional-smoke-%'`) — não
+  existem em prod.
+- Adicionar métrica de `audit_logs{action='VIEW_PII'}` por
+  `scope` no dashboard de compliance — hoje as rows são auditadas
+  mas não há gráfico consolidado.
+
+**CI / Quality Gates (run pendente @ próximo commit):**
+
+A confirmar após push. Unit tests locais: 1336 passing (+44 vs.
+Wave 8: 31 `lib/dsar` + 8 `cron/dsar-sla-check` + 5 `logPiiView`).
+Typecheck + lint: 0 erros, 44 warnings de baseline.
+
+---
