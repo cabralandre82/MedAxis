@@ -2671,6 +2671,13 @@ semântica idêntica à intenção original.
 | Bug fixes em prod      | 🟢     | clinic_members + doctors + doctor_clinic_links policies refeitas sem recursão |
 | RLS canary execução    | 🟢     | Primeira execução manual: 40 tabelas, 0 vazamentos                            |
 
-CI runs são adicionados após push final.
+**Commits:** `845e3df` — `feat(wave-14): RLS canary — proof harness for tenant isolation`
+
+**CI runs (commit `845e3df`, branch `main`):**
+
+| Workflow      | Run ID                                                                               | Conclusion |
+| ------------- | ------------------------------------------------------------------------------------ | ---------- |
+| CI            | [24611344562](https://github.com/cabralandre82/clinipharma/actions/runs/24611344562) | 🟢 success |
+| Security Scan | [24611344563](https://github.com/cabralandre82/clinipharma/actions/runs/24611344563) | 🟢 success |
 
 ---
