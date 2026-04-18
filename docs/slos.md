@@ -133,6 +133,7 @@ via multi-window / multi-burn-rate (Google SRE, Cap. 5).
 | SLO-08 | Outbound 3rd-party availability | Asaas / Clicksign / Resend success rate (30 d)     | ≥ 99,0 %                | 7,2 h/mês          |
 | SLO-09 | Backup + restore recoverability | Weekly backup idade ≤ 9 d E monthly drill ≤ 35 d   | 100 % (hard, DR)        | 0                  |
 | SLO-10 | Legal-hold preservation         | 0 purges / DSAR erasures contra sujeitos sob hold  | 100 % (hard, legal)     | 0                  |
+| SLO-11 | RLS tenant isolation            | `rls_canary_violations_total` = 0 em janela 7 d    | 100 % (hard, security)  | 0                  |
 
 Classificação de severidade em resposta:
 
@@ -148,6 +149,7 @@ Classificação de severidade em resposta:
 | SLO-08 | soft   | Retry + circuit breaker já compensam                 |
 | SLO-09 | hard   | Sem restore comprovado, RPO/RTO = indefinido         |
 | SLO-10 | hard   | Destruir evidência sob ordem = sanção grave ANPD/CDC |
+| SLO-11 | hard   | Vazamento entre tenants = quebra contratual + LGPD   |
 
 ### 7.1 Política burn-rate
 
@@ -175,6 +177,7 @@ se o incidente persistisse — tier fast, acorda o on-call.
 | SLO-08 | Integrations   | semanal            | 2026-04-17     |
 | SLO-09 | Platform + SRE | diária             | 2026-04-17     |
 | SLO-10 | DPO + Legal    | evento-driven      | 2026-04-17     |
+| SLO-11 | Security + SRE | diária             | 2026-04-17     |
 
 ### 7.3 Changelog
 
@@ -191,3 +194,15 @@ se o incidente persistisse — tier fast, acorda o on-call.
   contadores `legal_hold_blocked_{purge,dsar}_total`. Hard SLO:
   qualquer purge executado contra sujeito sob ordem ativa é
   evento reportável ANPD/judicial.
+- **2026-04-17** — Wave 14 adiciona SLO-11 (RLS tenant isolation),
+  lastreado em `rls_canary_log` (migração 055) + contador
+  `rls_canary_violations_total` exposto pelo cron diário
+  `/api/cron/rls-canary`. Hard SLO: vazamento entre tenants
+  detectado por cliente externo seria quebra contratual e
+  potencial incidente reportável LGPD Art. 48. A primeira
+  execução do canário descobriu duas policies em recursão
+  infinita (`clinic_members_select`, `doctors_select` ↔
+  `doctor_clinic_links_select`) — corrigidas na própria
+  migração via helpers SECURITY DEFINER
+  (`is_clinic_member`, `is_doctor_for_user`,
+  `doctor_visible_to_clinic_member`).

@@ -2439,3 +2439,238 @@ uuid`. Linhas sem UUID são tratadas como "não há o que
 - **Security Scan run**: `24606617522` (1m00s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24606617522>
 
 ---
+
+## Wave 14 — RLS canary: prova de isolamento de tenants (2026-04-17)
+
+### Resumo
+
+Quatorze waves depois temos 63 tabelas com RLS, 200+ políticas e
+zero prova interna de que essas políticas realmente isolam
+tenants. A Wave 14 fecha esse gap com um **canário diário**: às
+04:40 BRT um cron forja um JWT para um UUID aleatório (sem
+membership em nada), abre uma sessão `authenticated` via
+PostgREST e pergunta a cada tabela protegida quantas linhas são
+visíveis. A resposta correta é zero. Qualquer outra coisa é uma
+quebra de fronteira de tenant — P0/P1 imediato.
+
+A primeira execução do smoke test, dentro da própria migração
+055, encontrou **dois bugs reais de produção**:
+
+1. `clinic_members_select` referenciava `clinic_members` em
+   `EXISTS(...)` dentro da própria policy, causando recursão
+   infinita. O Postgres detectou e abortava qualquer query
+   autenticada que tocasse `orders`, `payments`, `coupons`, etc.
+   A produção sobrevivia apenas porque a app lê via service_role
+   (BYPASSRLS); qualquer rota nova que usasse cliente
+   authenticated quebraria.
+2. `doctors_select` ↔ `doctor_clinic_links_select` formavam um
+   ciclo de recursão cruzada (cada um faz `EXISTS` no outro).
+
+Os dois foram corrigidos na própria migração via helpers
+`SECURITY DEFINER` (`is_clinic_member`, `is_pharmacy_member`,
+`is_doctor_for_user`, `doctor_visible_to_clinic_member`) que
+fazem bypass da policy ofensora apenas para o lookup, mantendo
+semântica idêntica à intenção original.
+
+### Deliverables
+
+1. **Migração `055_rls_canary.sql`**:
+   - Tabela append-only `public.rls_canary_log` (hash chain
+     idêntica a `audit_logs`/`backup_runs`).
+   - Trigger `_rls_canary_log_guard` bloqueia UPDATE/DELETE.
+   - RPC `rls_canary_assert(uuid)` SECURITY INVOKER que rola a
+     matriz declarativa de 40 tabelas e devolve uma linha por
+     tabela com `visible_rows`/`violated`.
+   - RPC `rls_canary_record(...)` SECURITY DEFINER, com
+     `pg_advisory_xact_lock(hashtext('rls_canary'))` para
+     serializar writers no ledger.
+   - Helpers `is_clinic_member`, `is_pharmacy_member`,
+     `is_doctor_for_user`, `doctor_visible_to_clinic_member`
+     SECURITY DEFINER, com REVOKE PUBLIC + GRANT específico.
+   - Fix policies `clinic_members_select`, `doctors_select`,
+     `doctor_clinic_links_select` para usar os helpers (sem
+     recursão).
+   - Feature flag `rls_canary.page_on_violation` (default OFF).
+   - Smoke test fim-a-fim: roda `SET LOCAL ROLE authenticated`
+     (permitido fora de SECURITY DEFINER), chama o assert para
+     um UUID synthetic e exige `violations=0` ou aborta a
+     migração inteira.
+
+2. **`lib/metrics.ts`** — sete métricas novas:
+   `rls_canary_runs_total`, `rls_canary_violations_total`,
+   `rls_canary_tables_checked`, `rls_canary_last_success_ts`,
+   `rls_canary_last_violation_ts`, `rls_canary_age_seconds`,
+   `rls_canary_duration_ms`.
+
+3. **`lib/features/index.ts`** — chave
+   `rls_canary.page_on_violation` adicionada ao union type.
+
+4. **`lib/rls-canary.ts`** (novo, server-only):
+   - `signCanaryJwt(sub, ttl=60)` — HS256 puro com `node:crypto`
+     (sem nova dep), assinado com `SUPABASE_JWT_SECRET`.
+   - `canarySubjectUuid()` — UUID fresh por execução (não
+     reutilizado, para evitar que alguém polua dados sob esse
+     UUID e mascare regressões).
+   - `runCanary()` — orquestra: forja JWT → cria cliente
+     supabase-js com `Authorization: Bearer` no header → chama
+     `rls_canary_assert(subject)` (RLS aplicada porque
+     PostgREST resolve role=authenticated do JWT) →
+     `rls_canary_record(...)` via service_role → métricas.
+   - `readLatestCanaryStatus()` — lê o ledger para o deep health,
+     com gauge `rls_canary_age_seconds`.
+   - Tratamento fail-safe: erro de RPC vira `violations=1` para
+     escalar (preferimos page falsa-positiva a canário cego).
+
+5. **`app/api/cron/rls-canary/route.ts`** — endpoint diário
+   protegido por `withCronGuard`. 0 violações ⇒ log info; ≥1
+   violação ⇒ `triggerAlert` com severity controlada por
+   `rls_canary.page_on_violation` (warning enquanto OFF, critical
+   quando ON). Falha de start (env faltando) emite alerta
+   crítico próprio (`dedupKey: 'rls-canary:misconfigured'`).
+
+6. **`vercel.json`** — cron `40 7 * * *` (UTC = 04:40 BRT).
+
+7. **`app/api/health/deep/route.ts`** — bloco `checks.rlsCanary`
+   que lê o último run do ledger; `ok=false` se idade > 36 h ou
+   violations > 0. Não dispara canário fresh do health probe
+   (custo).
+
+8. **`docs/runbooks/rls-violation.md`** — runbook P0/P1 com
+   triagem, mitigação por cenário (policy quebrada, recursão,
+   permission denied), freeze de release, comunicação com DPO,
+   pós-mortem template.
+
+9. **`docs/runbooks/README.md`** — entrada do runbook.
+
+10. **`docs/slos.md`** — SLO-11 "RLS tenant isolation" (hard,
+    security, 0 budget, owner Security+SRE) + entrada de
+    changelog explicando os bugs descobertos pelo canário.
+
+11. **`docs/sli-queries.md`** — queries PromQL primárias e
+    suplementares para SLO-11.
+
+12. **`monitoring/grafana/security.json`** — quatro painéis:
+    SLO-11 violations (stat com red threshold em ≥1), canary age
+    (stat com yellow @25h, red @36h), tables in matrix (stat) e
+    runs by outcome (timeseries).
+
+13. **`docs/rls-matrix.md`** — matriz declarativa documentada,
+    três buckets (tenant/self/admin), exclusões justificadas, e
+    procedimento "como adicionar uma nova tabela".
+
+14. **`.env.example`** — `SUPABASE_JWT_SECRET=...` documentado.
+
+15. **Tests**:
+    - `tests/unit/lib/rls-canary.test.ts` (11 tests) — JWT
+      forging contra `node:crypto` real, `canarySubjectUuid`
+      uniqueness, `runCanary` happy/violation/RPC-error/cap-50/
+      persist-failure paths, `readLatestCanaryStatus`
+      empty/age/error.
+    - `tests/unit/api/rls-canary-cron.test.ts` (5 tests) — 0
+      violations / warning quando enforce OFF / critical quando
+      enforce ON / runCanary throws → alerta de misconfig /
+      mensagem truncada em 20 entries.
+
+### Decisões-chave de design
+
+1. **SECURITY INVOKER, não DEFINER**. A primeira tentativa fez a
+   função SECURITY DEFINER e usou `SET LOCAL ROLE authenticated`
+   internamente — Postgres rejeita: `42501: cannot set parameter
+"role" within security-definer function`. A solução é forjar
+   um JWT autenticado e deixar o PostgREST configurar role +
+   `request.jwt.claims` ao receber a chamada. Função roda como
+   `authenticated`, RLS é aplicada de verdade.
+
+2. **JWT in-house em `node:crypto`, sem `jose`**. Minting é uma
+   única operação HS256; adicionar dep para isso é overkill.
+   `signCanaryJwt` é ~12 linhas testáveis, e a chave é a mesma
+   que o PostgREST usa para validar QUALQUER request — não
+   estamos abrindo nova superfície.
+
+3. **UUID synthetic fresh por run**, não reutilizado. Se um
+   atacante (ou bug) seedasse linhas para um "canary user"
+   fixo, o canário passaria mesmo com policy quebrada. UUID
+   aleatório torna isso estatisticamente impossível.
+
+4. **`permission denied` é interpretado como enforcement**, não
+   como violação. Tabelas sem policy (default DENY ALL) retornam
+   `permission denied for table X` quando consultadas por
+   `authenticated`. O canário trata isso como `visible_rows=0`,
+   `violated=false` — a menor leitura possível É o
+   comportamento desejado.
+
+5. **Fail-safe com violation=1 em erro de RPC**. Preferimos page
+   falsa-positiva a canário cego. Se o RPC retorna erro
+   transitório de rede, o cron registra um run com
+   `violations=1` no ledger, dispara alerta e investiga. Dois
+   ciclos sucessivos OK reseta a confiança.
+
+6. **Flag `rls_canary.page_on_violation` default OFF por 30 dias**.
+   Igual ao padrão de Wave 9/10/12/13: observamos primeiro,
+   ligamos depois. Métrica continua sendo emitida; só a
+   severidade do alerta muda (warning → critical).
+
+7. **Cron NÃO seedaa dados**. O canário prova "stranger sees
+   zero", não "owner sees their own". O segundo é coberto pelos
+   testes E2E existentes (Playwright). Esse split mantém o
+   canário < 1s, sem polution em prod.
+
+8. **`SET LOCAL ROLE authenticated` no smoke test do migration**.
+   Inside DO blocks (que rodam com privilégios do caller, não
+   SECURITY DEFINER) `SET LOCAL ROLE` é permitido. Sem isso, o
+   smoke roda como `postgres` (BYPASSRLS) e o canário sempre
+   passaria — falsa segurança.
+
+### Observações / issues encontrados durante execução
+
+- **Bug crítico #1**: `clinic_members_select` (já em produção,
+  pré-W14) recursava em si mesmo. Provavelmente nunca disparou
+  porque toda leitura de `orders`, `coupons`, etc. é feita pela
+  app via service_role. Migração 055 corrige.
+- **Bug crítico #2**: ciclo `doctors_select` ↔
+  `doctor_clinic_links_select`. Mesmo cenário, mesma correção.
+- **Schema drift**: a primeira definição do canário usou
+  `digest()` sem schema-qualify; `extensions.digest()` é o
+  caminho correto em Supabase. Corrigido inline.
+- **Falta de Vercel CLI token**: não consigo configurar
+  `SUPABASE_JWT_SECRET` em production env via automação. Está
+  documentado no runbook como pré-requisito de deploy
+  (operador roda `vercel env add SUPABASE_JWT_SECRET production`
+  uma vez).
+
+### Follow-ups criados
+
+1. **CI gate**: adicionar `tests/integration/rls-matrix-coverage.test.ts`
+   que lê `pg_policies`/`pg_class` da staging e falha o PR se
+   uma tabela RLS-enabled em `public` não está nem na matriz nem
+   na lista de exclusões. Bloquear merge sem isso na próxima
+   wave.
+2. **UI admin**: `/admin/rls-canary` para o time de segurança ver
+   o histórico do ledger sem psql. (Pareado com `/admin/legal-holds`
+   da W13 follow-up.)
+3. **Pure-positive matrix**: hoje cobrimos só "stranger sees
+   zero". Adicionar "owner sees own row" para cada tabela
+   tenant — exige seed de canary clinic + canary user na hora
+   da execução. Trabalho maior; fica para W15+.
+4. **Sweep de policies com `USING (true)`**: lint SQL no CI que
+   rejeita migrations contendo `USING (true)` ou `WITH CHECK
+(true)` sem comentário `-- WORLD-READABLE: <justificativa>`.
+5. **Trocar `email = (SELECT email FROM profiles ...)` por
+   função SECURITY DEFINER `is_doctor_email_for_user(...)`** —
+   a subquery atual ainda dispara RLS em `profiles`, que é
+   barata mas não-zero. Otimização, não correção.
+
+### CI run info (Wave 14)
+
+**Quality gates (locais):**
+
+| Gate                   | Status | Notes                                                                         |
+| ---------------------- | ------ | ----------------------------------------------------------------------------- |
+| Unit Tests (Vitest)    | 🟢     | 1490 passing (+16 W14)                                                        |
+| Migration smoke (prod) | 🟢     | 055 aplicada, smoke 40 tabelas / 0 violações, ledger genesis recorded         |
+| Bug fixes em prod      | 🟢     | clinic_members + doctors + doctor_clinic_links policies refeitas sem recursão |
+| RLS canary execução    | 🟢     | Primeira execução manual: 40 tabelas, 0 vazamentos                            |
+
+CI runs são adicionados após push final.
+
+---

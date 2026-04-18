@@ -40,6 +40,7 @@ export type FeatureFlagKey =
   | 'dsar.sla_enforce'
   | 'legal_hold.block_purge'
   | 'legal_hold.block_dsar_erasure'
+  | 'rls_canary.page_on_violation'
   // Future waves extend this union. String literal `string & {}` keeps callers
   // type-safe while allowing new keys without churning this file.
   | (string & {})

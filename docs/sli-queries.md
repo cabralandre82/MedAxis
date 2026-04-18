@@ -229,6 +229,51 @@ other hard SLOs — the counters are normally 0 and MUST stay 0
 while enforce flags are ON. A single non-zero increment is a
 P1 and must trigger the `legal-hold-received.md` runbook.
 
+## SLO-11 — RLS tenant isolation (hard)
+
+Primary SLI — the violation counter MUST be 0 in every 7 d window:
+
+```promql
+# Any non-zero value over the last week is a hard breach.
+# Wave 14 emits this counter from /api/cron/rls-canary every
+# 24 h and from any read of `rls_canary_log` via the deep health
+# endpoint when violations > 0.
+sum(increase(rls_canary_violations_total[7d]))
+```
+
+Supplementary (operational health of the canary itself):
+
+```promql
+# Did the cron actually run? Should be ≥ 6 in any 7 d window
+# (one daily run, allowing for one missed day).
+sum(increase(rls_canary_runs_total[7d]))
+
+# Split by outcome — `error` means the canary couldn't even
+# evaluate (env misconfig, JWT_SECRET missing, RPC down). Treat
+# error as a soft breach: page only after 2 consecutive errors.
+sum by (outcome) (increase(rls_canary_runs_total[24h]))
+
+# How fresh is the latest successful canary? Should stay below
+# the cron interval + slack (default 36 h).
+rls_canary_age_seconds
+
+# Latency of the RPC. p95 should be < 2 s; spikes hint at
+# planner regression on `pg_policies` lookup.
+histogram_quantile(0.95,
+  sum by (le) (rate(rls_canary_duration_ms_bucket[1h])))
+
+# How many tables the matrix exercises right now. If this drops
+# without a corresponding migration, someone shrunk the canary.
+rls_canary_tables_checked
+```
+
+Burn-rate: like SLO-10, hard with zero budget. A single
+`rls_canary_violations_total` increment > 0 trips the
+`rls-violation.md` runbook immediately. The
+`rls_canary.page_on_violation` flag controls whether the alert
+is P0 (PagerDuty) or P1 (e-mail) during the 30-day observation
+window after first deploy.
+
 ## Observability meta-SLO
 
 We also track the observability stack itself:

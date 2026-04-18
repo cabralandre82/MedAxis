@@ -244,6 +244,46 @@ export async function GET(req: NextRequest) {
     checks.legalHolds = { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
+  // ── RLS canary (Wave 14) ──────────────────────────────────────────────
+  // Surface the freshness of the daily isolation proof. Two ways
+  // this check turns red:
+  //   1. The latest run recorded a violation (any unaffiliated read
+  //      that should have been hidden by RLS).
+  //   2. The ledger has not been written to in over 36 h — the cron
+  //      stopped running.
+  // We deliberately do NOT trigger a fresh canary from this
+  // endpoint (it would do real DB work on every health probe);
+  // we only read the ledger.
+  try {
+    const { readLatestCanaryStatus } = await import('@/lib/rls-canary')
+    const status = await readLatestCanaryStatus()
+    if (!status) {
+      checks.rlsCanary = {
+        ok: false,
+        error: 'no canary runs recorded — migration 055 not applied?',
+      }
+    } else {
+      const stale = status.lastRunAgeSeconds > 36 * 3600
+      const violated = status.lastViolations > 0
+      checks.rlsCanary = {
+        ok: !stale && !violated,
+        details: {
+          lastRunAt: status.lastRunAt,
+          lastRunAgeSeconds: status.lastRunAgeSeconds,
+          lastViolations: status.lastViolations,
+          tablesChecked: status.tablesChecked,
+        },
+        error: violated
+          ? `${status.lastViolations} RLS violation(s) in latest run`
+          : stale
+            ? `canary stale: last run ${(status.lastRunAgeSeconds / 3600).toFixed(1)} h ago`
+            : undefined,
+      }
+    }
+  } catch (err) {
+    checks.rlsCanary = { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+
   const allOk = Object.values(checks).every((c) => c.ok)
   const totalMs = Date.now() - start
   observeHistogram(Metrics.HEALTH_CHECK_DURATION_MS, totalMs, { endpoint: 'deep' })

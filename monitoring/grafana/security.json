@@ -148,6 +148,100 @@
           "expr": "sum(increase(dsar_opened_total[1h]))"
         }
       ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "SLO-11 · RLS canary violations (7d)",
+      "description": "Hard SLO. Must be 0. Any non-zero value is a P0/P1 (depending on rls_canary.page_on_violation).",
+      "gridPos": { "x": 0, "y": 12, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(rls_canary_violations_total[7d]))"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "SLO-11 · Canary age (s)",
+      "description": "Seconds since the last successful canary run. Should stay below ~90 000 (≈25h) given the daily 04:40 BRT schedule.",
+      "gridPos": { "x": 6, "y": 12, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 90000, "color": "yellow" },
+              { "value": 129600, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(rls_canary_age_seconds)"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "SLO-11 · Tables in matrix",
+      "description": "How many tables the canary exercised on the latest run. Drops without a migration are suspicious.",
+      "gridPos": { "x": 12, "y": 12, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "yellow" },
+              { "value": 30, "color": "green" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(rls_canary_tables_checked)"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "RLS canary runs by outcome",
+      "gridPos": { "x": 18, "y": 12, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{outcome}}",
+          "expr": "sum by (outcome) (increase(rls_canary_runs_total[24h]))"
+        }
+      ]
     }
   ]
 }

@@ -280,6 +280,14 @@ export const Metrics = {
   LEGAL_HOLD_BLOCKED_PURGE_TOTAL: 'legal_hold_blocked_purge_total',
   LEGAL_HOLD_BLOCKED_DSAR_TOTAL: 'legal_hold_blocked_dsar_total',
   LEGAL_HOLD_EXPIRED_TOTAL: 'legal_hold_expired_total',
+  // Wave 14 — RLS canary
+  RLS_CANARY_RUNS_TOTAL: 'rls_canary_runs_total',
+  RLS_CANARY_VIOLATIONS_TOTAL: 'rls_canary_violations_total',
+  RLS_CANARY_TABLES_CHECKED: 'rls_canary_tables_checked',
+  RLS_CANARY_LAST_SUCCESS_TS: 'rls_canary_last_success_ts',
+  RLS_CANARY_LAST_VIOLATION_TS: 'rls_canary_last_violation_ts',
+  RLS_CANARY_AGE_SECONDS: 'rls_canary_age_seconds',
+  RLS_CANARY_DURATION_MS: 'rls_canary_duration_ms',
 } as const
 
 // ── Surge detector ───────────────────────────────────────────────────────────
