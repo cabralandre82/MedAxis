@@ -1526,10 +1526,18 @@ failed` — tolerável por 48h.
   `scope` no dashboard de compliance — hoje as rows são auditadas
   mas não há gráfico consolidado.
 
-**CI / Quality Gates (run pendente @ próximo commit):**
+**CI / Quality Gates (run `24605045549` CI + `24605045542` Security Scan @ `3cec293`):**
 
-A confirmar após push. Unit tests locais: 1336 passing (+44 vs.
-Wave 8: 31 `lib/dsar` + 8 `cron/dsar-sla-check` + 5 `logPiiView`).
-Typecheck + lint: 0 erros, 44 warnings de baseline.
+| Job                         | Status | Notas                                                                       |
+| --------------------------- | ------ | --------------------------------------------------------------------------- |
+| Lint & Type Check           | 🟢     | 0 erros, 44 warnings de baseline inalterados                                |
+| Unit Tests (Vitest)         | 🟢     | **1336 passing** (+44 vs. Wave 8: 31 dsar + 8 cron/dsar-sla + 5 logPiiView) |
+| E2E Smoke (Playwright)      | 🟢     | 24 testes `smoke*` verdes (inalterado vs. W8)                               |
+| Gitleaks (secret scan)      | 🟢     | nenhum secret novo                                                          |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos                                                          |
+| Trivy (filesystem + config) | 🟢     | sem findings novos                                                          |
+| SBOM (CycloneDX)            | 🟢     | regenerado                                                                  |
+| npm audit                   | 🟢     | 0 high/critical (mesmas advisories moderate/low das Waves anteriores)       |
+| License check (production)  | 🟢     | OK                                                                          |
 
 ---
