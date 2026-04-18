@@ -739,3 +739,23 @@ Slack removido do escopo em 2026-04-17 (decisão do fundador). Falhas dos workfl
 - `docs/runbooks/rbac-permission-denied.md` — novo runbook P2.
 - `docs/runbooks/README.md` — índice atualizado.
 - `docs/implementation-plan.md` — linha "Última atualização" bumpada.
+
+**Commits:**
+
+- `972f267` — feat(wave-4): fine-grained permissions (migration 047 + lib/rbac/permissions)
+
+**CI / Quality Gates (runs `24602263131` + `24602263142` @ `972f267`):**
+
+| Job                         | Status | Notas                                                                                                                                                                                                                                  |
+| --------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint & Type Check           | 🟢     | 0 erros, 44 warnings (mesma baseline de Wave 3)                                                                                                                                                                                        |
+| Unit Tests (Vitest)         | 🟢     | 1110 passing (+21 vs. Wave 3), thresholds Wave 1 mantidos                                                                                                                                                                              |
+| Gitleaks (secret scan)      | 🟢     | allowlist inalterada                                                                                                                                                                                                                   |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos                                                                                                                                                                                                                     |
+| Trivy (filesystem + config) | 🟢     | sem findings novos                                                                                                                                                                                                                     |
+| SBOM (CycloneDX)            | 🟢     | regenerado                                                                                                                                                                                                                             |
+| npm audit                   | 🟢     | 0 high/critical (mesmo conjunto de advisories moderate/low de Wave 3, tracked em Wave 5)                                                                                                                                               |
+| License check (production)  | 🟢     | OK                                                                                                                                                                                                                                     |
+| E2E Smoke (Playwright)      | 🔴     | **mesmo bug pré-existente Waves 1–3** — `webServer` não sobe por falta de `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` no ambiente CI. Mensagem idêntica (`Your project's URL and Key are required to create a Supabase client!`). Débito W5. |
+
+---
