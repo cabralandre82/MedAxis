@@ -2028,6 +2028,23 @@ camada de observação. Pré-req: W6 (health checks) ✓ + W10
 
 ### CI / Quality gates — Wave 11
 
-A ser completada após commit + push.
+Commit `8817887`, push to `main`:
+
+| Job                         | Status | Notas                                                                         |
+| --------------------------- | ------ | ----------------------------------------------------------------------------- |
+| Lint & Type Check           | 🟢     | 0 erros, baseline warnings inalterado                                         |
+| Unit Tests (Vitest)         | 🟢     | **1407 passing** (+25 vs. Wave 10: 17 `lib/trace` + 8 `api/metrics-endpoint`) |
+| E2E Smoke (Playwright)      | 🟢     | 24 testes `smoke*` verdes (inalterado vs. W10)                                |
+| Gitleaks (secret scan)      | 🟢     | `METRICS_SECRET` citado só em docs — não é um secret real                     |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos                                                            |
+| Trivy (filesystem + config) | 🟢     | sem findings novos                                                            |
+| SBOM (CycloneDX)            | 🟢     | regenerado                                                                    |
+| npm audit                   | 🟢     | 0 high/critical (mesmas advisories moderate/low herdadas)                     |
+| License check (production)  | 🟢     | OK                                                                            |
+
+- **CI run**: `24605789167` (3m05s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24605789167>
+- **Security Scan run**: `24605789172` (1m39s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24605789172>
+
+---
 
 ---
