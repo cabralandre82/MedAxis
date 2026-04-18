@@ -942,20 +942,20 @@ SELECT key, enabled, owner
 ### Commits
 
 - `_pending_` — feat(wave-6): 3-tier health + metrics/alerts libs + client-csrf helper + wiring
-- `_pending_` — docs(wave-6): runbooks health-check-failing + alerts-noisy + W6 log entry
+- `72ebf3e` — feat(wave-6): 3-tier health + metrics/alerts libs + client-csrf helper (inclui runbooks + W6 log entry + migration 048)
 
-**CI / Quality Gates (`_pending_` run):**
+**CI / Quality Gates (run `24603385326` CI + `24603385323` Security Scan @ `72ebf3e`):**
 
-| Job                         | Status  | Notas                                                                      |
-| --------------------------- | ------- | -------------------------------------------------------------------------- |
-| Lint & Type Check           | 🟢      | 0 erros (local `npx eslint` verde nos arquivos W6)                         |
-| Unit Tests (Vitest)         | 🟢      | **1205 passing** (+40 vs. Wave 5: 16 metrics + 11 alerts + 13 client-csrf) |
-| Gitleaks (secret scan)      | pending | nenhum secret novo                                                         |
-| CodeQL (JS/TS)              | pending |                                                                            |
-| Trivy (filesystem + config) | pending |                                                                            |
-| SBOM (CycloneDX)            | pending | regenerar                                                                  |
-| npm audit                   | pending |                                                                            |
-| License check (production)  | pending |                                                                            |
-| E2E Smoke (Playwright)      | pending | adicionou `smoke-health.test.ts` (4 cenários)                              |
+| Job                         | Status | Notas                                                                                                   |
+| --------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| Lint & Type Check           | 🟢     | 0 erros, warnings de baseline inalterados (1m01s)                                                       |
+| Unit Tests (Vitest)         | 🟢     | **1205 passing** (+40 vs. Wave 5: 16 metrics + 11 alerts + 13 client-csrf) (1m09s)                      |
+| E2E Smoke (Playwright)      | 🟢     | 22 testes `smoke*` verdes incluindo 4 novos de `smoke-health.test.ts` (1m49s) — sequência W5 preservada |
+| Gitleaks (secret scan)      | 🟢     | nenhum secret novo                                                                                      |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos                                                                                      |
+| Trivy (filesystem + config) | 🟢     | sem findings novos                                                                                      |
+| SBOM (CycloneDX)            | 🟢     | regenerado                                                                                              |
+| npm audit                   | 🟢     | 0 high/critical (mesmas advisories moderate/low Waves anteriores)                                       |
+| License check (production)  | 🟢     | OK                                                                                                      |
 
 ---
