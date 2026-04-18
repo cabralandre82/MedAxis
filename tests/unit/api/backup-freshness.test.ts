@@ -67,9 +67,9 @@ function makeReq() {
 }
 
 describe('diagnoseFreshness', () => {
-  let diagnose: typeof import('@/app/api/cron/backup-freshness/route').diagnoseFreshness
+  let diagnose: typeof import('@/lib/cron/backup-freshness-helpers').diagnoseFreshness
   beforeEach(async () => {
-    ;({ diagnoseFreshness: diagnose } = await import('@/app/api/cron/backup-freshness/route'))
+    ;({ diagnoseFreshness: diagnose } = await import('@/lib/cron/backup-freshness-helpers'))
   })
 
   const nowIso = new Date().toISOString()

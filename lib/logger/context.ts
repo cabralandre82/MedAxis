@@ -37,6 +37,15 @@ import { randomUUID } from 'node:crypto'
  *    actions using the Node runtime) and `extractRequestContext` (for the
  *    middleware, which stashes the id on the response header and passes it
  *    along to downstream Node handlers via `x-request-id` request header).
+ *
+ *  - The `server-only` guard above is load-bearing: it prevents the file
+ *    (and its `node:async_hooks` / `node:crypto` imports) from leaking into
+ *    a Client Component bundle. The only known reachable client path was
+ *    `app/(private)/error.tsx` → `lib/monitoring.ts` → `lib/logger.ts` →
+ *    here, which broke the Vercel build on 2026-04-18. The fix lives in
+ *    `lib/monitoring.ts`: it now produces its no-DSN fallback output
+ *    inline (structured JSON to console) without importing `lib/logger`,
+ *    keeping this module's server-only contract intact.
  */
 
 export interface RequestContext {

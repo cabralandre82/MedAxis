@@ -37,10 +37,23 @@ describe('encrypt', () => {
   })
 
   it('throws if ENCRYPTION_KEY is missing', async () => {
+    // Setup test environments commonly carry an ENCRYPTION_KEY value in
+    // process.env (loaded from `.env.local` for local dev, or injected by
+    // CI). `vi.unstubAllEnvs()` only removes the *test stubs*, not the
+    // baseline value, so we explicitly delete it here to force the
+    // missing-env failure path. resetModules() guarantees that any
+    // already-imported `lib/crypto` does not return a cached `getKey`.
+    const previous = process.env.ENCRYPTION_KEY
     vi.unstubAllEnvs()
-    const { encrypt } = await import('@/lib/crypto')
-    expect(() => encrypt('test')).toThrow('ENCRYPTION_KEY')
-    vi.stubEnv('ENCRYPTION_KEY', TEST_KEY)
+    delete process.env.ENCRYPTION_KEY
+    vi.resetModules()
+    try {
+      const { encrypt } = await import('@/lib/crypto')
+      expect(() => encrypt('test')).toThrow('ENCRYPTION_KEY')
+    } finally {
+      if (previous !== undefined) process.env.ENCRYPTION_KEY = previous
+      vi.stubEnv('ENCRYPTION_KEY', TEST_KEY)
+    }
   })
 })
 

@@ -30,12 +30,8 @@
  * Schedule: `0 9 * * *` in `vercel.json` (UTC = 06:00 BRT).
  */
 import { withCronGuard } from '@/lib/cron/guarded'
-import {
-  getBackupFreshness,
-  verifyBackupChain,
-  BACKUP_SLA,
-  type BackupFreshnessRow,
-} from '@/lib/backup'
+import { getBackupFreshness, verifyBackupChain } from '@/lib/backup'
+import { diagnoseFreshness } from '@/lib/cron/backup-freshness-helpers'
 import { isFeatureEnabled } from '@/lib/features'
 import { incCounter, setGauge, Metrics } from '@/lib/metrics'
 import { logger } from '@/lib/logger'
@@ -43,92 +39,6 @@ import { logger } from '@/lib/logger'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 30
-
-export interface Diagnosis {
-  label: string
-  kind: BackupFreshnessRow['kind']
-  reason: 'missing' | 'stale' | 'last_failed' | 'chain_break'
-  ageSeconds: number | null
-  lastOutcome?: BackupFreshnessRow['outcome']
-  recordedAt?: string
-  r2Prefix?: string | null
-}
-
-/**
- * Pure classifier — exported for unit tests. Takes the latest
- * row per (kind,label) and returns the set of SLA breaches.
- *
- * We *expect* `weekly` BACKUP and `monthly` RESTORE_DRILL
- * labels; missing labels are treated as a hard breach with
- * reason='missing'. That way a silently-disabled workflow does
- * not look healthy.
- */
-export function diagnoseFreshness(
-  rows: BackupFreshnessRow[],
-  chainBreaks: { kind: BackupFreshnessRow['kind']; firstBreakId: string | null }[]
-): Diagnosis[] {
-  const out: Diagnosis[] = []
-  const byKey = new Map<string, BackupFreshnessRow>()
-  for (const r of rows) byKey.set(`${r.kind}:${r.label}`, r)
-
-  const expected: Array<{
-    kind: BackupFreshnessRow['kind']
-    label: string
-    maxAge: number
-  }> = [
-    { kind: 'BACKUP', label: 'weekly', maxAge: BACKUP_SLA.BACKUP_MAX_AGE_S },
-    { kind: 'RESTORE_DRILL', label: 'monthly', maxAge: BACKUP_SLA.RESTORE_DRILL_MAX_AGE_S },
-  ]
-
-  for (const e of expected) {
-    const row = byKey.get(`${e.kind}:${e.label}`)
-    if (!row) {
-      out.push({
-        label: e.label,
-        kind: e.kind,
-        reason: 'missing',
-        ageSeconds: null,
-      })
-      continue
-    }
-    if (row.outcome !== 'ok') {
-      out.push({
-        label: row.label,
-        kind: row.kind,
-        reason: 'last_failed',
-        ageSeconds: row.age_seconds,
-        lastOutcome: row.outcome,
-        recordedAt: row.recorded_at,
-        r2Prefix: row.r2_prefix,
-      })
-      continue
-    }
-    if (row.age_seconds > e.maxAge) {
-      out.push({
-        label: row.label,
-        kind: row.kind,
-        reason: 'stale',
-        ageSeconds: row.age_seconds,
-        lastOutcome: row.outcome,
-        recordedAt: row.recorded_at,
-        r2Prefix: row.r2_prefix,
-      })
-    }
-  }
-
-  for (const br of chainBreaks) {
-    if (br.firstBreakId) {
-      out.push({
-        label: '*',
-        kind: br.kind,
-        reason: 'chain_break',
-        ageSeconds: null,
-      })
-    }
-  }
-
-  return out
-}
 
 export const GET = withCronGuard('backup-freshness', async () => {
   const rows = await getBackupFreshness()

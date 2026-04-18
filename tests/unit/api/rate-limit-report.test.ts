@@ -55,11 +55,11 @@ beforeEach(() => {
 })
 
 describe('classifyReport', () => {
-  let classify: typeof import('@/app/api/cron/rate-limit-report/route').classifyReport
+  let classify: typeof import('@/lib/cron/rate-limit-report-helpers').classifyReport
 
   beforeEach(async () => {
     // Classifier is a pure function; import in isolation.
-    ;({ classifyReport: classify } = await import('@/app/api/cron/rate-limit-report/route'))
+    ;({ classifyReport: classify } = await import('@/lib/cron/rate-limit-report-helpers'))
   })
 
   const row = (
