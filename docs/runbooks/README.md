@@ -19,14 +19,15 @@
 
 ### 🟠 P2 — Degradação (cliente afetado pode contornar)
 
-| Runbook                        | Sintoma disparador                                       | Alerta de origem           |
-| ------------------------------ | -------------------------------------------------------- | -------------------------- |
-| `external-integration-down.md` | Circuit breaker aberto (Asaas/Clicksign/Resend)          | `/api/health/deep`         |
-| `cron-job-failing.md`          | Cron em loop de falha                                    | `cron_runs` + email        |
-| `cron-double-run.md`           | Cron `skipped_locked` repetido ou lock órfão             | `cron_runs` + `cron_locks` |
-| `webhook-replay.md`            | `webhook_events.status=failed` acumulando ou sender-loop | Sentry + `webhook_events`  |
-| `email-deliverability-low.md`  | Taxa de bounce > 5% em 24h                               | Resend dashboard           |
-| `connection-pool-exhausted.md` | Supabase pool > 80% por >5 min                           | `/api/cron/db-pool-health` |
+| Runbook                        | Sintoma disparador                                                | Alerta de origem             |
+| ------------------------------ | ----------------------------------------------------------------- | ---------------------------- |
+| `external-integration-down.md` | Circuit breaker aberto (Asaas/Clicksign/Resend)                   | `/api/health/deep`           |
+| `cron-job-failing.md`          | Cron em loop de falha                                             | `cron_runs` + email          |
+| `cron-double-run.md`           | Cron `skipped_locked` repetido ou lock órfão                      | `cron_runs` + `cron_locks`   |
+| `webhook-replay.md`            | `webhook_events.status=failed` acumulando ou sender-loop          | Sentry + `webhook_events`    |
+| `email-deliverability-low.md`  | Taxa de bounce > 5% em 24h                                        | Resend dashboard             |
+| `connection-pool-exhausted.md` | Supabase pool > 80% por >5 min                                    | `/api/cron/db-pool-health`   |
+| `rbac-permission-denied.md`    | Spike de `permission denied` após ativação de `rbac.fine_grained` | `server_logs` + painel flags |
 
 ### 🟡 P3 — Degradação silenciosa (backlog)
 

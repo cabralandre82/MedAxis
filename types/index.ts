@@ -471,3 +471,30 @@ export interface AppSetting {
   updated_by_user_id?: string | null
   updated_at: string
 }
+
+// Wave 4 — fine-grained permissions (migration 047).
+export interface PermissionDefinition {
+  key: string
+  description: string
+  domain: string
+  created_at: string
+}
+
+export interface RolePermission {
+  role: UserRole
+  permission: string
+  created_at: string
+}
+
+export interface UserPermissionGrant {
+  id: string
+  user_id: string
+  permission: string
+  granted_by_user_id?: string | null
+  reason?: string | null
+  expires_at?: string | null
+  revoked_at?: string | null
+  revoked_by_user_id?: string | null
+  created_at: string
+  updated_at: string
+}

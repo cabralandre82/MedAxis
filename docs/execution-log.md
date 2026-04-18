@@ -654,3 +654,88 @@ Slack removido do escopo em 2026-04-17 (decisão do fundador). Falhas dos workfl
 | E2E Smoke (Playwright)      | 🔴     | **mesmo bug pré-existente Waves 1 e 2** — `webServer` não sobe por falta de `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` no ambiente CI. Mensagem idêntica (`Your project's URL and Key are required to create a Supabase client!`). Débito W5. |
 
 ---
+
+### Wave 4 — RBAC granular: `permissions` + `role_permissions` + `user_permission_grants` + `has_permission` RPC — 2026-04-19
+
+**Status:** 🟢 concluído (código + migration 047 aplicada em staging e produção via Supabase Management API; feature flag `rbac.fine_grained` seedado em OFF; piloto em `/server-logs` migrado; aguardando merge + deploy Vercel).
+
+**Problema-raiz.** Autorização expressa só por `requireRole(['SUPER_ADMIN','PLATFORM_ADMIN'])` em ~80 call sites espalhados em `services/*` e `app/(private)/*/page.tsx`. Consequências: (a) não dá pra conceder uma permissão específica (ex: "ler `server_logs`") sem promover a `PLATFORM_ADMIN`; (b) adicionar uma nova ação admin exige editar N arquivos; (c) ausência de trilha de grants individuais para auditoria LGPD; (d) acoplamento rígido role↔ação impede uso futuro de roles mais finos (`SUPPORT_AGENT`, `FINANCE_ANALYST`, etc.).
+
+**Objetivo.** Introduzir modelo de permissões fine-grained **sem quebrar** o código existente e **sem deploy big-bang**. Fluxo: migration 047 + módulo novo + um piloto; resto das rotas migram gradualmente nas Waves 5-9 com flag feature `rbac.fine_grained` regendo cada rampa.
+
+**Entregas**
+
+- **`supabase/migrations/047_fine_grained_permissions.sql`** (NEW, ~270 linhas). Idempotente.
+  - Tabelas: `public.permissions` (catálogo com constraint `key = domain.action`), `public.role_permissions(role, permission)` (many-to-many, permission FK com `ON DELETE CASCADE`), `public.user_permission_grants` (grants individuais com `expires_at`, `revoked_at`, `granted_by_user_id`, índice único parcial `WHERE revoked_at IS NULL`).
+  - Helper `user_permission_grants_touch()` mantém `updated_at`.
+  - RPC `public.has_permission(p_user_id uuid, p_permission text)` — `STABLE SECURITY DEFINER`, resolve em três camadas: SUPER_ADMIN wildcard → role mapping → grant ativo; fail-closed implícito (não casa nenhuma → false).
+  - RLS: `permissions`/`role_permissions` SELECT para `authenticated` (catálogo público dentro do app); `user_permission_grants` SELECT `user_id = auth.uid() OR is_platform_admin()`, WRITE gated em `is_platform_admin()`.
+  - Seeds: 38 permissions em 15 domínios (platform, users, clinics, pharmacies, doctors, products, orders, payments, coupons, consultants, distributors, categories, audit, server_logs, churn, reports, settings, registrations, support, lgpd); 55+ role mappings (PLATFORM_ADMIN: 35; CLINIC_ADMIN: 7; PHARMACY_ADMIN: 8; DOCTOR: 2; SALES_CONSULTANT: 4; SUPER_ADMIN intencionalmente vazio — tratado via wildcard na RPC).
+  - Smoke asserts inline (`DO $smoke$`): `>=35` perms, `>=30` para PLATFORM_ADMIN, `>=7` para PHARMACY_ADMIN. Bloqueia migration se seed vier incompleto.
+  - Grants explícitos: `GRANT EXECUTE ON FUNCTION has_permission TO authenticated, service_role`; `REVOKE ALL FROM public` para anon.
+
+- **`lib/rbac/permissions.ts`** (NEW, ~220 linhas). `server-only`.
+  - `Permissions` constant object (38 entradas) — fonte única de verdade em TS, **deve** espelhar seed 047.
+  - `ROLE_FALLBACK: Record<Permission, UserRole[]>` — espelho exato das role_permissions; usado quando flag OFF. Super-admin-only (`users.anonymize`, `consultants.manage`, `registrations.approve`) mapeadas para `[]` (apenas SUPER_ADMIN via wildcard).
+  - `hasPermission(user, perm)` — short-circuit SUPER_ADMIN → cache per-request (WeakMap keyed no RequestContext do logger) → `isFeatureEnabled('rbac.fine_grained', ...)` → branch: (flag OFF) `hasAnyRole(user, ROLE_FALLBACK[perm])` | (flag ON) `admin.rpc('has_permission', ...)`. **Fail-closed** em qualquer erro do RPC (`logger.error` + return `false`).
+  - `hasAnyPermission(user, perms[])` — short-circuit.
+  - `requirePermission(perm | perm[])` — throws `UNAUTHORIZED` / `FORBIDDEN`, análogo a `requireRole`. Tem `logger.warn('permission denied', …)` para telemetria.
+  - `requirePermissionPage(perm | perm[])` — redirects `/login` / `/unauthorized`, análogo a `requireRolePage`.
+  - Cache per-request via `WeakMap<RequestContext, Map<cacheKey, boolean>>` — evita mutar a interface tipada `RequestContext`. Lifespan = request; tolerância a revogações dentro do request é intencional.
+
+- **`app/(private)/server-logs/page.tsx`** — piloto. Troca `requireRolePage(['SUPER_ADMIN','PLATFORM_ADMIN'])` → `requirePermissionPage(Permissions.SERVER_LOGS_READ)`. Com flag OFF, comportamento idêntico (fallback → `['PLATFORM_ADMIN']` + SUPER_ADMIN wildcard). Com flag ON, passa pelo RPC. Escolhido porque: (a) rota pequena (130 linhas, 1 guard), (b) acesso apenas admin (risco baixo de afetar cliente externo), (c) já está isolada em `/server-logs`.
+
+- **`types/index.ts`** — novos types `PermissionDefinition`, `RolePermission`, `UserPermissionGrant` refletindo o schema.
+
+- **`tests/unit/lib/rbac-permissions.test.ts`** (NEW, 21 testes):
+  - `hasPermission — fallback (flag OFF)`: SUPER_ADMIN wildcard, PLATFORM_ADMIN sem `users.anonymize`, PHARMACY_ADMIN own-scope, DOCTOR minimal.
+  - `hasPermission — granular (flag ON)`: RPC true/false/error/throw (todos fail-closed quando erra), SUPER_ADMIN NÃO chama RPC (economia + defense-in-depth).
+  - `hasAnyPermission`: short-circuit positivo e negativo.
+  - `requirePermission`: happy path, FORBIDDEN, UNAUTHORIZED, array OR, empty array → FORBIDDEN.
+  - `requirePermissionPage`: redirect `/login`, redirect `/unauthorized`, happy path.
+  - `ROLE_FALLBACK catalog invariants`: todas as Permissions cobertas; super-admin-only mapeadas para `[]`.
+
+- **`docs/runbooks/rbac-permission-denied.md`** (NEW) — runbook P2. Contém: rollback instantâneo via `UPDATE feature_flags SET enabled=false WHERE key='rbac.fine_grained'`, queries de diagnóstico (`server_logs` search, `pg_proc` lookup, integridade de seed), tabela de `error_code` Postgres → correção, emissão de grant individual temporário via SQL, sinais de falso-positivo.
+
+- **`docs/runbooks/README.md`** — entry adicionada em P2 (linha 29).
+
+- **`docs/implementation-plan.md`** — linha "Última atualização" bumpada para 2026-04-19.
+
+**Aplicação da migration**
+
+- **Staging (`ghjexiyrqdtqhkolsyaw`)**: `POST /v1/projects/{ref}/database/query` com o SQL completo (19.181 bytes). HTTP 201. Verificação: `perms=38, platform_admin_perms=35, pharmacy_admin_perms=8, clinic_admin_perms=7, grants=0`. Smoke RPC em 4 roles existentes: PLATFORM_ADMIN → `platform.admin=true, users.anonymize=false, lgpd.export_self=true, unknown=false`; PHARMACY_ADMIN/CLINIC_ADMIN/DOCTOR → `platform.admin=false, users.anonymize=false, lgpd.export_self=true, unknown=false`; SUPER_ADMIN → tudo `true` incluindo `nonexistent.perm` (comportamento wildcard correto).
+- **Produção (`jomdntqlgrupvhrqoyai`)**: mesma rota, HTTP 201. Verificação: contagens idênticas. Smoke RPC em 5 usuários reais: comportamento idêntico ao staging. Feature flag `rbac.fine_grained` continua `enabled=false` em ambos — ativação será discutida antes de Wave 5.
+
+**Testes: 1110 total (+21 vs. fim de Wave 3)**
+
+- `npx tsc --noEmit`: 0 erros.
+- `npm run lint`: 0 errors, 44 warnings (baseline Wave 3 intacta).
+- `npx vitest run`: 76 files / 1110 passing.
+
+**Impacto operacional**
+
+1. **Ativação gradual sem deploy.** Em staging: `UPDATE feature_flags SET rollout_percent=100 WHERE key='rbac.fine_grained'`. Em prod: incrementos 5% → 25% → 100% com observação em `server_logs` `message='permission denied'` e `message LIKE 'has_permission RPC%'`. Rollback = flip para `enabled=false` (TTL 30s do cache in-memory).
+2. **Grants individuais audit-ready.** `INSERT INTO user_permission_grants` é automaticamente logado pelo `createAuditLog` (migration 046 append-only). TTL via `expires_at`; revogação via `UPDATE SET revoked_at, revoked_by_user_id`. Sem DELETE no caminho feliz.
+3. **Paridade exata flag-OFF vs. requireRole prévio.** `ROLE_FALLBACK` foi derivado diretamente do grep de `requireRole` call sites + das seeds 047. Testes invariantes garantem que toda `Permissions.*` tem entrada em `ROLE_FALLBACK`. Super-admin-only (3 perms) é o único caso em que role é `[]` — wildcard SUPER_ADMIN cobre.
+4. **Request-scoped cache evita N+1.** Server Component que chama `requirePermissionPage(X)`, depois executa Server Action que chama `requirePermission(X)`, emite um único RPC call. Isolamento total entre requests via AsyncLocalStorage.
+
+**Pendências capturadas**
+
+- **UI de gestão de permissions/grants.** Catálogo (`SELECT * FROM permissions`) e grants ativos precisam de painel admin. Rascunho: página `/admin/permissions` listando permissions por domain + expansão role → perms + tabela de grants pendentes/ativos/revogados. Backlog Wave 5.
+- **Migração das demais rotas.** 80+ call sites de `requireRole` ainda existem. Plano de ondas:
+  - W5: 20 rotas de `services/*` (users/doctors/pharmacies/products) + 10 páginas admin críticas.
+  - W6: rotas de pagamento (`services/payments`, `services/coupons`) — precisam `payments.manage` + `coupons.manage`.
+  - W7: `app/api/admin/*` + rotas Sentinel (`churn`, `registrations/[id]/ocr`, `lgpd/anonymize`).
+  - W8: rotas "próprias" PHARMACY_ADMIN/CLINIC_ADMIN — exigem coord entre permission (`pharmacies.manage_own`) + scope RLS.
+  - W9: cleanup, remover `requireRole` / `requireRolePage` caso ≤ 3 call sites restantes. Senão: mantê-los para paths legacy.
+- **Scope enforcement ainda depende de RLS.** `pharmacies.manage_own` é "PHARMACY_ADMIN pode gerir A pharmacy" — qual pharmacy continua sendo decidido por RLS (`pharmacies_select_own`). Permission não resolve escopo geográfico/clínico por si — é porta, não filtro. Incluir nota no runbook para on-call.
+- **Testes E2E do pilot.** Precisam de Supabase env no CI (pendente W5) para confirmar `/server-logs` redireciona corretamente nos 3 cenários: não logado, DOCTOR (FORBIDDEN), PLATFORM_ADMIN (OK).
+- **Alarme para fail-closed RPC.** `logger.error('has_permission RPC failed — failing closed')` deveria fechar Sentry issue-alert. Seguir para Wave 6 (alerts) com threshold: `count > 3 in 5min` → PagerDuty P2.
+- **`ROLE_FALLBACK` duplica seed SQL.** Aceitável por ser curto + testado, mas uma Wave futura pode gerar `ROLE_FALLBACK` via codegen a partir de um dump de `role_permissions`, eliminando a chance de drift.
+
+**Docs atualizados**
+
+- `docs/execution-log.md` — esta entrada.
+- `docs/runbooks/rbac-permission-denied.md` — novo runbook P2.
+- `docs/runbooks/README.md` — índice atualizado.
+- `docs/implementation-plan.md` — linha "Última atualização" bumpada.

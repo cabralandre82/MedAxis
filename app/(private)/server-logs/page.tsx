@@ -1,4 +1,4 @@
-import { requireRolePage } from '@/lib/rbac'
+import { requirePermissionPage, Permissions } from '@/lib/rbac/permissions'
 import { createAdminClient } from '@/lib/db/admin'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -10,7 +10,13 @@ export default async function ServerLogsPage({
 }: {
   searchParams: Promise<{ level?: string; q?: string }>
 }) {
-  await requireRolePage(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
+  // Wave 4 pilot: this route is the first to migrate from requireRole to
+  // requirePermission. When the feature flag `rbac.fine_grained` is off
+  // (default), the new helper transparently delegates to the legacy role
+  // map defined in ROLE_FALLBACK, which reproduces the previous
+  // SUPER_ADMIN / PLATFORM_ADMIN gate. Flip the flag to route through the
+  // `has_permission` RPC (see migration 047).
+  await requirePermissionPage(Permissions.SERVER_LOGS_READ)
 
   const { level, q } = await searchParams
   const admin = createAdminClient()
