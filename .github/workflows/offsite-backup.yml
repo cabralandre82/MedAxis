@@ -49,7 +49,7 @@ jobs:
       R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install PostgreSQL client 17 and age
         # Supabase is on PostgreSQL 17 as of 2026-04. Client major must be >=
