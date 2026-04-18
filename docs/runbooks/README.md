@@ -10,13 +10,14 @@
 
 ### 🔴 P1 — Incidente crítico (cliente impactado)
 
-| Runbook                         | Sintoma disparador                                                                                                | Alerta de origem                     |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `order-volume-drop.md`          | Queda abrupta de pedidos                                                                                          | `detect_order_volume_anomaly` cron   |
-| `payment-confirmation-stuck.md` | Webhooks Asaas sem processar há >15 min                                                                           | SLO burn rate "payment confirmation" |
-| `database-unavailable.md`       | `/api/health/ready` retornando 503 por >2 min                                                                     | UptimeRobot + Sentry                 |
-| `audit-chain-tampered.md`       | `verify_audit_chain` retorna >0 inconsistências                                                                   | Cron noturno                         |
-| `rls-violation.md`              | Canário diário detecta vazamento de tenant ou erro de RLS (Wave 14) — P0 quando `rls_canary.page_on_violation` ON | `rls_canary_violations_total` + cron |
+| Runbook                         | Sintoma disparador                                                                                                | Alerta de origem                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `order-volume-drop.md`          | Queda abrupta de pedidos                                                                                          | `detect_order_volume_anomaly` cron       |
+| `payment-confirmation-stuck.md` | Webhooks Asaas sem processar há >15 min                                                                           | SLO burn rate "payment confirmation"     |
+| `database-unavailable.md`       | `/api/health/ready` retornando 503 por >2 min                                                                     | UptimeRobot + Sentry                     |
+| `audit-chain-tampered.md`       | `verify_audit_chain` retorna >0 inconsistências                                                                   | Cron noturno                             |
+| `rls-violation.md`              | Canário diário detecta vazamento de tenant ou erro de RLS (Wave 14) — P0 quando `rls_canary.page_on_violation` ON | `rls_canary_violations_total` + cron     |
+| `secret-compromise.md`          | Suspeita ou confirmação de leak de qualquer secret rastreado pelo manifesto Wave 15                               | DPO/Security + ledger `secret_rotations` |
 
 ### 🟠 P2 — Degradação (cliente afetado pode contornar)
 

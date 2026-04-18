@@ -121,35 +121,37 @@ Fonte de medição: registry in-memory exposto por
 budgets computados sobre janela móvel **30 dias**; burn-rate
 via multi-window / multi-burn-rate (Google SRE, Cap. 5).
 
-| Ref    | Flow                            | SLI                                                | Target                  | Error budget (30d) |
-| ------ | ------------------------------- | -------------------------------------------------- | ----------------------- | ------------------ |
-| SLO-01 | Checkout end-to-end             | `orders_created_total{outcome=ok}` / total         | ≥ 99,5 %                | ~216 min downtime  |
-| SLO-02 | Payment webhook idempotency     | 0 duplicate credits per `webhook_event.id`         | 100 % (hard)            | 0                  |
-| SLO-03 | Auth sign-in p95 latency        | p95 `http_request_duration_ms{path=~/api/auth/..}` | ≤ 400 ms                | latency SLO        |
-| SLO-04 | Cron freshness                  | every cron succeeds within SLA window              | ≥ 99,9 % on-time runs   | ~43 runs/mês       |
-| SLO-05 | Rate-limit false-positive rate  | `rate_limit_denied_total / rate_limit_hits_total`  | ≤ 1 %                   | ratio SLO          |
-| SLO-06 | LGPD DSAR SLA                   | `dsar_sla_breach_total` = 0 em 15 d                | 100 % (hard, legal)     | 0                  |
-| SLO-07 | Money drift                     | `money_drift_total` = 0                            | 100 % (hard, financial) | 0                  |
-| SLO-08 | Outbound 3rd-party availability | Asaas / Clicksign / Resend success rate (30 d)     | ≥ 99,0 %                | 7,2 h/mês          |
-| SLO-09 | Backup + restore recoverability | Weekly backup idade ≤ 9 d E monthly drill ≤ 35 d   | 100 % (hard, DR)        | 0                  |
-| SLO-10 | Legal-hold preservation         | 0 purges / DSAR erasures contra sujeitos sob hold  | 100 % (hard, legal)     | 0                  |
-| SLO-11 | RLS tenant isolation            | `rls_canary_violations_total` = 0 em janela 7 d    | 100 % (hard, security)  | 0                  |
+| Ref    | Flow                            | SLI                                                                                                                  | Target                  | Error budget (30d) |
+| ------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------ |
+| SLO-01 | Checkout end-to-end             | `orders_created_total{outcome=ok}` / total                                                                           | ≥ 99,5 %                | ~216 min downtime  |
+| SLO-02 | Payment webhook idempotency     | 0 duplicate credits per `webhook_event.id`                                                                           | 100 % (hard)            | 0                  |
+| SLO-03 | Auth sign-in p95 latency        | p95 `http_request_duration_ms{path=~/api/auth/..}`                                                                   | ≤ 400 ms                | latency SLO        |
+| SLO-04 | Cron freshness                  | every cron succeeds within SLA window                                                                                | ≥ 99,9 % on-time runs   | ~43 runs/mês       |
+| SLO-05 | Rate-limit false-positive rate  | `rate_limit_denied_total / rate_limit_hits_total`                                                                    | ≤ 1 %                   | ratio SLO          |
+| SLO-06 | LGPD DSAR SLA                   | `dsar_sla_breach_total` = 0 em 15 d                                                                                  | 100 % (hard, legal)     | 0                  |
+| SLO-07 | Money drift                     | `money_drift_total` = 0                                                                                              | 100 % (hard, financial) | 0                  |
+| SLO-08 | Outbound 3rd-party availability | Asaas / Clicksign / Resend success rate (30 d)                                                                       | ≥ 99,0 %                | 7,2 h/mês          |
+| SLO-09 | Backup + restore recoverability | Weekly backup idade ≤ 9 d E monthly drill ≤ 35 d                                                                     | 100 % (hard, DR)        | 0                  |
+| SLO-10 | Legal-hold preservation         | 0 purges / DSAR erasures contra sujeitos sob hold                                                                    | 100 % (hard, legal)     | 0                  |
+| SLO-11 | RLS tenant isolation            | `rls_canary_violations_total` = 0 em janela 7 d                                                                      | 100 % (hard, security)  | 0                  |
+| SLO-12 | Secret freshness                | `secret_oldest_age_seconds` ≤ tier max age (90 d Tier A/B, 180 d Tier C) E `secret_rotation_never_rotated_count` = 0 | 100 % (hard, security)  | 0                  |
 
 Classificação de severidade em resposta:
 
-| Ref    | Classe | Razão operacional                                    |
-| ------ | ------ | ---------------------------------------------------- |
-| SLO-01 | soft   | Carrinho sobrevive; re-order é aceitável             |
-| SLO-02 | hard   | Double-charge é reportável LGPD + CDC                |
-| SLO-03 | soft   | Latência degrada UX, não correção                    |
-| SLO-04 | hard   | Cron miss cascateia (audit chain, offsite backup, …) |
-| SLO-05 | soft   | Ruído sinaliza tuning                                |
-| SLO-06 | hard   | Deadline legal — ANPD reportável acima de 15 d       |
-| SLO-07 | hard   | Cents ≠ numeric é perda de verdade financeira        |
-| SLO-08 | soft   | Retry + circuit breaker já compensam                 |
-| SLO-09 | hard   | Sem restore comprovado, RPO/RTO = indefinido         |
-| SLO-10 | hard   | Destruir evidência sob ordem = sanção grave ANPD/CDC |
-| SLO-11 | hard   | Vazamento entre tenants = quebra contratual + LGPD   |
+| Ref    | Classe | Razão operacional                                                          |
+| ------ | ------ | -------------------------------------------------------------------------- |
+| SLO-01 | soft   | Carrinho sobrevive; re-order é aceitável                                   |
+| SLO-02 | hard   | Double-charge é reportável LGPD + CDC                                      |
+| SLO-03 | soft   | Latência degrada UX, não correção                                          |
+| SLO-04 | hard   | Cron miss cascateia (audit chain, offsite backup, …)                       |
+| SLO-05 | soft   | Ruído sinaliza tuning                                                      |
+| SLO-06 | hard   | Deadline legal — ANPD reportável acima de 15 d                             |
+| SLO-07 | hard   | Cents ≠ numeric é perda de verdade financeira                              |
+| SLO-08 | soft   | Retry + circuit breaker já compensam                                       |
+| SLO-09 | hard   | Sem restore comprovado, RPO/RTO = indefinido                               |
+| SLO-10 | hard   | Destruir evidência sob ordem = sanção grave ANPD/CDC                       |
+| SLO-11 | hard   | Vazamento entre tenants = quebra contratual + LGPD                         |
+| SLO-12 | hard   | Secret rancido = vetor de comprometimento prolongado, base p/ ANPD Art. 46 |
 
 ### 7.1 Política burn-rate
 
@@ -178,6 +180,7 @@ se o incidente persistisse — tier fast, acorda o on-call.
 | SLO-09 | Platform + SRE | diária             | 2026-04-17     |
 | SLO-10 | DPO + Legal    | evento-driven      | 2026-04-17     |
 | SLO-11 | Security + SRE | diária             | 2026-04-17     |
+| SLO-12 | Security + SRE | semanal            | 2026-04-17     |
 
 ### 7.3 Changelog
 
@@ -194,6 +197,25 @@ se o incidente persistisse — tier fast, acorda o on-call.
   contadores `legal_hold_blocked_{purge,dsar}_total`. Hard SLO:
   qualquer purge executado contra sujeito sob ordem ativa é
   evento reportável ANPD/judicial.
+- **2026-04-17** — Wave 15 adiciona SLO-12 (secret freshness),
+  lastreado no ledger `secret_rotations` (migração 056) +
+  gauges `secret_oldest_age_seconds`,
+  `secret_rotation_overdue_count` e
+  `secret_rotation_never_rotated_count` populados pelo cron
+  semanal `/api/cron/rotate-secrets`. Hard SLO: secret retido
+  além do prazo é vetor crônico de comprometimento (acesso
+  persistente via credenciais vazadas em CI logs / ex-funcionário
+  / repo público), sustenta materialidade de incidente reportável
+  ANPD Art. 46 caso somado a evidência de uso indevido. Política
+  por tier:
+  Tier A (CRON_SECRET, METRICS_SECRET, BACKUP_LEDGER_SECRET) —
+  auto-rotacionado pelo cron quando flag `secrets.auto_rotate_tier_a`
+  ON; senão queued p/ operador.
+  Tier B (Resend, Asaas, Zenvia, Inngest, Clicksign, Nuvem
+  Fiscal, Vercel token, Turnstile) — assistido: cron queued + alerta com runbook anchor.
+  Tier C (Supabase DB password / JWT secret, Firebase, OpenAI,
+  ENCRYPTION_KEY) — manual obrigatório: cron alerta apenas,
+  runbook exige janela de manutenção.
 - **2026-04-17** — Wave 14 adiciona SLO-11 (RLS tenant isolation),
   lastreado em `rls_canary_log` (migração 055) + contador
   `rls_canary_violations_total` exposto pelo cron diário

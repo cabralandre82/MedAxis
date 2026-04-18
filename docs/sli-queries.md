@@ -274,6 +274,62 @@ Burn-rate: like SLO-10, hard with zero budget. A single
 is P0 (PagerDuty) or P1 (e-mail) during the 30-day observation
 window after first deploy.
 
+## SLO-12 — Secret freshness (hard)
+
+Primary SLI — every secret must be younger than its tier's max age,
+and no secret may be in `never-rotated` state:
+
+```promql
+# Oldest secret across the whole manifest (seconds).
+# MUST be < 90 d (Tier A/B threshold). Tier C (180 d) is still
+# enforced per-secret in the cron, but the global oldest gauge
+# uses the tightest bound so a stale Tier A doesn't hide.
+secret_oldest_age_seconds
+
+# Count of secrets currently overdue (any tier). Updated by the
+# weekly cron and by every health-deep probe.
+secret_rotation_overdue_count
+
+# Count of secrets that exist in the manifest but have no
+# successful rotation in the ledger. MUST be 0 — anything > 0
+# means someone added an env var without seeding genesis.
+secret_rotation_never_rotated_count
+```
+
+Supplementary (operational health of the rotation machinery itself):
+
+```promql
+# Per-secret age (seconds). Heatmap-friendly. Use for
+# "which secret will be next overdue" forecasting.
+secret_age_seconds
+
+# Did the weekly cron actually run? Should be ≥ 1 every 7 d.
+sum(increase(secret_rotation_runs_total[14d]))
+
+# Split by tier+outcome.
+sum by (tier, outcome) (increase(secret_rotation_runs_total[30d]))
+
+# Failure counter — non-zero means a Vercel/provider API
+# rejected our rotation. Investigate immediately.
+sum by (tier, secret, reason) (increase(secret_rotation_failures_total[7d]))
+
+# Latency of one rotation pass. Tier A auto-rotation hits Vercel
+# API ~3 times per secret + 1 redeploy; p95 < 30s expected.
+histogram_quantile(0.95,
+  sum by (le, tier) (rate(secret_rotation_duration_ms_bucket[1h])))
+
+# Last successful cron run timestamp. Compared against now() to
+# detect stuck cron — should never be > 8 d old.
+secret_rotation_last_run_ts
+```
+
+Burn-rate: SLO-12 is hard. The `secrets.rotation_enforce` flag
+controls whether overdue rotations page critical (ON) or warn-only
+(OFF) during the 30-day observation window after Wave 15 deploy.
+Once flipped ON, the cron uses `severity=critical` for any failed
+rotation OR any Tier C overdue secret — Tier C overdue means
+the maintenance window was missed, which is itself an SLO breach.
+
 ## Observability meta-SLO
 
 We also track the observability stack itself:

@@ -2681,3 +2681,358 @@ semântica idêntica à intenção original.
 | Security Scan | [24611344563](https://github.com/cabralandre82/clinipharma/actions/runs/24611344563) | 🟢 success |
 
 ---
+
+## Wave 15 — Rotação automática de secrets (3 tiers + ledger hash-chain) (2026-04-17)
+
+### Resumo
+
+Quinze waves acumularam **19 secrets em produção** (Vercel envs +
+provider tokens + chaves criptográficas) sem nenhuma garantia de
+freshness. A Wave 15 fecha esse gap com um **modelo de 3 tiers**:
+
+- **Tier A** (3 secrets — `CRON_SECRET`, `METRICS_SECRET`,
+  `BACKUP_LEDGER_SECRET`): random bytes app-internal, **rotacionados
+  automaticamente** pelo cron via Vercel API + redeploy. Zero
+  participação de operador no caminho feliz.
+- **Tier B** (11 secrets — Resend, Asaas API + webhook, Zenvia,
+  Inngest event + signing, Clicksign access + webhook, Nuvem Fiscal,
+  `VERCEL_TOKEN`, Turnstile): rotação requer chamada externa ao
+  provider; o cron **prepara um work-item** com os passos exatos da
+  CLI/portal e dispara warning para o on-call.
+- **Tier C** (5 secrets — `SUPABASE_DB_PASSWORD`,
+  `SUPABASE_JWT_SECRET`, `FIREBASE_PRIVATE_KEY`, `OPENAI_API_KEY`,
+  `ENCRYPTION_KEY`): blast-radius alto (invalida sessões, destrói
+  dados em rest, forço de drop de connections); o cron **só
+  alerta** com link de runbook + janela de manutenção exigida.
+
+Toda execução, sucesso ou falha, vai para um **ledger hash-chained**
+`public.secret_rotations` (estilo Wave 3/12/13/14) — append-only via
+trigger, ordenado por `seq bigserial` para garantir hash chain
+determinístico mesmo com 19 inserts no mesmo `now()` (descoberta da
+primeira execução do smoke da migração — `now()` retorna o início
+da transação, então 19 timestamps idênticos quebram o ordenamento).
+
+A descoberta colateral mais importante: o cron documenta sua
+**fingerprint SHA-256-truncada-8** do valor antigo e do novo no
+ledger sem expor o secret, então um operador pode confirmar "a env
+viva no Vercel é a registrada no ledger" sem nunca ver o segredo.
+
+### Deliverables
+
+1. **Migração `056_secret_rotation.sql`**:
+   - Tabela `public.secret_rotations` (append-only via trigger
+     `_secret_rotations_guard`, hash-chained com `prev_hash → row_hash`
+     SHA-256, `seq bigserial UNIQUE NOT NULL` para ordering
+     determinístico, `rotated_at timestamptz DEFAULT clock_timestamp()`
+     — não `now()` — para timestamps únicos dentro da mesma transação).
+   - RPC `secret_rotation_record(p_secret_name, p_tier, p_provider,
+p_trigger_reason, p_rotated_by, p_success, p_error_message,
+p_details)` SECURITY DEFINER que valida tier ∈ {A,B,C}, provider
+     contra whitelist, trigger_reason contra enum, computa hash chain
+     ordenando por `seq DESC`.
+   - View `public.secret_inventory` agregando o último **sucesso**
+     por secret + `age_seconds` + `age_days` + `last_row_hash`.
+   - RPC `secret_rotation_overdue(p_max_age_days)` SECURITY DEFINER
+     com manifesto estático embutido de 19 secrets (espelho do
+     `lib/secrets/manifest.ts`); retorna linhas com `status =
+'overdue' | 'never-rotated'`.
+   - Genesis seed dentro de `DO $$` populando 19 entradas iniciais
+     com `trigger_reason='genesis'` para baseline de age tracking.
+   - Smoke test fim-a-fim verificando: 19 rows no inventory, 0
+     overdue imediatamente após genesis, 0 hash chain breaks
+     (com `ORDER BY seq DESC` — não `rotated_at` — porque
+     `clock_timestamp()` ainda pode coincidir em microssegundos
+     em hardware muito rápido).
+   - Flags `secrets.rotation_enforce` (controla severity warning →
+     critical) e `secrets.auto_rotate_tier_a` (default OFF para
+     bootstrap; quando ON o cron de fato chama Vercel API).
+
+2. **`lib/secrets/manifest.ts`** (novo, isomorphic — sem
+   `server-only`): manifesto runtime com `SECRET_MANIFEST` (19
+   `SecretDescriptor` tipados), `TIER_MAX_AGE_DAYS` (A/B 90d, C
+   180d), `getSecretDescriptor()`, `secretsByTier()`,
+   `manifestFingerprint()`. Documentação inline esclarece que o
+   SQL manifest é a fonte de verdade e este arquivo é mirror.
+
+3. **`lib/secrets/vercel.ts`** (novo, server-only): cliente Vercel
+   API minimalista — `listEnvs()` (paginação até 5 páginas
+   defensivas), `findEnv(key, target)`, `updateEnvValue(envId,
+newValue)` (PATCH `/v9/projects/:projectId/env/:envId`),
+   `rotateEnvValue(key, newValue)` (lookup + patch atômico, retorna
+   envId + previous fingerprint), `triggerRedeploy(reason)`
+   (POST `/v13/deployments` com `gitSource={type:'github',
+ref:'main'}` + `target='production'` + meta tags
+   `rotation-source` + `rotation-reason`), `fingerprint(value)`
+   (SHA-256 primeiros 8 hex). Erros tipados:
+   `VercelConfigError` para envs faltando, `VercelApiError` para
+   non-2xx (carregam status + endpoint + body truncado).
+
+4. **`lib/secrets/rotate.ts`** (novo, server-only — orquestrador):
+   - `getOverdueSecrets()`: chama `secret_rotation_overdue(90)`
+     duas vezes (para tier A e B) e `(180)` para tier C, dedup por
+     name, retorna `OverdueSecret[]`.
+   - `executeTierARotation(desc)`: gera 32 random bytes via
+     `node:crypto.randomBytes` codificados em base64url, chama
+     `vercel.rotateEnvValue`, registra rotação com
+     `rotation_strategy='tier_a_auto'` + fingerprints. Marca
+     erros como `skipped-misconfigured` quando é
+     `VercelConfigError` (env Vercel ausente — não é falha
+     "chamou e bombou", é "nem podemos chamar"), e como `failed`
+     em qualquer outro erro.
+   - `prepareTierBRotation(desc)`: registra rotação com
+     `rotation_strategy='tier_b_queued'` +
+     `runbook='/docs/runbooks/secret-compromise.md#tier-b-assisted-rotation'`,
+     incrementa contador `tier=B,outcome=queued`, retorna
+     `queued-for-operator`.
+   - `alertTierCRotation(desc)`: registra rotação com
+     `rotation_strategy='tier_c_alert_only'` + carrega flags
+     `invalidates_sessions` / `destroys_data_at_rest` /
+     `has_siblings` no `details` para o on-call entender o
+     blast-radius sem abrir o manifest.
+   - `rotateAllOverdue(opts)`: leitura única do flag
+     `secrets.auto_rotate_tier_a` (não 1× por secret), dispatch
+     por tier, **trigger ÚNICO de redeploy ao final** se
+     qualquer Tier A foi de fato rotacionado (evita N redeploys
+     por run com N rotações). Falha de redeploy emite alerta
+     `severity=critical` com `dedupKey='secrets:redeploy-failed'`
+     mas **não** marca a rotação como falha — o env já está
+     atualizado, o que falta é só o cold-start.
+   - `getRotationStatus()`: snapshot read-only para o deep health
+     probe (não dispara rotação fresh — custo).
+   - `recordManualRotation()`: helper para o operador
+     post-rotação manual de Tier B/C ou incident response
+     (`reason='incident-confirmed-leak'` etc). Retorna `row_hash`
+     para anexar no ticket como prova.
+
+5. **`lib/secrets/index.ts`** (novo): re-export público dos tipos
+   e funções. Cron + tests importam apenas de `@/lib/secrets`.
+
+6. **`lib/metrics.ts`** — 8 métricas novas:
+   `secret_rotation_runs_total{tier,outcome}`,
+   `secret_rotation_failures_total{tier,secret,reason}`,
+   `secret_rotation_overdue_count`,
+   `secret_rotation_never_rotated_count`,
+   `secret_age_seconds{secret}`,
+   `secret_oldest_age_seconds`,
+   `secret_rotation_duration_ms{tier,secret}`,
+   `secret_rotation_last_run_ts`.
+
+7. **`lib/features/index.ts`** — 2 chaves novas no union type
+   (`secrets.rotation_enforce`, `secrets.auto_rotate_tier_a`).
+
+8. **`app/api/cron/rotate-secrets/route.ts`** — cron weekly via
+   `withCronGuard`. Schedule `0 4 * * 0` (Sunday 04:00 UTC ⇒
+   01:00 BRT — menor atividade de usuário). Caminho feliz: 0
+   overdue ⇒ 200 + log info, sem alerta. Caminho com overdue:
+   summarize counts, severity é `critical` se `counts.failed > 0`
+   OU (`requiresOperator > 0` E flag enforce ON), senão
+   `warning`. Operator list truncada em 30 entries para evitar
+   payload bloat. Catch de erro do orquestrador emite
+   `dedupKey='secrets:cron:misconfigured'`.
+
+9. **`vercel.json`** — entrada `/api/cron/rotate-secrets` `0 4 * * 0`.
+
+10. **`app/api/health/deep/route.ts`** — bloco `checks.secretRotation`
+    lendo `getRotationStatus()`: total, overdue, never-rotated,
+    oldest secret age, last ledger hash. `ok=false` quando flag
+    `secrets.rotation_enforce` ON e há overdue/never-rotated.
+
+11. **`docs/slos.md`** — SLO-12 "Secret freshness" (hard, security,
+    0 budget, owner Security+SRE, cadência semanal). Targets:
+    Tier A/B ≤ 90d, Tier C ≤ 180d, never-rotated = 0.
+
+12. **`docs/sli-queries.md`** — 8 PromQL queries cobrindo SLO-12
+    (oldest age, overdue count, never-rotated count, per-secret
+    age, runs by tier+outcome, failures by reason, duration p95,
+    last run ts).
+
+13. **`monitoring/grafana/security.json`** — 6 painéis novos:
+    "Oldest secret age (days)", "Overdue secrets",
+    "Never-rotated secrets", "Secret rotation runs by
+    tier+outcome", "Secret rotation FAILURES", "Per-secret age
+    (days)".
+
+14. **`docs/runbooks/secret-compromise.md`** (novo) — runbook P0/P1
+    cobrindo: contexto do modelo de 3 tiers, sintomas de leak,
+    triagem T+0 (snapshot do ledger + chain integrity check),
+    rotação programada por tier (procedimento detalhado para
+    cada um dos 11 Tier B + 5 Tier C — incluindo a circularidade
+    de `VERCEL_TOKEN` que rotaciona a si mesmo), incident
+    response (suspected vs confirmed leak), comunicação
+    (DPO/Jurídico/CEO/ANPD), pós-mortem template, recovery de
+    Tier A redeploy failure, verification pós-rotação (ledger
+    hash chain + Vercel env fingerprint match).
+
+15. **`docs/runbooks/README.md`** — entrada do runbook em P1.
+
+16. **`docs/secrets-inventory.md`** (novo) — inventário humano dos
+    19 secrets + classificação tier + provider + queries SQL
+    operacionais (daily check, weekly report, audit trail
+    integrity) + mapeamento LGPD Art. 46 + ISO 27001 A.10.1.2.
+
+17. **`.env.example`** — 3 envs novos (`VERCEL_TOKEN`,
+    `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`) com nota explicando
+    que sem eles o cron cai para alert-only mesmo em Tier A.
+
+18. **Tests (48 unit, +todas verdes):**
+    - `tests/unit/lib/secrets-manifest.test.ts` (14 tests) — drift
+      check `manifest.ts` ⇄ `056.sql` (parse de ambos arquivos +
+      diff dos tuples `(name,tier,provider)`); validação de
+      invariantes (nomes únicos, tiers válidos, providers
+      válidos, descrições não-vazias, `ENCRYPTION_KEY` com
+      `destroysDataAtRest=true`, `SUPABASE_JWT_SECRET` com
+      `invalidatesSessions=true`).
+    - `tests/unit/lib/secrets-rotate.test.ts` (14 tests) —
+      `getOverdueSecrets` agrega 3 tiers sem dup; happy path
+      Tier A → Vercel PATCH + ledger record + ÚNICO redeploy
+      mesmo com 2 secrets; failure paths (Vercel API erro vs
+      `VercelConfigError` ⇒ `skipped-misconfigured`); Tier B
+      queued sem touch-Vercel; Tier C requires-operator com
+      blast-radius flags; redeploy failure ⇒ alerta crítico
+      mas rotação **não** revertida; secret fora do manifest ⇒
+      defensive skip; `getRotationStatus` snapshot + gauges +
+      never-rotated count = manifest_size − inventory_size.
+    - `tests/unit/api/rotate-secrets-cron.test.ts` (8 tests) — 0
+      overdue ⇒ no alert; warning para queued + requires
+      (enforce OFF); critical para failed > 0 (regardless
+      enforce); critical para Tier C requires (enforce ON);
+      orchestrator throws ⇒ `secrets:cron:misconfigured`;
+      operator list truncated em 30 entries; redeploy
+      reportado no body; 401 quando bearer ausente.
+    - `tests/unit/lib/secrets-vercel.test.ts` (12 tests) — env
+      missing ⇒ `VercelConfigError`; teamId ausente é OK;
+      `listEnvs` paginação; `findEnv` filter por target;
+      `rotateEnvValue` happy path GET → PATCH; HTTP errors ⇒
+      `VercelApiError` com status/endpoint/body;
+      `triggerRedeploy` POST `/v13/deployments` com gitSource
+      main; `fingerprint` determinístico 8-char hex.
+
+### Decisões-chave de design
+
+1. **3 tiers, não 1 modelo único.** A primeira ideação era
+   "rotaciona tudo automaticamente". Não funciona: rotacionar
+   `SUPABASE_JWT_SECRET` invalida toda sessão ativa e exige
+   `service_role_key` re-fetch coordenado. Fizemos a separação
+   pelo eixo "blast-radius × provider-controlled":
+   - Tier A: app gera o valor → app pode rotacionar.
+   - Tier B: provider gera valor → app não pode auto-rotacionar
+     com confidence (precisa de janela dual-key).
+   - Tier C: provider gera valor + rotação corta usuários ou
+     destrói dados → exige janela de manutenção planejada.
+
+2. **`seq bigserial` para hash chain ordering.** A primeira
+   migração usou `ORDER BY rotated_at DESC, id DESC` no chain
+   compute. Smoke test do genesis falhou com "17 hash chain
+   break(s) detected". Causa raiz: `now()` no `DO $$` block
+   retorna o início da transação, então 19 inserts dentro do
+   mesmo bloco têm `rotated_at` idêntico, e o `id` UUID é
+   aleatório (sem ordem temporal). Fix: adicionar `seq
+bigserial UNIQUE NOT NULL` (estritamente monotônico,
+   garantido pelo Postgres) + trocar default de `now()` para
+   `clock_timestamp()` (microsegundo distinto por insert,
+   evita ambiguidade) + reordenar tudo por `seq` no chain
+   compute. Lição reusável: **toda chain SHA-256 sobre rows
+   precisa de ordering provadamente determinístico — timestamp
+   é insuficiente em transações batch.**
+
+3. **Único redeploy por run.** Cron tem 2 Tier A overdue ⇒
+   tentação é redeploy 2 vezes, ou 1× depois de cada PATCH.
+   Ambos são errados: cada redeploy custa 60-120s + invalida
+   warm cache. Solução: orquestrador rastreia
+   `anyTierARotated`, dispara redeploy 1× ao final. Tradeoff
+   aceitável: se o redeploy falhar, ambas as rotações ficam em
+   "env atualizado mas não live" — mitigado por alerta crítico
+   `secrets:redeploy-failed` apontando para
+   `vercel deploy --prod --force`.
+
+4. **Fingerprint SHA-256 truncada (8 hex) no ledger.** Não
+   logamos o secret nunca, mas precisamos provar "o env vivo
+   == o que registramos". Fingerprint = `sha256(value)[0..8]`.
+   Colisão prática: 1 em 4 bilhões — suficiente para verificação
+   visual sem expor o segredo. Operador faz `vercel env pull` em
+   ambiente seguro, calcula `sha256(...) | head -c 8`, compara
+   com `details.new_value_fingerprint` no ledger.
+
+5. **`VercelConfigError` ≠ `VercelApiError`.** Distinção
+   crítica: a primeira ("token Vercel não configurado") é o
+   ambiente do cron, a segunda ("Vercel API retornou 502") é
+   transient. A primeira marca outcome como
+   `skipped-misconfigured` (não é falha do código nem do
+   provider, é falha de ops); a segunda marca como `failed`
+   (paga warning crítico). Métricas usam labels diferentes
+   (`reason=misconfigured` vs `reason=api_error`).
+
+6. **`secrets.auto_rotate_tier_a` default OFF.** Padrão de
+   rollout das waves anteriores (W9/10/12/13/14): observamos
+   primeiro, ligamos depois. Nas primeiras 30d, mesmo Tier A
+   é tratado como Tier B (queued, alerta para operador). Após
+   confiança, flag ON e o cron começa a fazer PATCHes.
+
+7. **Cron weekly, não daily.** Tier A pode rotacionar
+   diariamente sem fricção, mas Tier B+C alertam o on-call —
+   alerta diário cria fadiga. Weekly Sunday 04:00 UTC alinha
+   com janela de menor tráfego.
+
+8. **`recordManualRotation()` é separado de `rotateAllOverdue()`.**
+   Operador rotacionou Tier C manualmente em maintenance window
+   ⇒ chama `recordManualRotation({ reason: 'manual',
+rotatedBy: 'on-call:alice@x' })` para o ledger refletir a
+   verdade. Sem esse endpoint, próximo cron alertaria de novo
+   ("ainda overdue") porque o inventory não enxergaria a
+   rotação fora-de-banda.
+
+### Observações / issues encontrados durante execução
+
+- **Smoke fail no genesis seed.** Já citado em (2) acima —
+  `now()` vs `clock_timestamp()` + falta de coluna monotônica.
+  Reparado dentro da própria migração antes de aplicar em prod.
+- **`secret_rotation_overdue` retorna TODAS as rows >threshold.**
+  Não filtra por tier. Decisão consciente: deixa o orquestrador
+  filtrar por tier por iteração (3 chamadas ao RPC), evita
+  ter que parametrizar tier no RPC e simplifica o manifesto
+  estático embutido no SQL.
+- **Vercel API token = secret rotacionado pelo próprio cron.**
+  Circularidade detectada cedo. Solução documentada no
+  runbook §3.2.7: rotação manual com cron pausado. Tier B
+  com `hasSiblings: false` para sinalizar que é especial.
+- **`fingerprint()` usa lazy `require('node:crypto')`.** Mantém
+  o módulo edge-friendly mesmo com `import 'server-only'` já
+  pinando ele para Node — defesa em profundidade contra
+  bundler edge-cases.
+
+### Follow-ups criados
+
+1. **CI gate de drift.** Adicionar `tests/integration/secrets-drift.test.ts`
+   que faz fetch da live Vercel `listEnvs()` e compara o conjunto
+   `{ key }` contra o `SECRET_MANIFEST`. Falha o PR se há env nova
+   no Vercel sem entrada no manifest. Bloqueia merge sem isso na W16.
+2. **UI admin `/admin/secrets`** para o time de Segurança ver age
+   por secret + última rotação + chain integrity sem psql.
+   Pareado com `/admin/legal-holds` (W13) e `/admin/rls-canary`
+   (W14 follow-up).
+3. **Tier A scope creep prevention.** Lint regra: novo secret
+   em `.env.example` precisa ter PR companion atualizando
+   `lib/secrets/manifest.ts` + `056.sql` (ou evolução). Senão
+   o test de manifest-coverage falha.
+4. **Pre-rotation health probe.** Antes de rotacionar Tier A,
+   chamar `/api/health/deep` para confirmar que o backend está
+   verde — abortar rotação se não. Evita rotacionar durante
+   incidente em outra dimensão.
+5. **`ENCRYPTION_KEY` versioning.** Tier C destrói dados em
+   rest. Implementar key versioning (Wave 6 PII encryption
+   precisa de `key_id` em todo ciphertext) para que rotação
+   possa de fato acontecer. Hoje está documentada como "NUNCA
+   rotate naively" no runbook §4.5 — solução = trabalho de
+   semanas, não de uma wave.
+
+### CI run info (Wave 15)
+
+**Quality gates (locais):**
+
+| Gate                   | Status | Notes                                                          |
+| ---------------------- | ------ | -------------------------------------------------------------- |
+| Unit Tests (Vitest)    | 🟢     | 1538 passing (+48 W15)                                         |
+| Migration smoke (prod) | 🟢     | 056 aplicada, smoke 19 secrets / 0 overdue / 0 chain breaks    |
+| Manifest drift         | 🟢     | `manifest.ts` ⇄ `056.sql` aligned (14 invariant tests passing) |
+
+---

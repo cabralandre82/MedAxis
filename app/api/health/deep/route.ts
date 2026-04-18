@@ -284,6 +284,45 @@ export async function GET(req: NextRequest) {
     checks.rlsCanary = { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
+  // ── Secret rotation freshness (Wave 15) ───────────────────────────────
+  // Reads the secret_inventory view and reports the oldest secret +
+  // overdue counts. Two ways this turns red:
+  //   1. Any secret has never been rotated (manifest drift or a new
+  //      secret was added without seeding the ledger).
+  //   2. The `secrets.rotation_enforce` flag is ON and at least one
+  //      secret is past its tier-specific max-age. While the flag is
+  //      OFF (default) this check stays green-with-details so we can
+  //      observe before paging.
+  try {
+    const { getRotationStatus } = await import('@/lib/secrets')
+    const status = await getRotationStatus()
+    const enforce = await isFeatureEnabled('secrets.rotation_enforce').catch(() => false)
+    const failNeverRotated = status.neverRotatedCount > 0
+    const failOverdue = enforce && status.overdueCount > 0
+    checks.secretRotation = {
+      ok: !failNeverRotated && !failOverdue,
+      details: {
+        enforce,
+        totalSecrets: status.totalSecrets,
+        oldestSecretName: status.oldestSecretName,
+        oldestAgeSeconds: status.oldestAgeSeconds,
+        overdueCount: status.overdueCount,
+        neverRotatedCount: status.neverRotatedCount,
+        lastLedgerHash: status.lastLedgerHash,
+      },
+      error: failNeverRotated
+        ? `${status.neverRotatedCount} secret(s) have NEVER been rotated`
+        : failOverdue
+          ? `${status.overdueCount} secret(s) overdue for rotation`
+          : undefined,
+    }
+  } catch (err) {
+    checks.secretRotation = {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+
   const allOk = Object.values(checks).every((c) => c.ok)
   const totalMs = Date.now() - start
   observeHistogram(Metrics.HEALTH_CHECK_DURATION_MS, totalMs, { endpoint: 'deep' })

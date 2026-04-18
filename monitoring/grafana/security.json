@@ -242,6 +242,133 @@
           "expr": "sum by (outcome) (increase(rls_canary_runs_total[24h]))"
         }
       ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "SLO-12 · Oldest secret age (days)",
+      "description": "Wave 15. Age in days of the most-overdue secret tracked by `secret_inventory`. Yellow at 60d (warning ahead of Tier A/B 90d limit), red at 90d+.",
+      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 60, "color": "yellow" },
+              { "value": 90, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(secret_oldest_age_seconds) / 86400"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "SLO-12 · Overdue secrets",
+      "description": "Wave 15. Number of secrets currently past their tier-specific max age (90d Tier A/B, 180d Tier C). Hard SLO target = 0.",
+      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(secret_rotation_overdue_count)"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "SLO-12 · Never-rotated secrets",
+      "description": "Wave 15. Secrets present in the manifest but with no successful rotation row in the ledger. Should be 0 — non-zero implies manifest drift or missing genesis seed.",
+      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(secret_rotation_never_rotated_count)"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Secret rotation runs by tier+outcome",
+      "description": "Wave 15. Weekly cron output by tier (A/B/C) and outcome (rotated/queued/requires_operator).",
+      "gridPos": { "x": 18, "y": 16, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{tier}}/{{outcome}}",
+          "expr": "sum by (tier, outcome) (increase(secret_rotation_runs_total[14d]))"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Secret rotation FAILURES",
+      "description": "Wave 15. Any non-zero series here means a rotation attempt was rejected by the upstream (Vercel API, provider, DB). Investigate via `docs/runbooks/secret-compromise.md`.",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{tier}}/{{secret}}/{{reason}}",
+          "expr": "sum by (tier, secret, reason) (increase(secret_rotation_failures_total[7d]))"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Per-secret age (days)",
+      "description": "Wave 15. Tracks the age of every individual secret. Use this panel to forecast which secret rotates next.",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "d" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{secret}}",
+          "expr": "secret_age_seconds / 86400"
+        }
+      ]
     }
   ]
 }

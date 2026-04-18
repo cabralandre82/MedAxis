@@ -288,6 +288,15 @@ export const Metrics = {
   RLS_CANARY_LAST_VIOLATION_TS: 'rls_canary_last_violation_ts',
   RLS_CANARY_AGE_SECONDS: 'rls_canary_age_seconds',
   RLS_CANARY_DURATION_MS: 'rls_canary_duration_ms',
+  // Wave 15 — secret rotation
+  SECRET_ROTATION_RUNS_TOTAL: 'secret_rotation_runs_total',
+  SECRET_ROTATION_FAILURES_TOTAL: 'secret_rotation_failures_total',
+  SECRET_ROTATION_OVERDUE_COUNT: 'secret_rotation_overdue_count',
+  SECRET_ROTATION_NEVER_ROTATED_COUNT: 'secret_rotation_never_rotated_count',
+  SECRET_AGE_SECONDS: 'secret_age_seconds',
+  SECRET_OLDEST_AGE_SECONDS: 'secret_oldest_age_seconds',
+  SECRET_ROTATION_DURATION_MS: 'secret_rotation_duration_ms',
+  SECRET_ROTATION_LAST_RUN_TS: 'secret_rotation_last_run_ts',
 } as const
 
 // ── Surge detector ───────────────────────────────────────────────────────────
