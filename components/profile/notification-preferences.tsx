@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Bell, Lock } from 'lucide-react'
 import { SILENCEABLE_TYPES, CRITICAL_TYPES } from '@/lib/notification-types'
+import { fetchWithCsrf } from '@/lib/security/client-csrf'
 
 const TYPE_LABELS: Record<string, string> = {
   ORDER_CREATED: 'Novo pedido criado',
@@ -47,7 +48,7 @@ export function NotificationPreferences({ initialPreferences }: NotificationPref
   async function save() {
     startTransition(async () => {
       try {
-        const res = await fetch('/api/profile/notification-preferences', {
+        const res = await fetchWithCsrf('/api/profile/notification-preferences', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ preferences: prefs }),

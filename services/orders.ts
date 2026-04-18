@@ -16,6 +16,11 @@ import { isValidTransition } from '@/lib/orders/status-machine'
 import { canPlaceOrder } from '@/lib/compliance'
 import { getActiveCouponsForOrder } from '@/services/coupons'
 import { sendSms, SMS, sendWhatsApp, WA } from '@/lib/zenvia'
+import {
+  createOrderAtomic,
+  recordAtomicFallback,
+  shouldUseAtomicRpc,
+} from '@/lib/services/atomic.server'
 
 // Supabase uses gen_random_uuid() which may produce UUIDs outside strict RFC 4122 v4
 // variant bits (e.g. variant starting with 6x). Use a loose regex instead of z.string().uuid().
@@ -184,62 +189,108 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         buyer_type === 'DOCTOR' ? doctor_id : null
       )
 
-      // Create order header
-      const { data: order, error: orderError } = await adminClient
-        .from('orders')
-        .insert({
-          buyer_type,
-          clinic_id: buyer_type === 'CLINIC' ? clinic_id : null,
-          doctor_id,
-          delivery_address_id: buyer_type === 'DOCTOR' ? delivery_address_id : null,
-          pharmacy_id,
-          total_price: estimatedTotal,
-          order_status: 'AWAITING_DOCUMENTS',
-          payment_status: 'PENDING',
-          transfer_status: 'NOT_READY',
-          notes: notes ?? null,
-          created_by_user_id: user.id,
-          code: '',
+      // Wave 7 — atomic write path. When `orders.atomic_rpc` is enabled,
+      // orders + order_items + status history land in a single
+      // transaction. Pre-validation above (RBAC, compliance, prescription
+      // guard, pharmacy-uniqueness) still runs in TS; the RPC handles the
+      // ACID-critical writes only. On the legacy path we fall through to
+      // the original multi-step inserts and keep the compensating delete.
+      const useRpc = await shouldUseAtomicRpc('order', { userId: user.id, clinicId: clinic_id })
+      let order: { id: string; code: string } | null = null
+      if (useRpc) {
+        const rpc = await createOrderAtomic({
+          buyerType: buyer_type,
+          clinicId: clinic_id,
+          doctorId: doctor_id,
+          deliveryAddressId: delivery_address_id,
+          pharmacyId: pharmacy_id,
+          notes,
+          createdByUserId: user.id,
+          estimatedTotal,
+          items: items.map((item) => ({
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_price: productMap[item.product_id]?.price_current ?? 0,
+            total_price: (productMap[item.product_id]?.price_current ?? 0) * item.quantity,
+            coupon_id: couponMap[item.product_id] ?? null,
+          })),
         })
-        .select('id, code')
-        .single()
-
-      if (orderError || !order) {
-        logger.error('Order creation error:', { error: orderError })
-        return { error: 'Erro ao criar pedido. Tente novamente.' }
+        if (rpc.error) {
+          if (rpc.error.reason === 'rpc_unavailable') {
+            recordAtomicFallback('order', 'rpc_unavailable')
+            logger.warn('[createOrder] atomic rpc unavailable, using legacy path', {
+              userId: user.id,
+            })
+          } else {
+            logger.error('[createOrder] atomic rpc error', { reason: rpc.error.reason })
+            return { error: 'Erro ao criar pedido. Tente novamente.' }
+          }
+        } else if (rpc.data) {
+          order = { id: rpc.data.order_id, code: rpc.data.order_code }
+        }
+      } else {
+        recordAtomicFallback('order', 'flag_off')
       }
 
-      // Insert items (trigger freezes prices and applies coupon discount)
-      const { error: itemsError } = await adminClient.from('order_items').insert(
-        items.map((item) => ({
+      if (!order) {
+        // Legacy multi-step flow (fallback).
+        const { data: legacyOrder, error: orderError } = await adminClient
+          .from('orders')
+          .insert({
+            buyer_type,
+            clinic_id: buyer_type === 'CLINIC' ? clinic_id : null,
+            doctor_id,
+            delivery_address_id: buyer_type === 'DOCTOR' ? delivery_address_id : null,
+            pharmacy_id,
+            total_price: estimatedTotal,
+            order_status: 'AWAITING_DOCUMENTS',
+            payment_status: 'PENDING',
+            transfer_status: 'NOT_READY',
+            notes: notes ?? null,
+            created_by_user_id: user.id,
+            code: '',
+          })
+          .select('id, code')
+          .single()
+
+        if (orderError || !legacyOrder) {
+          logger.error('Order creation error:', { error: orderError })
+          return { error: 'Erro ao criar pedido. Tente novamente.' }
+        }
+        order = legacyOrder
+
+        // Insert items (trigger freezes prices and applies coupon discount)
+        const { error: itemsError } = await adminClient.from('order_items').insert(
+          items.map((item) => ({
+            order_id: order!.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_price: productMap[item.product_id]?.price_current ?? 0,
+            total_price: (productMap[item.product_id]?.price_current ?? 0) * item.quantity,
+            coupon_id: couponMap[item.product_id] ?? null,
+          }))
+        )
+
+        if (itemsError) {
+          logger.error('Order items error:', { error: itemsError })
+          await adminClient.from('orders').delete().eq('id', order.id)
+          return { error: 'Erro ao registrar itens do pedido.' }
+        }
+
+        // Record initial status history (non-blocking — log on failure)
+        const { error: historyError } = await adminClient.from('order_status_history').insert({
           order_id: order.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: productMap[item.product_id]?.price_current ?? 0,
-          total_price: (productMap[item.product_id]?.price_current ?? 0) * item.quantity,
-          coupon_id: couponMap[item.product_id] ?? null,
-        }))
-      )
-
-      if (itemsError) {
-        logger.error('Order items error:', { error: itemsError })
-        await adminClient.from('orders').delete().eq('id', order.id)
-        return { error: 'Erro ao registrar itens do pedido.' }
-      }
-
-      // Record initial status history (non-blocking — log on failure)
-      const { error: historyError } = await adminClient.from('order_status_history').insert({
-        order_id: order.id,
-        old_status: null,
-        new_status: 'AWAITING_DOCUMENTS',
-        changed_by_user_id: user.id,
-        reason: 'Pedido criado',
-      })
-      if (historyError)
-        logger.error('[createOrder] failed to insert status history', {
-          orderId: order.id,
-          error: historyError,
+          old_status: null,
+          new_status: 'AWAITING_DOCUMENTS',
+          changed_by_user_id: user.id,
+          reason: 'Pedido criado',
         })
+        if (historyError)
+          logger.error('[createOrder] failed to insert status history', {
+            orderId: order.id,
+            error: historyError,
+          })
+      }
 
       // Fetch updated total (after trigger recalc)
       const { data: updatedOrder } = await adminClient

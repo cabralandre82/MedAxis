@@ -10,6 +10,11 @@ import { paymentConfirmedEmail, transferRegisteredEmail } from '@/lib/email/temp
 import { createNotification } from '@/lib/notifications'
 import { formatCurrency } from '@/lib/utils'
 import { emitirNFSeParaTransferencia } from '@/services/nfse'
+import {
+  confirmPaymentAtomic,
+  recordAtomicFallback,
+  shouldUseAtomicRpc,
+} from '@/lib/services/atomic.server'
 
 interface ConfirmPaymentInput {
   paymentId: string
@@ -64,106 +69,144 @@ export async function confirmPayment(input: ConfirmPaymentInput): Promise<{ erro
         ) * 100
       ) / 100
 
-    // Confirm payment
-    const { error: confirmErr } = await adminClient
-      .from('payments')
-      .update({
-        status: 'CONFIRMED',
-        payment_method: input.paymentMethod,
-        reference_code: input.referenceCode ?? null,
+    // Wave 7 — atomic critical section. When `payments.atomic_confirm` is
+    // on, all of the writes below (payment UPDATE, commission / transfer /
+    // consultant_commission INSERT, order UPDATE, history INSERT) happen
+    // inside a single SECURITY DEFINER function and cannot leave the DB in
+    // a half-confirmed state. When the flag is off we preserve the exact
+    // legacy sequence — including the tolerant logging on inner errors.
+    const useRpc = await shouldUseAtomicRpc('payment', { userId: user.id })
+    let rpcDidConfirm = false
+    if (useRpc) {
+      const rpc = await confirmPaymentAtomic(input.paymentId, {
+        paymentMethod: input.paymentMethod,
+        referenceCode: input.referenceCode ?? null,
         notes: input.notes ?? null,
-        confirmed_by_user_id: user.id,
-        confirmed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        confirmedByUserId: user.id,
       })
-      .eq('id', input.paymentId)
-    if (confirmErr) return { error: 'Erro ao confirmar pagamento' }
+      if (rpc.error) {
+        if (rpc.error.reason === 'already_processed') return { error: 'Pagamento já processado' }
+        if (rpc.error.reason === 'not_found') return { error: 'Pagamento não encontrado' }
+        if (rpc.error.reason === 'order_not_found') return { error: 'Pedido não encontrado' }
+        if (rpc.error.reason === 'rpc_unavailable') {
+          recordAtomicFallback('payment', 'rpc_unavailable')
+          logger.warn('[confirmPayment] atomic rpc unavailable, using legacy path', {
+            paymentId: input.paymentId,
+          })
+        } else {
+          return { error: 'Erro ao confirmar pagamento' }
+        }
+      } else {
+        rpcDidConfirm = true
+      }
+    } else {
+      recordAtomicFallback('payment', 'flag_off')
+    }
 
-    // Platform commission record
-    const { error: commissionErr } = await adminClient.from('commissions').insert({
-      order_id: payment.order_id,
-      commission_type: 'FIXED',
-      commission_fixed_amount: platformCommission,
-      commission_total_amount: platformCommission,
-      calculated_by_user_id: user.id,
-    })
-    if (commissionErr)
-      logger.error('[confirmPayment] commissions.insert failed', {
-        error: commissionErr,
-        orderId: payment.order_id,
-      })
+    if (!rpcDidConfirm) {
+      // Confirm payment
+      const { error: confirmErr } = await adminClient
+        .from('payments')
+        .update({
+          status: 'CONFIRMED',
+          payment_method: input.paymentMethod,
+          reference_code: input.referenceCode ?? null,
+          notes: input.notes ?? null,
+          confirmed_by_user_id: user.id,
+          confirmed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', input.paymentId)
+      if (confirmErr) return { error: 'Erro ao confirmar pagamento' }
 
-    // Pharmacy transfer record (net_amount = what pharmacy receives)
-    const { error: transferErr } = await adminClient.from('transfers').insert({
-      order_id: payment.order_id,
-      pharmacy_id: orderData.pharmacy_id,
-      gross_amount: Number(orderData.total_price),
-      commission_amount: platformCommission,
-      net_amount: pharmacyTransfer,
-      status: 'PENDING',
-    })
-    if (transferErr)
-      logger.error('[confirmPayment] transfers.insert failed', {
-        error: transferErr,
-        orderId: payment.order_id,
-      })
-
-    // Consultant commission (global rate from app_settings)
-    const clinic = orderData.clinics as { consultant_id?: string | null } | null
-    if (clinic?.consultant_id) {
-      const { data: setting } = await adminClient
-        .from('app_settings')
-        .select('value_json')
-        .eq('key', 'consultant_commission_rate')
-        .single()
-
-      const consultantRate = Number(setting?.value_json ?? 5)
-      const consultantCommission =
-        Math.round(Number(orderData.total_price) * consultantRate * 100) / 10000
-
-      const { error: consultantCommErr } = await adminClient.from('consultant_commissions').insert({
+      // Platform commission record
+      const { error: commissionErr } = await adminClient.from('commissions').insert({
         order_id: payment.order_id,
-        consultant_id: clinic.consultant_id,
-        order_total: Number(orderData.total_price),
-        commission_rate: consultantRate,
-        commission_amount: consultantCommission,
+        commission_type: 'FIXED',
+        commission_fixed_amount: platformCommission,
+        commission_total_amount: platformCommission,
+        calculated_by_user_id: user.id,
+      })
+      if (commissionErr)
+        logger.error('[confirmPayment] commissions.insert failed', {
+          error: commissionErr,
+          orderId: payment.order_id,
+        })
+
+      // Pharmacy transfer record (net_amount = what pharmacy receives)
+      const { error: transferErr } = await adminClient.from('transfers').insert({
+        order_id: payment.order_id,
+        pharmacy_id: orderData.pharmacy_id,
+        gross_amount: Number(orderData.total_price),
+        commission_amount: platformCommission,
+        net_amount: pharmacyTransfer,
         status: 'PENDING',
       })
-      if (consultantCommErr)
-        logger.error('[confirmPayment] consultant_commissions.insert failed', {
-          error: consultantCommErr,
+      if (transferErr)
+        logger.error('[confirmPayment] transfers.insert failed', {
+          error: transferErr,
+          orderId: payment.order_id,
+        })
+
+      // Consultant commission (global rate from app_settings)
+      const clinic = orderData.clinics as { consultant_id?: string | null } | null
+      if (clinic?.consultant_id) {
+        const { data: setting } = await adminClient
+          .from('app_settings')
+          .select('value_json')
+          .eq('key', 'consultant_commission_rate')
+          .single()
+
+        const consultantRate = Number(setting?.value_json ?? 5)
+        const consultantCommission =
+          Math.round(Number(orderData.total_price) * consultantRate * 100) / 10000
+
+        const { error: consultantCommErr } = await adminClient
+          .from('consultant_commissions')
+          .insert({
+            order_id: payment.order_id,
+            consultant_id: clinic.consultant_id,
+            order_total: Number(orderData.total_price),
+            commission_rate: consultantRate,
+            commission_amount: consultantCommission,
+            status: 'PENDING',
+          })
+        if (consultantCommErr)
+          logger.error('[confirmPayment] consultant_commissions.insert failed', {
+            error: consultantCommErr,
+            orderId: payment.order_id,
+          })
+      }
+
+      // Update order status
+      const { error: orderUpdateErr } = await adminClient
+        .from('orders')
+        .update({
+          payment_status: 'CONFIRMED',
+          order_status: 'COMMISSION_CALCULATED',
+          transfer_status: 'PENDING',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payment.order_id)
+      if (orderUpdateErr)
+        logger.error('[confirmPayment] orders.update status failed', {
+          error: orderUpdateErr,
+          orderId: payment.order_id,
+        })
+
+      const { error: histErr } = await adminClient.from('order_status_history').insert({
+        order_id: payment.order_id,
+        old_status: orderData.order_status ?? 'AWAITING_PAYMENT',
+        new_status: 'COMMISSION_CALCULATED',
+        changed_by_user_id: user.id,
+        reason: `Pagamento confirmado (${input.paymentMethod}${input.referenceCode ? ' · ref: ' + input.referenceCode : ''})`,
+      })
+      if (histErr)
+        logger.error('[confirmPayment] order_status_history.insert failed', {
+          error: histErr,
           orderId: payment.order_id,
         })
     }
-
-    // Update order status
-    const { error: orderUpdateErr } = await adminClient
-      .from('orders')
-      .update({
-        payment_status: 'CONFIRMED',
-        order_status: 'COMMISSION_CALCULATED',
-        transfer_status: 'PENDING',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', payment.order_id)
-    if (orderUpdateErr)
-      logger.error('[confirmPayment] orders.update status failed', {
-        error: orderUpdateErr,
-        orderId: payment.order_id,
-      })
-
-    const { error: histErr } = await adminClient.from('order_status_history').insert({
-      order_id: payment.order_id,
-      old_status: orderData.order_status ?? 'AWAITING_PAYMENT',
-      new_status: 'COMMISSION_CALCULATED',
-      changed_by_user_id: user.id,
-      reason: `Pagamento confirmado (${input.paymentMethod}${input.referenceCode ? ' · ref: ' + input.referenceCode : ''})`,
-    })
-    if (histErr)
-      logger.error('[confirmPayment] order_status_history.insert failed', {
-        error: histErr,
-        orderId: payment.order_id,
-      })
 
     await createAuditLog({
       actorUserId: user.id,

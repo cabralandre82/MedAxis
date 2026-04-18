@@ -239,6 +239,9 @@ export const Metrics = {
   CRON_DURATION_MS: 'cron_duration_ms',
   CIRCUIT_BREAKER_STATE: 'circuit_breaker_state',
   HEALTH_CHECK_DURATION_MS: 'health_check_duration_ms',
+  ATOMIC_RPC_TOTAL: 'atomic_rpc_total',
+  ATOMIC_RPC_DURATION_MS: 'atomic_rpc_duration_ms',
+  ATOMIC_RPC_FALLBACK_TOTAL: 'atomic_rpc_fallback_total',
 } as const
 
 // ── Surge detector ───────────────────────────────────────────────────────────

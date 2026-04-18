@@ -31,6 +31,7 @@
 | `csrf-block-surge.md`          | Spike de `csrf_blocked` em `/api/**` após Wave 5                  | `server_logs` + 403 rate      |
 | `health-check-failing.md`      | `/api/health/ready` ou `/deep` retornando `degraded` por >5 min   | UptimeRobot + Sentry          |
 | `alerts-noisy.md`              | Enxurrada de emails / páginas de `lib/alerts` fora de incidente   | PagerDuty + `OPS_ALERT_EMAIL` |
+| `atomic-rpc-mismatch.md`       | Divergência ou spike de erros nas RPCs atômicas (Wave 7)          | `atomic_rpc_total` + logs     |
 
 ### 🟡 P3 — Degradação silenciosa (backlog)
 

@@ -8,6 +8,11 @@ import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { createNotification } from '@/lib/notifications'
 import { revalidateTag } from 'next/cache'
 import { randomBytes } from 'crypto'
+import {
+  applyCouponAtomic,
+  recordAtomicFallback,
+  shouldUseAtomicRpc,
+} from '@/lib/services/atomic.server'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -291,6 +296,48 @@ export async function activateCoupon(
   try {
     const user = await requireAuth()
     const admin = createAdminClient()
+
+    // Wave 7 — atomic path. When `coupons.atomic_rpc` is enabled we delegate
+    // the whole check-then-act to public.apply_coupon_atomic(), which runs
+    // inside a single statement and therefore can never double-activate.
+    // We still hydrate the returned CouponRow to match the legacy shape so
+    // downstream callers are unchanged.
+    const useRpc = await shouldUseAtomicRpc('coupon', { userId: user.id })
+    if (useRpc) {
+      const { data, error } = await applyCouponAtomic(code, user.id)
+      if (error) {
+        const map: Record<string, string> = {
+          invalid_code: 'Código inválido',
+          invalid_user: 'Usuário não autenticado',
+          user_not_linked: 'Usuário não vinculado a nenhuma clínica ou perfil de médico',
+          already_activated: 'Este cupom já foi ativado anteriormente',
+          not_found_or_forbidden: 'Código inválido ou cupom não encontrado',
+          rpc_unavailable: 'Serviço temporariamente indisponível',
+        }
+        // Only fall back on infrastructure errors. Business errors must
+        // surface to the user so the UX matches the legacy flow.
+        if (error.reason === 'rpc_unavailable') {
+          recordAtomicFallback('coupon', 'rpc_unavailable')
+          logger.warn('[coupons/activate] atomic rpc unavailable, using legacy path', {
+            userId: user.id,
+          })
+        } else {
+          return { error: map[error.reason] ?? 'Erro ao ativar cupom' }
+        }
+      } else if (data) {
+        const { data: full } = await admin
+          .from('coupons')
+          .select('*')
+          .eq('id', data.coupon_id)
+          .single()
+        if (full) {
+          revalidateTag('coupons')
+          return { coupon: full as CouponRow }
+        }
+      }
+    } else {
+      recordAtomicFallback('coupon', 'flag_off')
+    }
 
     // Resolve who the current user is — clinic member or doctor
     const [{ data: membership }, { data: doctorRecord }] = await Promise.all([
