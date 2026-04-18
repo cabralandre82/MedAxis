@@ -1294,3 +1294,19 @@ Total novos: **60 unit tests**. Regressão integral:
 - Consider um `CHECK (cents IS NOT NULL OR numeric IS NULL)` quando
   `money.cents_read` estiver ON por ≥ 14 dias e zero drift — hoje a
   migration não adiciona CHECK para evitar bloquear inserts legados.
+
+**CI / Quality Gates (run `24604629112` CI + `24604629117` Security Scan @ `23019bd`):**
+
+| Job                         | Status | Notas                                                                    |
+| --------------------------- | ------ | ------------------------------------------------------------------------ |
+| Lint & Type Check           | 🟢     | 0 erros, 44 warnings de baseline inalterados (2m57s)                     |
+| Unit Tests (Vitest)         | 🟢     | **1292 passing** (+60 vs. Wave 7: 42 money + 13 format + 5 cron) (2m57s) |
+| E2E Smoke (Playwright)      | 🟢     | 24 testes `smoke*` verdes (1m42s)                                        |
+| Gitleaks (secret scan)      | 🟢     | nenhum secret novo (9s, hit cache)                                       |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos (9s, hit cache)                                       |
+| Trivy (filesystem + config) | 🟢     | sem findings novos (9s, hit cache)                                       |
+| SBOM (CycloneDX)            | 🟢     | regenerado (9s)                                                          |
+| npm audit                   | 🟢     | 0 high/critical (mesmas advisories moderate/low Waves anteriores) (9s)   |
+| License check (production)  | 🟢     | OK (9s)                                                                  |
+
+---
