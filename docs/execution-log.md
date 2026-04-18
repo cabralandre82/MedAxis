@@ -835,3 +835,23 @@ Slack removido do escopo em 2026-04-17 (decisão do fundador). Falhas dos workfl
 - `docs/runbooks/csrf-block-surge.md` — novo runbook P2.
 - `docs/runbooks/README.md` — índice atualizado.
 - `docs/implementation-plan.md` — linha "Última atualização" bumpada.
+  **Commits:**
+
+- `f14fb7a` — feat(wave-5): csrf + hmac timingSafeEqual + safe-redirect + e2e attack tests
+- `4e262dc` — fix(wave-5): loosen E2E attack assertions to what smoke context can verify
+
+**CI / Quality Gates (run `24602994370` CI + `24602994384` Security Scan @ `4e262dc`):**
+
+| Job                         | Status | Notas                                                                                                                                                                                      |
+| --------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Lint & Type Check           | 🟢     | 0 erros, 46 warnings (baseline Wave 4 + 2 novos no teste smoke — aceitos)                                                                                                                  |
+| Unit Tests (Vitest)         | 🟢     | 1165 passing (+55 vs. Wave 4, 3 arquivos novos `security-*`), thresholds Wave 1 mantidos                                                                                                   |
+| Gitleaks (secret scan)      | 🟢     | allowlist inalterada                                                                                                                                                                       |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos                                                                                                                                                                         |
+| Trivy (filesystem + config) | 🟢     | sem findings novos                                                                                                                                                                         |
+| SBOM (CycloneDX)            | 🟢     | regenerado                                                                                                                                                                                 |
+| npm audit                   | 🟢     | 0 high/critical (mesmas advisories moderate/low Waves anteriores)                                                                                                                          |
+| License check (production)  | 🟢     | OK                                                                                                                                                                                         |
+| E2E Smoke (Playwright)      | 🟢     | **primeiro run verde desde Wave 1.** 18 testes `smoke*` passaram (incluindo 8 novos de ataque). Débito `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` no CI resolvido via secrets `E2E_SUPABASE_*`. |
+
+---
