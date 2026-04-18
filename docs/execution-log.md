@@ -1833,3 +1833,24 @@ Também atualizados para novos imports:
 - [ ] Monitorar `rate_limit_hits_total{outcome=denied}` por
       bucket — se > 1% em qualquer bucket, investigar via
       runbook seção 3.
+
+### CI / Quality gates — Wave 10
+
+Commit `7dce4ff`, push to `main`:
+
+| Job                         | Status | Notas                                                                           |
+| --------------------------- | ------ | ------------------------------------------------------------------------------- |
+| Lint & Type Check           | 🟢     | 0 erros, 45 warnings de baseline (1 novo: import limpo no follow-up commit)     |
+| Unit Tests (Vitest)         | 🟢     | **1382 passing** (+46 vs. Wave 9: 16 rate-limit-guard + 16 turnstile + 14 cron) |
+| E2E Smoke (Playwright)      | 🟢     | 24 testes `smoke*` verdes (inalterado vs. W9)                                   |
+| Gitleaks (secret scan)      | 🟢     | nenhum secret novo                                                              |
+| CodeQL (JS/TS)              | 🟢     | sem findings novos                                                              |
+| Trivy (filesystem + config) | 🟢     | sem findings novos                                                              |
+| SBOM (CycloneDX)            | 🟢     | regenerado                                                                      |
+| npm audit                   | 🟢     | 0 high/critical (mesmas advisories moderate/low das Waves anteriores)           |
+| License check (production)  | 🟢     | OK                                                                              |
+
+- **CI run**: `24605451531` (2m57s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24605451531>
+- **Security Scan run**: `24605451517` (1m45s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24605451517>
+
+---

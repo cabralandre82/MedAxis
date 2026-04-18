@@ -5,7 +5,7 @@ import { createNotificationForRole } from '@/lib/notifications'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { createDsarRequest } from '@/lib/dsar'
 import { guard, lgpdFormLimiter, Bucket, extractClientIp } from '@/lib/rate-limit'
-import { verifyTurnstile, extractTurnstileToken } from '@/lib/turnstile'
+import { verifyTurnstile } from '@/lib/turnstile'
 import { logger } from '@/lib/logger'
 
 /**
