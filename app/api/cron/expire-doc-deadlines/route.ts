@@ -1,19 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { createNotification } from '@/lib/notifications'
 import { logger } from '@/lib/logger'
+import { withCronGuard } from '@/lib/cron/guarded'
 
 /**
  * GET /api/cron/expire-doc-deadlines
  * Called daily by Vercel Cron.
  * Cancels orders that are still in AWAITING_DOCUMENTS past their docs_deadline.
+ *
+ * Wrapped by withCronGuard (Wave 2) — single-flight lock + cron_runs audit.
  */
-export async function GET(req: NextRequest) {
-  const secret = req.headers.get('authorization')
-  if (secret !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const GET = withCronGuard('expire-doc-deadlines', async () => {
   const admin = createAdminClient()
 
   const { data: expired, error } = await admin
@@ -24,12 +21,12 @@ export async function GET(req: NextRequest) {
     .lt('docs_deadline', new Date().toISOString())
 
   if (error) {
-    logger.error('[expire-doc-deadlines] query error', { error })
-    return NextResponse.json({ error: 'Query failed' }, { status: 500 })
+    logger.error('query error', { action: 'expire-doc-deadlines', error })
+    throw new Error(`query failed: ${error.message}`)
   }
 
   if (!expired?.length) {
-    return NextResponse.json({ ok: true, canceled: 0 })
+    return { canceled: 0 }
   }
 
   let canceled = 0
@@ -60,12 +57,13 @@ export async function GET(req: NextRequest) {
 
       canceled++
     } catch (err) {
-      logger.error('[expire-doc-deadlines] failed to cancel order', {
+      logger.error('failed to cancel order', {
+        action: 'expire-doc-deadlines',
         orderId: order.id,
         error: err,
       })
     }
   }
 
-  return NextResponse.json({ ok: true, canceled })
-}
+  return { canceled }
+})

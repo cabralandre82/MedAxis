@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/db/admin'
 import { createNotification, createNotificationForRole } from '@/lib/notifications'
+import {
+  claimWebhookEvent,
+  clicksignIdempotencyKey,
+  completeWebhookEvent,
+} from '@/lib/webhooks/dedup'
+import { logger } from '@/lib/logger'
 
 /**
  * Clicksign webhook handler.
@@ -40,6 +46,24 @@ export async function POST(req: NextRequest) {
 
   if (!documentKey) return NextResponse.json({ ok: true, skipped: true })
 
+  const claim = await claimWebhookEvent({
+    source: 'clicksign',
+    eventType,
+    idempotencyKey: clicksignIdempotencyKey(body),
+    payload: rawBody,
+  })
+
+  if (claim.status === 'duplicate') {
+    logger.info('clicksign duplicate delivery', {
+      module: 'webhooks/clicksign',
+      eventId: claim.eventId,
+      firstSeenAt: claim.firstSeenAt,
+      eventType,
+    })
+    return NextResponse.json({ ok: true, duplicate: true, eventId: claim.eventId })
+  }
+
+  const eventId = claim.status === 'claimed' ? claim.eventId : null
   const admin = createAdminClient()
 
   const { data: contract } = await admin
@@ -48,7 +72,12 @@ export async function POST(req: NextRequest) {
     .eq('clicksign_document_key', documentKey)
     .single()
 
-  if (!contract) return NextResponse.json({ ok: true, skipped: 'contract not found' })
+  if (!contract) {
+    if (eventId) {
+      await completeWebhookEvent(eventId, { status: 'processed', httpStatus: 200 })
+    }
+    return NextResponse.json({ ok: true, skipped: 'contract not found' })
+  }
 
   if (eventType === 'sign' || eventType === 'auto_close') {
     await admin
@@ -95,6 +124,10 @@ export async function POST(req: NextRequest) {
         link: '/profile',
       })
     }
+  }
+
+  if (eventId) {
+    await completeWebhookEvent(eventId, { status: 'processed', httpStatus: 200 })
   }
 
   return NextResponse.json({ ok: true, event: eventType })

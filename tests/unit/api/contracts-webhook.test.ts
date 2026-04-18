@@ -2,13 +2,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createHmac } from 'crypto'
 import { NextRequest } from 'next/server'
+import { loggerMock } from '@/tests/helpers/cron-guard-mock'
 
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/notifications', () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
   createNotificationForRole: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
+vi.mock('@/lib/logger', () => loggerMock())
 
 import * as adminModule from '@/lib/db/admin'
 import * as notificationsModule from '@/lib/notifications'
@@ -41,26 +42,55 @@ function makeRequest(body: object, hmacSecret = HMAC_SECRET): NextRequest {
   })
 }
 
-function buildAdmin(contractData: unknown = CONTRACT) {
+/**
+ * Admin stub that dispatches by table name:
+ *   - `webhook_events`: insert+select+single returns a claimed eventId;
+ *                        update is a no-op.
+ *   - `contracts`: select+eq+single returns `contractData`.
+ *                    update captured on `updateSpy`.
+ */
+function buildAdmin(contractData: unknown = CONTRACT, { dupeEventId = 77 } = {}) {
   const updateSpy = vi.fn()
-  const eqSpy = vi.fn().mockResolvedValue({ error: null })
-  const updateBuilder = { eq: eqSpy }
+  const webhookUpdateSpy = vi.fn()
 
-  let callCount = 0
-  const from = vi.fn(() => {
-    callCount++
-    if (callCount === 1) {
-      // First call: select to look up the contract
-      const b = { eq: vi.fn().mockReturnThis() } as Record<string, unknown>
-      b.select = vi.fn().mockReturnValue(b)
-      b.single = vi.fn().mockResolvedValue({ data: contractData, error: null })
-      return b
+  const from = vi.fn((table: string) => {
+    if (table === 'webhook_events') {
+      return {
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: { id: dupeEventId }, error: null }),
+          }),
+        }),
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+            }),
+          }),
+        }),
+        update: (row: unknown) => {
+          webhookUpdateSpy(row)
+          return { eq: () => Promise.resolve({ error: null }) }
+        },
+      }
     }
-    // Subsequent calls: update
-    updateSpy.mockReturnValue(updateBuilder)
-    return { update: updateSpy }
+    if (table === 'contracts') {
+      return {
+        select: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: contractData, error: null }),
+          }),
+        }),
+        update: (row: unknown) => {
+          updateSpy(row)
+          return { eq: () => Promise.resolve({ error: null }) }
+        },
+      }
+    }
+    return {}
   })
-  return { client: { from }, updateSpy, eqSpy }
+
+  return { client: { from }, updateSpy, webhookUpdateSpy }
 }
 
 beforeEach(() => {
@@ -104,7 +134,6 @@ describe('HMAC authentication', () => {
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
       client as ReturnType<typeof adminModule.createAdminClient>
     )
-    // No Content-Hmac header — should still succeed
     const rawBody = JSON.stringify({ event: { name: 'sign' }, document: { key: 'doc-1' } })
     const req = new NextRequest('http://localhost/api/contracts/webhook', {
       method: 'POST',
@@ -248,6 +277,69 @@ describe('unknown events', () => {
     const json = await res.json()
     expect(json.ok).toBe(true)
     expect(json.event).toBe('upload')
+    expect(updateSpy).not.toHaveBeenCalled()
+    expect(notificationsModule.createNotification).not.toHaveBeenCalled()
+  })
+})
+
+// ── webhook idempotency (Wave 2) ────────────────────────────────────────────
+
+describe('webhook idempotency (Wave 2)', () => {
+  it('returns { duplicate: true } when claim sees a unique-violation', async () => {
+    const updateSpy = vi.fn()
+    const from = vi.fn((table: string) => {
+      if (table === 'webhook_events') {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: () => Promise.resolve({ data: null, error: { code: '23505' } }),
+            }),
+          }),
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data: {
+                      id: 88,
+                      received_at: '2026-04-17T10:00:00Z',
+                      status: 'processed',
+                      attempts: 2,
+                    },
+                    error: null,
+                  }),
+              }),
+            }),
+          }),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        }
+      }
+      if (table === 'contracts') {
+        return {
+          select: () => ({
+            eq: () => ({ single: () => Promise.resolve({ data: CONTRACT, error: null }) }),
+          }),
+          update: (row: unknown) => {
+            updateSpy(row)
+            return { eq: () => Promise.resolve({ error: null }) }
+          },
+        }
+      }
+      return {}
+    })
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue({ from } as unknown as ReturnType<
+      typeof adminModule.createAdminClient
+    >)
+
+    const req = makeRequest({ event: { name: 'sign' }, document: { key: 'doc-1' } })
+    const res = await POST(req)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.duplicate).toBe(true)
+    expect(json.eventId).toBe(88)
+    // Critical: business side effects must NOT run for duplicates.
     expect(updateSpy).not.toHaveBeenCalled()
     expect(notificationsModule.createNotification).not.toHaveBeenCalled()
   })

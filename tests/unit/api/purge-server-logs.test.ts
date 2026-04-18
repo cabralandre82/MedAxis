@@ -2,11 +2,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import * as adminModule from '@/lib/db/admin'
+import { attachCronGuard, loggerMock } from '@/tests/helpers/cron-guard-mock'
 
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
-vi.mock('@/lib/logger', () => ({
-  logger: { error: vi.fn(), info: vi.fn() },
-}))
+vi.mock('@/lib/logger', () => loggerMock())
 
 const CRON_SECRET = 'cron-test-secret'
 
@@ -17,16 +16,19 @@ function makeRequest(secret?: string) {
   })
 }
 
-function makeAdmin({ deleteError = null, deletedCount = 5 } = {}) {
-  return {
-    from: vi.fn().mockReturnValue({
-      delete: vi.fn().mockReturnThis(),
-      lt: vi.fn().mockReturnThis(),
-      select: vi.fn().mockResolvedValue({
-        data: deleteError ? null : Array(deletedCount).fill({ id: 'x' }),
-        error: deleteError ?? null,
-      }),
-    }),
+function serverLogsFrom({ deleteError = null as null | { message: string }, deletedCount = 5 }) {
+  return (table: string) => {
+    if (table === 'server_logs') {
+      return {
+        delete: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({
+          data: deleteError ? null : Array(deletedCount).fill({ id: 'x' }),
+          error: deleteError ?? null,
+        }),
+      }
+    }
+    return {}
   }
 }
 
@@ -51,35 +53,38 @@ describe('GET /api/cron/purge-server-logs', () => {
 
   it('returns ok:true with purged count on success', async () => {
     const { GET } = await import('@/app/api/cron/purge-server-logs/route')
+    const stub = attachCronGuard({ from: serverLogsFrom({ deletedCount: 42 }) })
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      makeAdmin({ deletedCount: 42 }) as unknown as ReturnType<typeof adminModule.createAdminClient>
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
     )
 
     const res = await GET(makeRequest(CRON_SECRET))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
-    expect(body.purged).toBe(42)
-    expect(body.cutoff).toBeTruthy()
+    expect(body.result.purged).toBe(42)
+    expect(body.result.cutoff).toBeTruthy()
   })
 
   it('returns ok:true with purged:0 when no old logs', async () => {
     const { GET } = await import('@/app/api/cron/purge-server-logs/route')
+    const stub = attachCronGuard({ from: serverLogsFrom({ deletedCount: 0 }) })
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      makeAdmin({ deletedCount: 0 }) as unknown as ReturnType<typeof adminModule.createAdminClient>
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
     )
 
     const res = await GET(makeRequest(CRON_SECRET))
     expect(res.status).toBe(200)
-    expect((await res.json()).purged).toBe(0)
+    expect((await res.json()).result.purged).toBe(0)
   })
 
   it('returns 500 when DB delete fails', async () => {
     const { GET } = await import('@/app/api/cron/purge-server-logs/route')
+    const stub = attachCronGuard({
+      from: serverLogsFrom({ deleteError: { message: 'connection error' } }),
+    })
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      makeAdmin({ deleteError: { message: 'connection error' } }) as unknown as ReturnType<
-        typeof adminModule.createAdminClient
-      >
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
     )
 
     const res = await GET(makeRequest(CRON_SECRET))
@@ -89,17 +94,17 @@ describe('GET /api/cron/purge-server-logs', () => {
 
   it('cutoff is approximately 90 days ago', async () => {
     const { GET } = await import('@/app/api/cron/purge-server-logs/route')
+    const stub = attachCronGuard({ from: serverLogsFrom({}) })
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      makeAdmin() as unknown as ReturnType<typeof adminModule.createAdminClient>
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
     )
 
     const before = Date.now()
     const res = await GET(makeRequest(CRON_SECRET))
-    const { cutoff } = await res.json()
-    const cutoffMs = new Date(cutoff).getTime()
+    const { result } = await res.json()
+    const cutoffMs = new Date(result.cutoff).getTime()
     const expectedMs = before - 90 * 24 * 60 * 60 * 1000
 
-    // Allow ±5 seconds tolerance
     expect(Math.abs(cutoffMs - expectedMs)).toBeLessThan(5000)
   })
 })

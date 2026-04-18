@@ -1,21 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { getDaysDiff, getStaleThreshold } from '@/lib/stale-orders'
 import { sendEmail } from '@/lib/email'
 import { createNotification } from '@/lib/notifications'
+import { withCronGuard } from '@/lib/cron/guarded'
 
 /**
  * GET /api/cron/stale-orders
  * Called daily by Vercel Cron (see vercel.json).
  * Sends in-app + email alerts for stale orders to SUPER_ADMINs and PHARMACY_ADMINs.
+ *
+ * Wrapped by withCronGuard (Wave 2) — single-flight lock + cron_runs audit.
  */
-export async function GET(req: NextRequest) {
-  // Verify cron secret so only Vercel can call this
-  const secret = req.headers.get('authorization')
-  if (secret !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const GET = withCronGuard('stale-orders', async (req: NextRequest) => {
   const admin = createAdminClient()
 
   const { data: orders } = await admin
@@ -57,7 +54,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (stale.length === 0) {
-    return NextResponse.json({ ok: true, stale: 0 })
+    return { stale: 0 }
   }
 
   // ── Notify SUPER_ADMINs ───────────────────────────────
@@ -142,8 +139,8 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ ok: true, stale: stale.length })
-}
+  return { stale: stale.length }
+})
 
 const STATUS_LABELS: Record<string, string> = {
   AWAITING_DOCUMENTS: 'Aguardando Documentos',

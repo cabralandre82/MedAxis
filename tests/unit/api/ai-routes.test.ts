@@ -2,11 +2,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
+import { attachCronGuard, loggerMock } from '@/tests/helpers/cron-guard-mock'
+
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/rbac', () => ({ requireRole: vi.fn() }))
-vi.mock('@/lib/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}))
+vi.mock('@/lib/logger', () => loggerMock())
 vi.mock('@/lib/ai', () => ({
   extractDocumentData: vi.fn(),
   classifyTicket: vi.fn(),
@@ -299,6 +299,13 @@ describe('Cron trigger routes (churn-check, reorder-alerts, product-recommendati
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = CRON_SECRET
+
+    // Every cron route now runs under withCronGuard, which requires the
+    // admin client to expose `rpc()` and a `from('cron_runs')` branch.
+    const stub = attachCronGuard({ from: () => ({}) })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
   })
 
   async function testCronRoute(routePath: string) {

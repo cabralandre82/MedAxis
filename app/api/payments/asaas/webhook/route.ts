@@ -6,8 +6,9 @@ import { sendEmail } from '@/lib/email'
 import { sendSms, SMS, sendWhatsApp, WA } from '@/lib/zenvia'
 import { sendPushToUser } from '@/lib/push'
 import { inngest } from '@/lib/inngest'
+import { asaasIdempotencyKey, claimWebhookEvent, completeWebhookEvent } from '@/lib/webhooks/dedup'
+import { logger } from '@/lib/logger'
 
-// Asaas sends a query param accessToken or a header — verify it
 function isAuthorized(req: NextRequest): boolean {
   const tokenFromQuery = req.nextUrl.searchParams.get('accessToken')
   const tokenFromHeader = req.headers.get('asaas-access-token')
@@ -20,21 +21,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await req.json()
-  const event = body.event as string
+  const rawBody = await req.text()
+  let body: { event?: string; payment?: { id?: string; externalReference?: string } }
+  try {
+    body = JSON.parse(rawBody)
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const event = (body.event ?? '') as string
   const paymentData = body.payment
 
   if (!paymentData?.externalReference) {
     return NextResponse.json({ ok: true, skipped: true })
   }
 
-  // Enqueue to Inngest for reliable processing with automatic retry
-  // Return 200 immediately so Asaas doesn't retry the delivery
+  // Wave 2 — idempotency: refuse replays at the DB layer.
+  const claim = await claimWebhookEvent({
+    source: 'asaas',
+    eventType: event,
+    idempotencyKey: asaasIdempotencyKey(body),
+    payload: rawBody,
+  })
+
+  if (claim.status === 'duplicate') {
+    logger.info('asaas duplicate delivery', {
+      module: 'webhooks/asaas',
+      eventId: claim.eventId,
+      firstSeenAt: claim.firstSeenAt,
+      event,
+    })
+    return NextResponse.json({ ok: true, duplicate: true, eventId: claim.eventId })
+  }
+
+  const eventId = claim.status === 'claimed' ? claim.eventId : null
+
   if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
     await inngest.send({
       name: 'webhook/asaas.received',
       data: { event, payment: paymentData },
     })
+    if (eventId) {
+      await completeWebhookEvent(eventId, { status: 'processed', httpStatus: 200 })
+    }
     return NextResponse.json({ ok: true, queued: true, event })
   }
 
@@ -53,7 +82,12 @@ export async function POST(req: NextRequest) {
     .eq('id', orderId)
     .single()
 
-  if (!order) return NextResponse.json({ ok: true, skipped: 'order not found' })
+  if (!order) {
+    if (eventId) {
+      await completeWebhookEvent(eventId, { status: 'processed', httpStatus: 200 })
+    }
+    return NextResponse.json({ ok: true, skipped: 'order not found' })
+  }
 
   const clinic = (order as any).clinics as {
     trade_name: string
@@ -176,6 +210,10 @@ export async function POST(req: NextRequest) {
         link: `/orders/${orderId}`,
       })
     }
+  }
+
+  if (eventId) {
+    await completeWebhookEvent(eventId, { status: 'processed', httpStatus: 200 })
   }
 
   return NextResponse.json({ ok: true, event })

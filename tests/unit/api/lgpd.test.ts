@@ -6,7 +6,9 @@ import * as serverModule from '@/lib/db/server'
 import * as notifModule from '@/lib/notifications'
 import * as auditModule from '@/lib/audit'
 import * as tokenModule from '@/lib/token-revocation'
+import { attachCronGuard, loggerMock } from '@/tests/helpers/cron-guard-mock'
 
+vi.mock('@/lib/logger', () => loggerMock())
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/db/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/notifications', () => ({
@@ -277,9 +279,14 @@ describe('GET /api/cron/enforce-retention', () => {
   })
 
   it('returns ok with retention summary on success', async () => {
-    vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      makeAdminWithData() as unknown as ReturnType<typeof adminModule.createAdminClient>
-    )
+    // The route is wrapped by withCronGuard, which also hits cron_runs + rpc;
+    // overlay those onto the retention mock via attachCronGuard.
+    const inner = makeAdminWithData()
+    const stub = attachCronGuard({ from: (table) => inner.from(table) })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue({
+      ...inner,
+      ...stub.admin,
+    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
 
     const { GET } = await import('@/app/api/cron/enforce-retention/route')
     const req = new NextRequest('http://localhost/api/cron/enforce-retention', {
@@ -289,6 +296,6 @@ describe('GET /api/cron/enforce-retention', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
-    expect(body).toHaveProperty('ran_at')
+    expect(body.result).toHaveProperty('ran_at')
   })
 })

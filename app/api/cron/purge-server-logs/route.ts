@@ -1,39 +1,31 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { logger } from '@/lib/logger'
+import { withCronGuard } from '@/lib/cron/guarded'
 
 /**
  * GET /api/cron/purge-server-logs
  * Weekly cron: delete server_logs entries older than 90 days.
  * Schedule: every Monday at 03:00 UTC (see vercel.json)
+ *
+ * Wrapped by withCronGuard (Wave 2) — single-flight lock + cron_runs audit.
  */
-export async function GET(req: NextRequest) {
-  const secret = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const GET = withCronGuard('purge-server-logs', async () => {
+  const admin = createAdminClient()
+  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+
+  const { data, error } = await admin
+    .from('server_logs')
+    .delete()
+    .lt('created_at', cutoff)
+    .select('id')
+
+  if (error) {
+    logger.error('purge failed', { action: 'purge-server-logs', error })
+    throw new Error(`delete failed: ${error.message}`)
   }
 
-  try {
-    const admin = createAdminClient()
-    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  const purged = data?.length ?? 0
+  logger.info('purged old logs', { action: 'purge-server-logs', purged, cutoff })
 
-    const { data, error } = await admin
-      .from('server_logs')
-      .delete()
-      .lt('created_at', cutoff)
-      .select('id')
-
-    if (error) {
-      logger.error('[cron/purge-server-logs] failed', { error })
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    }
-
-    const purged = data?.length ?? 0
-    logger.info('[cron/purge-server-logs] purged old logs', { purged, cutoff })
-
-    return NextResponse.json({ ok: true, purged, cutoff })
-  } catch (err) {
-    logger.error('[cron/purge-server-logs] unexpected error', { error: err })
-    return NextResponse.json({ ok: false, error: 'Erro interno' }, { status: 500 })
-  }
-}
+  return { purged, cutoff }
+})

@@ -463,3 +463,92 @@ Slack removido do escopo em 2026-04-17 (decisão do fundador). Falhas dos workfl
 - Gitleaks 8.24 flagou as fixtures sintéticas do próprio redator (`tests/unit/lib/logger-redact.test.ts` linha 82: JWT falso; linha 103: `sk_live_` falso). Tentativa inicial com `[[allowlists]]` + `targetRules` não surtiu efeito na v8.24; substituída por `[allowlist]` singular com `paths` estritos — apenas o test file específico é permitido, todas as outras rules continuam ativas pro arquivo. Full-history scan identifica 14 leaks em outros arquivos (docs/staging/demo fixtures) — fora do escopo de Wave 1, mas registrado pra um sprint de higiene futuro.
 
 ---
+
+### Wave 2 — Webhook dedup + cron single-flight guard — 2026-04-17
+
+**Status:** 🟢 concluído (código + migration 045 aplicada em staging e produção via Supabase MCP; aguardando merge + deploy Vercel)
+
+**Escopo do plano (`implementation-plan.md` W2):** Webhook dedup (`webhook_events(idempotency_key)`) + `runCronGuarded` com `pg_try_advisory_xact_lock` + `cron_runs`.
+
+**Escopo ajustado em tempo de execução:**
+
+- **`pg_try_advisory_xact_lock` trocado por lease-with-TTL em `cron_locks`.** O plano original presumia que a transação do cron wrapper envolveria a execução inteira; com Supabase + PostgREST + Route Handlers em Node, cada chamada de `admin.from(...)` abre conexão e commita transação própria — o lock xact cai junto com o `rpc()`. Em vez disso, migration 045 cria **`cron_locks(job_name PK, locked_by, locked_at, expires_at)`** e três RPCs `SECURITY DEFINER`:
+  - `cron_try_lock(p_job_name, p_locked_by, p_ttl_seconds)` — `INSERT ... ON CONFLICT DO UPDATE` com rearm quando `expires_at < now()` (auto-roubo após TTL). Retorna `true` se adquirido.
+  - `cron_release_lock(p_job_name, p_locked_by)` — `DELETE` só se `locked_by` bate (guarda anti roubo incorreto).
+  - `cron_extend_lock(p_job_name, p_locked_by, p_extra_seconds)` — refresh de lease pra jobs longos.
+- **Proteção anti-lock-dead** (processo Vercel morre mid-execução): `expires_at = now() + ttl_seconds`. Primeira invocação após expiração adquire, mesmo sem `release`. TTL default = 900s (Vercel Pro cron maxDuration).
+- **Modelo de acesso**: `REVOKE ALL` em `webhook_events`, `cron_runs`, `cron_locks` e nos três RPCs. `GRANT SELECT` pra `authenticated` (UI admin futura). `GRANT EXECUTE` nos RPCs só pra `service_role`. Funções marcadas `SECURITY DEFINER` com `search_path = public, pg_temp` — inatacáveis via search-path injection.
+
+**Arquivos novos**
+
+- `supabase/migrations/045_webhook_cron_hardening.sql` — três tabelas + três RPCs + RLS + comentários de rollback. Idempotente (`IF NOT EXISTS`, `OR REPLACE`).
+  - `webhook_events(id bigserial, source text, event_type text, idempotency_key text, payload_hash bytea, received_at, processed_at, status CHECK IN ('received','processed','failed','duplicate'), http_status int, attempts int, error text, request_id text, UNIQUE(source, idempotency_key))`.
+  - `cron_runs(id bigserial, job_name, started_at, finished_at, duration_ms, status CHECK IN ('running','success','failed','skipped_locked'), error, request_id, locked_by, result jsonb)`.
+  - `cron_locks(job_name PK, run_id → cron_runs.id ON DELETE SET NULL, locked_by, locked_at, expires_at)`.
+- `lib/webhooks/dedup.ts` — API:
+  - `asaasIdempotencyKey({event, payment.id})` — `"<payment_id>:<event>"`.
+  - `clicksignIdempotencyKey({event.name, event.occurred_at, document.key})` — `"<doc_key>:<event_name>:<occurred_at>"`.
+  - `claimWebhookEvent({source, eventType?, idempotencyKey, payload?, requestId?})` → `{status:'claimed', eventId} | {status:'duplicate', eventId, firstSeenAt, previousStatus} | {status:'degraded', reason}`. Insert falha `23505` = duplicate, qualquer outro código = degraded. Duplicate incrementa `attempts` e marca `status='duplicate'` pra ops ver senders barulhentos.
+  - `completeWebhookEvent(eventId, {status:'processed'|'failed', httpStatus?, error?})` — nunca lança.
+  - Hash de payload em SHA-256 armazenado em `payload_hash` pra forense sem expor corpo.
+- `lib/cron/guarded.ts` — API:
+  - `runCronGuarded(jobName, fn, {ttlSeconds?, lockedBy?})` → `GuardedResult<T>` (`success|failed|skipped_locked|degraded`). `lockedBy` default = `VERCEL_DEPLOYMENT_ID:<uuid>` pra atribuir corridas a deploys específicos.
+  - `withCronGuard(jobName, handler, {authenticate?, ttlSeconds?})` — wrapper HTTP que combina auth (`CRON_SECRET` via `Authorization: Bearer`, `x-cron-secret` ou `?secret=`), `withCronContext` (ALS), `runCronGuarded`, e mapeia outcome → `NextResponse` (`200`/`200 skipped`/`500 failed`/`503 degraded`). JSON result da `fn` é preservado em `body.result` com clone JSON-safe (resultados exóticos viram `null` em vez de crashar o audit).
+- `tests/helpers/cron-guard-mock.ts` — `attachCronGuard(adminMock)` injeta `.rpc('cron_try_lock'|'cron_release_lock')` e `.from('cron_runs')` reutilizáveis nos testes de crons existentes; `loggerMock()` retorna `{logger, withCronContext, withWebhookContext, withRouteContext}` compatíveis com os wrappers Wave 1+2.
+- `tests/unit/lib/webhooks-dedup.test.ts` — 19 testes: determinismo dos dois builders de key (tolerância a payloads parciais/nulos), `claimWebhookEvent` happy path / duplicate path (incluindo bump de attempts) / degraded em erro genérico / `requestId` lido do ALS, `completeWebhookEvent` no-op em `id<=0`, swallowing de erros.
+- `tests/unit/lib/cron-guarded.test.ts` — 18 testes: `runCronGuarded` success / failed / skipped_locked / degraded (3 formas: rpc error, insert error, rpc throw), `withCronGuard` respeita auth via Bearer/header/query, retorna 401 sem segredo, propaga result em 200, 500 em failure, 503 em degraded. Cobrem `ttlSeconds`, `lockedBy`, request_id correlation, release-after-success e release-after-failure.
+
+**Arquivos modificados**
+
+- **Webhooks (2 handlers):**
+  - `app/api/payments/asaas/webhook/route.ts` — lê raw body, roda `claimWebhookEvent({source:'asaas'})`, short-circuit `{ok:true, duplicate:true}` se duplicate, chama `completeWebhookEvent` no finally. Verificação HMAC continua antes do claim (falha de assinatura nunca ocupa slot de idempotência).
+  - `app/api/contracts/webhook/route.ts` — idem para Clicksign. Em duplicatas, NÃO executa `updateContract`, NÃO dispara `createNotification`, NÃO re-assina PDF.
+- **Crons (11 handlers migrados pra `withCronGuard`):** `churn-check`, `coupon-expiry-alerts`, `enforce-retention`, `expire-doc-deadlines`, `product-recommendations`, `purge-drafts`, `purge-revoked-tokens`, `purge-server-logs`, `reorder-alerts`, `revalidate-pharmacies` (TTL custom `1800s` por ser o job mais longo), `stale-orders`. Cada handler agora:
+  - Remove validação manual de `CRON_SECRET` (vira job do wrapper).
+  - Retorna objeto de resultado (ex: `{purged:12, duration:830}`); o wrapper enfeita com `{ok, job, runId, durationMs, result}`.
+  - Ganha audit row em `cron_runs` mesmo em falha (duration, error truncado em 4096 chars).
+  - Ganha `request_id` automático via ALS (`withCronContext` injeta no contexto ambiente, logger pega de graça).
+- **Testes adaptados (6 files):** `purge-drafts`, `purge-server-logs`, `coupon-expiry-alerts`, `ai-routes` (churn-check + reorder-alerts + product-recommendations), `contracts-webhook`, `lgpd` (cobre `enforce-retention`). Todos passaram a mockar `loggerMock()` + `attachCronGuard()`, e asserções de body trocaram `body.purged` → `body.result.purged`. `contracts-webhook` ganhou suíte nova `webhook idempotency (Wave 2)` (4 testes adicionais) verificando que duplicate short-circuit NÃO toca em `contracts` nem em `notifications`.
+
+**Operações executadas**
+
+- Migration 045 aplicada em staging (`apply_migration` via Supabase MCP, sem erros) e em produção (`mcp_supabase_apply_migration`, sem erros). Ambos bancos passaram `SELECT count(*) FROM webhook_events; SELECT count(*) FROM cron_runs; SELECT count(*) FROM cron_locks;` retornando `0`. RPCs testados com `SELECT cron_try_lock('smoke', 'migration-check', 5);` + release — OK.
+- Nenhuma alteração em secrets GitHub / Vercel — `CRON_SECRET` e `SUPABASE_SERVICE_ROLE_KEY` já existiam.
+
+**Testes: 1082 total (+38 vs. fim de Wave 1)**
+
+- 19 dedup + 18 cron guard + 4 idempotency-check no contracts-webhook − 3 descartados (tests antigos de "CRON_SECRET inválido" absorvidos pelo wrapper).
+- `npm test`: 1082 passed, 0 failed, 12.4s.
+- `npx tsc --noEmit`: 0 erros.
+- `npm run lint`: 0 erros, 46 warnings pré-existentes.
+
+**Impacto operacional**
+
+1. **Webhooks replayados não executam side-effects duas vezes.** Asaas e Clicksign re-entregam em caso de timeout/5xx; agora, segunda entrega do mesmo `(source, idempotency_key)` devolve `200 {ok:true, duplicate:true}` sem tocar em banco de negócio (contracts, payments, orders, notifications).
+2. **Crons nunca rodam em paralelo consigo mesmo.** Um pod Vercel pendurado OU um re-trigger manual via cURL (feature comum quando ops quer "forçar o job") se torna seguro: segundo invocador recebe `200 {ok:true, skipped:true, reason:"lock-busy"}`, audit row marcada `skipped_locked`.
+3. **Observabilidade.** `select * from cron_runs order by started_at desc limit 50` lista toda execução nas últimas N horas com status, duração e erro. Query pra alertas SLO (W6/W7): `failed / running` ratio por job nos últimos 24h. `select * from webhook_events where status='failed'` diagnostica senders que estão recebendo HTTP 5xx de volta.
+4. **Degrade gracefully.** Se Supabase estiver down quando webhook chega: `claimWebhookEvent` retorna `degraded`, handler Asaas/Clicksign escolhe **fail-open** (processa mesmo assim, logando erro) — melhor duplicar uma mensagem que perder pagamento. Se Supabase estiver down quando cron dispara: wrapper retorna `503 degraded`, Vercel reagenda no próximo slot.
+
+**Pendências capturadas:**
+
+- **Lease TTL tuning:** default 900s cobre todos crons atuais; `revalidate-pharmacies` já tem 1800s. Se futuro job ultrapassar, adicionar parâmetro `ttlSeconds` no wrapper.
+- **UI admin pra `cron_runs` + `webhook_events`:** pensado pra Wave 6 (Health & Alerts). Por ora, consulta via SQL editor no Supabase.
+- **Inngest dedup:** W2 cobre Vercel Cron + Asaas + Clicksign. Inngest já tem idempotency nativo, mas seus webhooks inbound (ex: `/api/inngest`) podem passar a usar `claimWebhookEvent({source:'inngest', ...})` em W17 quando `fraud_signals` consumir jobs externos.
+- **Particionamento de `cron_runs` / `webhook_events`:** volume atual baixo (~30 inserts/dia em cron, <100/dia em webhook). Considerar após 6 meses ou quando tabelas passarem de 1M linhas — W15 (partitioning).
+- **Cron_runs retention:** criar cron próprio (meta) em W15 pra purgar `cron_runs` com `started_at < now() - interval '90 days'`. Por ora, infinito.
+
+**Docs atualizados**
+
+- `docs/execution-log.md` (este arquivo) — entrada Wave 2.
+- `docs/runbooks/webhook-replay.md` — novo runbook P2 (duplicate / failed webhook events).
+- `docs/runbooks/cron-double-run.md` — novo runbook P2 (lock busy / failed cron runs).
+- `docs/runbooks/README.md` — tabela P2 atualizada com as duas novas entradas.
+- `docs/implementation-plan.md` — linha "Última atualização" bumpada.
+
+**Commits a consolidar em 1 PR:** (hashes atribuídos no push)
+
+- `feat(wave-2): webhook dedup + cron single-flight guard (migration 045)`
+
+**CI / Quality Gates:** aguardando push.
+
+---

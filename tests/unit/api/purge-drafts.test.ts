@@ -2,11 +2,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import * as adminModule from '@/lib/db/admin'
+import { attachCronGuard, loggerMock } from '@/tests/helpers/cron-guard-mock'
 
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
-vi.mock('@/lib/logger', () => ({
-  logger: { error: vi.fn(), info: vi.fn() },
-}))
+vi.mock('@/lib/logger', () => loggerMock())
 
 const CRON_SECRET = 'test-cron-secret'
 
@@ -17,21 +16,22 @@ function makeRequest(secret?: string) {
   })
 }
 
-function makePurgeAdmin({ deleteError = null, deletedIds = ['d1', 'd2'] } = {}) {
-  return {
-    from: vi.fn().mockImplementation((table: string) => {
-      if (table === 'registration_drafts') {
-        return {
-          delete: vi.fn().mockReturnThis(),
-          lt: vi.fn().mockReturnThis(),
-          select: vi.fn().mockResolvedValue({
-            data: deleteError ? null : deletedIds.map((id) => ({ id })),
-            error: deleteError ?? null,
-          }),
-        }
+function draftsFrom({
+  deleteError = null as null | { message: string },
+  deletedIds = ['d1', 'd2'] as string[],
+}) {
+  return (table: string) => {
+    if (table === 'registration_drafts') {
+      return {
+        delete: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({
+          data: deleteError ? null : deletedIds.map((id) => ({ id })),
+          error: deleteError ?? null,
+        }),
       }
-      return {}
-    }),
+    }
+    return {}
   }
 }
 
@@ -57,43 +57,45 @@ describe('GET /api/cron/purge-drafts', () => {
 
   it('returns ok:true with purged count when drafts are deleted', async () => {
     const { GET } = await import('@/app/api/cron/purge-drafts/route')
-    const admin = makePurgeAdmin({ deletedIds: ['d1', 'd2', 'd3'] })
+    const stub = attachCronGuard({ from: draftsFrom({ deletedIds: ['d1', 'd2', 'd3'] }) })
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
     )
 
     const res = await GET(makeRequest(CRON_SECRET))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
-    expect(body.purged).toBe(3)
-    expect(body.ran_at).toBeDefined()
+    expect(body.job).toBe('purge-drafts')
+    expect(body.result.purged).toBe(3)
+    expect(body.result.ran_at).toBeDefined()
   })
 
   it('returns ok:true with purged:0 when no expired drafts exist', async () => {
     const { GET } = await import('@/app/api/cron/purge-drafts/route')
-    const admin = makePurgeAdmin({ deletedIds: [] })
+    const stub = attachCronGuard({ from: draftsFrom({ deletedIds: [] }) })
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
     )
 
     const res = await GET(makeRequest(CRON_SECRET))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
-    expect(body.purged).toBe(0)
+    expect(body.result.purged).toBe(0)
   })
 
   it('returns 500 when DB delete fails', async () => {
     const { GET } = await import('@/app/api/cron/purge-drafts/route')
-    const admin = makePurgeAdmin({ deleteError: { message: 'db error' } })
+    const stub = attachCronGuard({ from: draftsFrom({ deleteError: { message: 'db error' } }) })
     vi.mocked(adminModule.createAdminClient).mockReturnValue(
-      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
     )
 
     const res = await GET(makeRequest(CRON_SECRET))
     expect(res.status).toBe(500)
     const body = await res.json()
     expect(body.ok).toBe(false)
+    expect(body.error).toMatch(/db error/)
   })
 })

@@ -159,4 +159,4 @@ Migrations existentes vão até `043_server_logs.sql`. As novas continuam a part
 ---
 
 _Para detalhes técnicos de cada correção ver `docs/audit-fine-tooth-comb-2026-04.md`._
-_Última atualização: 2026-04-17 — Wave 1 concluída (logger + PII redaction + ALS correlation)._
+_Última atualização: 2026-04-17 — Wave 2 concluída (webhook dedup + cron single-flight guard, migration 045 aplicada em staging e prod)._
