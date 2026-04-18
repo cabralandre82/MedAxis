@@ -2268,7 +2268,7 @@ ORDER BY recorded_at DESC LIMIT 1;` e confirmar que
 **Env vars alteradas:** nenhuma (flags `legal_hold.block_purge`, `legal_hold.block_dsar_erasure` default OFF)
 **Testes:** 1474 unit (+32 W13), CI still green
 **Deploy staging:** n/a (Vercel auto)
-**Deploy prod:** pendente push
+**Deploy prod:** commit `34e7e75` em `main` · CI `24606617520` + Security Scan `24606617522` ambos success
 
 **Entregáveis:**
 
@@ -2435,7 +2435,7 @@ uuid`. Linhas sem UUID são tratadas como "não há o que
 | Lint & Type Check      | 🟢     | tsc clean, eslint 0 err (44 warn pré-existentes) |
 | Migration smoke (prod) | 🟢     | 054 aplicada + smoke OK                          |
 
-- **CI run**: pendente push
-- **Security Scan run**: pendente push
+- **CI run**: `24606617520` (3m17s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24606617520>
+- **Security Scan run**: `24606617522` (1m00s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24606617522>
 
 ---
