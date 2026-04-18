@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/db/admin'
 import { createNotification, createNotificationForRole } from '@/lib/notifications'
 import {
@@ -8,6 +7,7 @@ import {
   completeWebhookEvent,
 } from '@/lib/webhooks/dedup'
 import { logger } from '@/lib/logger'
+import { verifyHmacSha256 } from '@/lib/security/hmac'
 
 /**
  * Clicksign webhook handler.
@@ -15,22 +15,14 @@ import { logger } from '@/lib/logger'
  * Clicksign signs the raw body with HMAC SHA256 and sends:
  *   Content-Hmac: sha256=<hex_digest>
  * Set CLICKSIGN_WEBHOOK_SECRET to the HMAC SHA256 Secret shown in the Clicksign panel.
+ *
+ * Wave 5: HMAC compare delegated to lib/security/hmac which uses
+ * `timingSafeEqual` over hex-decoded bytes and enforces hex format.
  */
 async function isValidHmac(req: NextRequest, rawBody: string): Promise<boolean> {
   const secret = process.env.CLICKSIGN_WEBHOOK_SECRET
   if (!secret) return true // no secret configured — skip check in dev
-
-  const receivedHeader = req.headers.get('content-hmac') ?? ''
-  // Header format: "sha256=<hex>"
-  const receivedHex = receivedHeader.replace(/^sha256=/, '')
-  if (!receivedHex) return false
-
-  const expected = createHmac('sha256', secret).update(rawBody).digest('hex')
-  try {
-    return timingSafeEqual(Buffer.from(receivedHex, 'hex'), Buffer.from(expected, 'hex'))
-  } catch {
-    return false
-  }
+  return verifyHmacSha256(rawBody, req.headers.get('content-hmac'), secret)
 }
 
 export async function POST(req: NextRequest) {

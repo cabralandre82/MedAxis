@@ -28,6 +28,7 @@
 | `email-deliverability-low.md`  | Taxa de bounce > 5% em 24h                                        | Resend dashboard             |
 | `connection-pool-exhausted.md` | Supabase pool > 80% por >5 min                                    | `/api/cron/db-pool-health`   |
 | `rbac-permission-denied.md`    | Spike de `permission denied` após ativação de `rbac.fine_grained` | `server_logs` + painel flags |
+| `csrf-block-surge.md`          | Spike de `csrf_blocked` em `/api/**` após Wave 5                  | `server_logs` + 403 rate     |
 
 ### 🟡 P3 — Degradação silenciosa (backlog)
 

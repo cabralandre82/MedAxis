@@ -759,3 +759,79 @@ Slack removido do escopo em 2026-04-17 (decisão do fundador). Falhas dos workfl
 | E2E Smoke (Playwright)      | 🔴     | **mesmo bug pré-existente Waves 1–3** — `webServer` não sobe por falta de `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` no ambiente CI. Mensagem idêntica (`Your project's URL and Key are required to create a Supabase client!`). Débito W5. |
 
 ---
+
+## Wave 5 — CSRF + HMAC `timingSafeEqual` + open-redirect allowlist + E2E de ataque + CI E2E fix (2026-04-19)
+
+**Status:** concluída. Perímetro de segurança endurecido em três frentes (CSRF, HMAC constant-time, open-redirect) atrás de flags/env para rollback imediato, mais o débito de infra de E2E Smoke (pré-existente desde W1) resolvido junto.
+
+### Entregas
+
+**1. CSRF (double-submit cookie + Origin check)**
+
+- `lib/security/csrf.ts` — módulo Edge-safe (usa Web Crypto; não depende de `node:crypto`). Exporta:
+  - `checkCsrf(req, { enforceDoubleSubmit })` → `CsrfDecision { ok, reason?, details? }`.
+  - `verifyDoubleSubmit(req)` (constant-time compare via XOR accumulator).
+  - `issueCsrfToken()` (256 bits via `crypto.getRandomValues`).
+  - `ensureCsrfCookie(req, res)` — cookie `__Host-csrf` em prod (HTTPS) / `csrf-token` em dev (HTTP).
+  - Lista `CSRF_EXEMPT_PREFIXES` — webhooks, Inngest, cron, tracking, health.
+- `middleware.ts` — enforce `checkCsrf` para métodos mutating em `/api/**`. Origin/Referer sempre checado; double-submit só quando `CSRF_ENFORCE_DOUBLE_SUBMIT=true` (env var Vercel, rollback < 60s). Primeira resposta GET em rota não-API injeta o cookie.
+
+**2. HMAC constant-time compare**
+
+- `lib/security/hmac.ts` — novo módulo. Três helpers:
+  - `safeEqualString(a, b)` — `timingSafeEqual` com length check explícito, retorna `false` em empty/null/undefined.
+  - `safeEqualHex(a, b)` — valida hex + decode + `timingSafeEqual`.
+  - `verifyHmacSha256(payload, signature, secret)` — aceita `sha256=<hex>` e `<hex>`.
+- `lib/asaas.ts` — `validateAsaasWebhookToken` agora chama `safeEqualString` (antes era `===` direto).
+- `app/api/payments/asaas/webhook/route.ts` — `isAuthorized` compara query-token **e** header-token com `safeEqualString`.
+- `app/api/contracts/webhook/route.ts` — Clicksign delega para `verifyHmacSha256`; código desduplicado (eliminou `createHmac`/`timingSafeEqual` inline).
+
+**3. Open-redirect allowlist**
+
+- `lib/security/safe-redirect.ts` — duas funções puras (isomorphic, sem runtime):
+  - `safeNextPath(raw, fallback)` — só aceita paths começando com `/` e não `//`, não `/\`, sem CR/LF/controle, ≤ 1024 chars.
+  - `safeSameOriginUrl(raw, currentOrigin, fallback)` — parseia + valida same-origin + funnela pelo `safeNextPath`.
+- `app/(auth)/auth/callback/route.ts` — `next = safeNextPath(searchParams.get('next'))`.
+- `app/(auth)/login/login-form.tsx` — idem no client side.
+
+**4. E2E Smoke fix (débito Waves 1-4)**
+
+- `playwright.config.ts` — `webServer.env` agora propaga `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`, `NEXT_PUBLIC_APP_URL` para o child process do `npm run dev`. Sem isso o Next não bootava no CI.
+- `.github/workflows/ci.yml` — job `e2e-smoke` passa secrets `E2E_SUPABASE_URL`/`E2E_SUPABASE_ANON_KEY`/`E2E_SUPABASE_SERVICE_ROLE_KEY`/`E2E_ENCRYPTION_KEY` como env variables.
+- Secrets do GitHub provisionadas via `gh secret set` apontando para o projeto **staging** (`ghjexiyrqdtqhkolsyaw`) — anon key é público, service-role key é staging-only (risk-contained).
+
+**5. Playwright attack tests**
+
+- `tests/e2e/smoke-security-attack.test.ts` — 8 cenários sem autenticação:
+  - CSRF: POST sem Origin → 403; POST com Origin mismatch → 403; GET nunca bloqueado; webhook exempt.
+  - Open-redirect: `/login?next=//evil.com` não navega cross-origin; `/auth/callback?next=//evil.com` cai em `/unauthorized` same-origin.
+  - HMAC: Clicksign assinatura bruta → < 500 (401 com secret configurado); Asaas sem token → 401/200.
+- Nomeado `smoke-*` para casar com `npm run test:e2e:smoke` pattern.
+
+**6. Unit tests (+55)**
+
+- `tests/unit/lib/security-csrf.test.ts` (23) — cobre safe methods, exempt paths, Origin match/mismatch, `ALLOWED_ORIGINS`, double-submit happy-path/mismatch/length-mismatch, dev cookie fallback, `issueCsrfToken` unicidade, `ensureCsrfCookie` prod/dev split.
+- `tests/unit/lib/security-hmac.test.ts` (16) — `safeEqualString`/`safeEqualHex`/`verifyHmacSha256` happy + unicode + null + malformed.
+- `tests/unit/lib/security-safe-redirect.test.ts` (16) — todos os vetores OWASP de open-redirect (protocol-relative, backslash, scheme, CR/LF, whitespace, length).
+- `tests/unit/audit5-fixes.test.ts` — expectativas atualizadas (HMAC agora em `lib/security/hmac.ts`).
+
+### Impacto operacional
+
+- Rotas `/api/**` com métodos mutating agora **bloqueiam cross-origin** silenciosamente na Edge. Clientes JS internos funcionam (mesma Origin); integrações externas precisam adicionar `Origin` ou entrar na exempt list com mecanismo próprio de auth.
+- Webhooks Asaas/Clicksign resistem a ataques de timing mesmo com secret curto — cada byte demora o mesmo tempo.
+- Parâmetro `?next=` em login e callback **não pode mais ser usado para phishing**.
+- CI volta a ter gate E2E funcional — Playwright webServer sobe e executa smokes incluindo os 8 attack cases novos.
+
+### Pendente para próximas Waves
+
+- **Double-submit token em prod.** Flag `CSRF_ENFORCE_DOUBLE_SUBMIT` ainda `false` por default. Ligar em W6 depois de 1 semana de shadow-mode (Origin-only) estável.
+- **Helper `lib/security/client-csrf.ts`** para clientes JS internos lerem o cookie e ecoarem no header — sai junto com W6 (painel admin).
+- **Sentry alert rule** para spike de `csrf_blocked` (`> 30/min`) — também em W6 quando `alerts.ts` chegar.
+- **Migração gradual de rotas requireRole → requirePermission** permanece pendente (parcialmente feita em W4); W6 vai migrar 15+ rotas de admin.
+
+**Docs atualizados**
+
+- `docs/execution-log.md` — esta entrada.
+- `docs/runbooks/csrf-block-surge.md` — novo runbook P2.
+- `docs/runbooks/README.md` — índice atualizado.
+- `docs/implementation-plan.md` — linha "Última atualização" bumpada.

@@ -87,7 +87,16 @@ jobs:
       - name: Run E2E smoke tests
         run: npm run test:e2e:smoke
         env:
+          # Wave 5 — when no staging URL is configured we let Playwright
+          # boot a local dev server against the staging Supabase project.
+          # The webServer only sees the env vars listed in playwright.config.ts,
+          # which reads these `process.env` entries.
           BASE_URL: ${{ vars.E2E_STAGING_URL || 'http://localhost:3000' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+          ENCRYPTION_KEY: ${{ secrets.E2E_ENCRYPTION_KEY }}
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
           E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
           E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
 

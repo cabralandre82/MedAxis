@@ -8,12 +8,19 @@ import { sendPushToUser } from '@/lib/push'
 import { inngest } from '@/lib/inngest'
 import { asaasIdempotencyKey, claimWebhookEvent, completeWebhookEvent } from '@/lib/webhooks/dedup'
 import { logger } from '@/lib/logger'
+import { safeEqualString } from '@/lib/security/hmac'
 
+// Wave 5: token comparison is now constant-time so the static ASAAS
+// access token cannot leak via timing side-channels. Both transport
+// paths (query string legacy + header) are still supported for
+// backward compatibility with the Asaas dashboard — but the query
+// path is preferred only as a fallback; the header should be used
+// going forward (avoids URLs in access logs).
 function isAuthorized(req: NextRequest): boolean {
-  const tokenFromQuery = req.nextUrl.searchParams.get('accessToken')
-  const tokenFromHeader = req.headers.get('asaas-access-token')
-  const expected = process.env.ASAAS_WEBHOOK_SECRET
-  return tokenFromQuery === expected || tokenFromHeader === expected
+  const expected = process.env.ASAAS_WEBHOOK_SECRET ?? null
+  const tokenFromQuery = req.nextUrl.searchParams.get('accessToken') ?? ''
+  const tokenFromHeader = req.headers.get('asaas-access-token') ?? ''
+  return safeEqualString(tokenFromQuery, expected) || safeEqualString(tokenFromHeader, expected)
 }
 
 export async function POST(req: NextRequest) {

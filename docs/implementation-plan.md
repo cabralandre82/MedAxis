@@ -159,4 +159,4 @@ Migrations existentes vão até `043_server_logs.sql`. As novas continuam a part
 ---
 
 _Para detalhes técnicos de cada correção ver `docs/audit-fine-tooth-comb-2026-04.md`._
-_Última atualização: 2026-04-19 — Wave 4 concluída (RBAC granular: migration 047 aplicada em staging e prod com 38 permissions + 55 role mappings, módulo `lib/rbac/permissions.ts` com fallback estático + RPC gated atrás do feature flag `rbac.fine_grained`, piloto em `/server-logs`, runbook `rbac-permission-denied.md`)._
+_Última atualização: 2026-04-19 — Wave 5 concluída (perímetro de segurança: CSRF Origin+double-submit em `lib/security/csrf.ts` / `middleware.ts` atrás de `CSRF_ENFORCE_DOUBLE_SUBMIT`, HMAC constant-time em `lib/security/hmac.ts` aplicado a Asaas+Clicksign, open-redirect allowlist em `lib/security/safe-redirect.ts` usado em `/auth/callback` e `LoginForm`, CI E2E fix via staging Supabase secrets, 8 testes Playwright de ataque + 55 unit tests novos, runbook `csrf-block-surge.md`)._

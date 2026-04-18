@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/db/client'
 import { loginSchema } from '@/lib/validators'
+import { safeNextPath } from '@/lib/security/safe-redirect'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,7 +19,8 @@ type LoginData = { email: string; password: string }
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const nextUrl = searchParams.get('next') ?? '/dashboard'
+  // Wave 5: refuse `?next=//evil.com` style open-redirect payloads.
+  const nextUrl = safeNextPath(searchParams.get('next'), '/dashboard')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
+import { checkCsrf, ensureCsrfCookie } from '@/lib/security/csrf'
 
 const PUBLIC_ROUTES = [
   '/login',
@@ -78,6 +79,25 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-request-id', requestId)
 
+  // Wave 5 — CSRF gate for state-changing /api/** calls. Webhooks, cron,
+  // and Inngest are exempt (checkCsrf knows the prefix list). Origin /
+  // Referer must match the request's own origin. The double-submit
+  // cookie check is an extra tier enabled only when the env flag is on;
+  // keeping it env-driven avoids a middleware-time DB round-trip.
+  const enforceDoubleSubmit = process.env.CSRF_ENFORCE_DOUBLE_SUBMIT === 'true'
+  const csrf = checkCsrf(request, { enforceDoubleSubmit })
+  if (!csrf.ok) {
+    const isUnsafeApi = request.method !== 'GET' && request.nextUrl.pathname.startsWith('/api/')
+    if (isUnsafeApi) {
+      // Only block API calls — a redirect-to-login response on a JSON
+      // endpoint would look like a success from an HTTP client.
+      return NextResponse.json(
+        { error: 'csrf_blocked', reason: csrf.reason ?? 'csrf_blocked' },
+        { status: 403, headers: { 'X-Request-ID': requestId } }
+      )
+    }
+  }
+
   let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
   supabaseResponse.headers.set('X-Request-ID', requestId)
 
@@ -139,6 +159,13 @@ export async function middleware(request: NextRequest) {
       })
       return redirectResponse
     }
+  }
+
+  // Wave 5 — prime the CSRF cookie on safe navigations so the browser
+  // has it ready when a form eventually POSTs. Only set on GET page
+  // loads (not on API GETs) to keep the cookie surface small.
+  if (request.method === 'GET' && !pathname.startsWith('/api/')) {
+    ensureCsrfCookie(request, supabaseResponse)
   }
 
   return supabaseResponse

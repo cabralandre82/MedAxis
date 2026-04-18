@@ -111,8 +111,17 @@ export async function cancelPayment(paymentId: string): Promise<void> {
 
 // ── Webhook validation ────────────────────────────────────────────────────────
 
+import { safeEqualString } from '@/lib/security/hmac'
+
+/**
+ * Compare the inbound Asaas access token to `ASAAS_WEBHOOK_SECRET` in
+ * constant time. Asaas signs nothing — it ships a static token in the
+ * `asaas-access-token` header — so the only defensive measure we can
+ * take is to prevent timing side-channels from leaking the expected
+ * secret character by character.
+ */
 export function validateAsaasWebhookToken(token: string): boolean {
-  return token === process.env.ASAAS_WEBHOOK_SECRET
+  return safeEqualString(token, process.env.ASAAS_WEBHOOK_SECRET ?? null)
 }
 
 // ── Due date helper ───────────────────────────────────────────────────────────

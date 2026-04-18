@@ -195,8 +195,12 @@ describe('Clicksign webhook — HMAC SHA256 verification', () => {
     const src = readFileSync(join(ROOT, 'app/api/contracts/webhook/route.ts'), 'utf8')
     expect(src).toContain('CLICKSIGN_WEBHOOK_SECRET')
     expect(src).toContain('content-hmac')
-    expect(src).toContain('createHmac')
-    expect(src).toContain('timingSafeEqual')
+    // Wave 5: HMAC compare moved to lib/security/hmac. Route delegates to verifyHmacSha256.
+    expect(src).toContain('verifyHmacSha256')
     expect(src).toContain('status: 401')
+
+    const hmacLib = readFileSync(join(ROOT, 'lib/security/hmac.ts'), 'utf8')
+    expect(hmacLib).toContain('createHmac')
+    expect(hmacLib).toContain('timingSafeEqual')
   })
 })
