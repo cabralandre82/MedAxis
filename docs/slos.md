@@ -1,7 +1,14 @@
 # Clinipharma — Service Level Objectives (SLOs)
 
-**Versão:** 1.0 | **Data:** 2026-04-08
-**Revisão:** Trimestral
+**Versão:** 2.0 (Wave 11) | **Data:** 2026-04-17
+**Revisão:** Trimestral (seções 1-6) / mensal (seção 7 SLO-as-code)
+
+---
+
+> Seção 7 abaixo (“**SLO-as-code**”) é a fonte-da-verdade de
+> produção a partir da Wave 11. As seções 1-6 permanecem como
+> contexto de alto nível e contato operacional — qualquer
+> conflito numérico, a seção 7 prevalece.
 
 ---
 
@@ -98,3 +105,74 @@ Ver procedimento completo em `docs/disaster-recovery.md`.
 | —   | —               | —          | —            | —                |
 
 _Preencher após primeira execução em produção._
+
+---
+
+## 7. SLO-as-code (Wave 11)
+
+Esta seção é **código**: cada target abaixo tem (1) uma query
+PromQL primária em `docs/sli-queries.md` e (2) um painel em
+`monitoring/grafana/*.json`. Qualquer alteração em número
+aqui requer PR sincronizado nos três arquivos — caso
+contrário as regras de burn-rate divergem do contrato.
+
+Fonte de medição: registry in-memory exposto por
+`GET /api/metrics` (Prometheus text, scrape 30 s). Error
+budgets computados sobre janela móvel **30 dias**; burn-rate
+via multi-window / multi-burn-rate (Google SRE, Cap. 5).
+
+| Ref    | Flow                            | SLI                                                | Target                  | Error budget (30d) |
+| ------ | ------------------------------- | -------------------------------------------------- | ----------------------- | ------------------ |
+| SLO-01 | Checkout end-to-end             | `orders_created_total{outcome=ok}` / total         | ≥ 99,5 %                | ~216 min downtime  |
+| SLO-02 | Payment webhook idempotency     | 0 duplicate credits per `webhook_event.id`         | 100 % (hard)            | 0                  |
+| SLO-03 | Auth sign-in p95 latency        | p95 `http_request_duration_ms{path=~/api/auth/..}` | ≤ 400 ms                | latency SLO        |
+| SLO-04 | Cron freshness                  | every cron succeeds within SLA window              | ≥ 99,9 % on-time runs   | ~43 runs/mês       |
+| SLO-05 | Rate-limit false-positive rate  | `rate_limit_denied_total / rate_limit_hits_total`  | ≤ 1 %                   | ratio SLO          |
+| SLO-06 | LGPD DSAR SLA                   | `dsar_sla_breach_total` = 0 em 15 d                | 100 % (hard, legal)     | 0                  |
+| SLO-07 | Money drift                     | `money_drift_total` = 0                            | 100 % (hard, financial) | 0                  |
+| SLO-08 | Outbound 3rd-party availability | Asaas / Clicksign / Resend success rate (30 d)     | ≥ 99,0 %                | 7,2 h/mês          |
+
+Classificação de severidade em resposta:
+
+| Ref    | Classe | Razão operacional                                    |
+| ------ | ------ | ---------------------------------------------------- |
+| SLO-01 | soft   | Carrinho sobrevive; re-order é aceitável             |
+| SLO-02 | hard   | Double-charge é reportável LGPD + CDC                |
+| SLO-03 | soft   | Latência degrada UX, não correção                    |
+| SLO-04 | hard   | Cron miss cascateia (audit chain, offsite backup, …) |
+| SLO-05 | soft   | Ruído sinaliza tuning                                |
+| SLO-06 | hard   | Deadline legal — ANPD reportável acima de 15 d       |
+| SLO-07 | hard   | Cents ≠ numeric é perda de verdade financeira        |
+| SLO-08 | soft   | Retry + circuit breaker já compensam                 |
+
+### 7.1 Política burn-rate
+
+Duas tiers, ambas contra budget de 30 d:
+
+| Tier | Janelas (curta / longa) | Burn rate | Ação           |
+| ---- | ----------------------- | --------- | -------------- |
+| Fast | 5 min / 1 h             | > 14.4 ×  | P1 → PagerDuty |
+| Slow | 30 min / 6 h            | > 6 ×     | P2 → email     |
+
+Um `14.4 ×` significa que o budget mensal seria gasto em 2 d
+se o incidente persistisse — tier fast, acorda o on-call.
+
+### 7.2 Ownership
+
+| Ref    | Owner          | Cadência de review | Última revisão |
+| ------ | -------------- | ------------------ | -------------- |
+| SLO-01 | Growth + SRE   | mensal             | 2026-04-17     |
+| SLO-02 | Finance + SRE  | semanal            | 2026-04-17     |
+| SLO-03 | Frontend + SRE | mensal             | 2026-04-17     |
+| SLO-04 | SRE            | semanal            | 2026-04-17     |
+| SLO-05 | Security + SRE | semanal            | 2026-04-17     |
+| SLO-06 | DPO + Legal    | semanal            | 2026-04-17     |
+| SLO-07 | Finance + SRE  | diária             | 2026-04-17     |
+| SLO-08 | Integrations   | semanal            | 2026-04-17     |
+
+### 7.3 Changelog
+
+- **2026-04-17** — Wave 11 baseline. 8 SLOs publicados com
+  queries PromQL, burn-rate policy e ownership. Sentry custom
+  alerts legados (seção 3) passam a ser suplementares, não a
+  fonte primária.

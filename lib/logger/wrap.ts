@@ -6,6 +6,7 @@ import {
   updateRequestContext,
   type RequestContext,
 } from './context'
+import { parseTraceparent, newTraceId, newSpanId } from '@/lib/trace'
 
 /**
  * Wrap a Next.js Route Handler so every log line it emits — and every log
@@ -32,6 +33,8 @@ export function withRouteContext<Args extends unknown[], R>(
     let requestId: string | undefined
     let path: string | undefined
     let clientIp: string | undefined
+    let traceId: string | undefined
+    let spanId: string | undefined
     try {
       const h = await headers()
       requestId = h.get('x-request-id') ?? undefined
@@ -40,6 +43,20 @@ export function withRouteContext<Args extends unknown[], R>(
       // on route group. Fall back to referer path as a last resort — the
       // value is informational only, not security-bearing.
       clientIp = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? undefined
+
+      // Wave 11 — continue the distributed trace started by an
+      // upstream proxy (CF Worker, Vercel's built-in OTEL
+      // collector, another service's fetchWithTrace call). Failing
+      // parse means we mint fresh ids so this handler still
+      // anchors its own span — never return without trace ids.
+      const parsed = parseTraceparent(h.get('traceparent'))
+      if (parsed) {
+        traceId = parsed.traceId
+        spanId = parsed.spanId
+      } else {
+        traceId = newTraceId()
+        spanId = newSpanId()
+      }
     } catch {
       // headers() can throw at import time / in test harness. That's fine —
       // we just carry on without enrichment.
@@ -50,6 +67,8 @@ export function withRouteContext<Args extends unknown[], R>(
       requestId,
       path,
       clientIp,
+      traceId,
+      spanId,
     })
     return runWithRequestContext(ctx, () => handler(...args))
   }

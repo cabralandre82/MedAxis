@@ -27,6 +27,8 @@ const PUBLIC_ROUTES = [
   '/api/tracking',
   // Health check — intentionally public for monitoring services
   '/api/health',
+  // Metrics scrape — gated by METRICS_SECRET, not user session (Wave 11)
+  '/api/metrics',
   // LGPD public pages
   '/privacy',
   '/terms',
@@ -77,8 +79,27 @@ export async function middleware(request: NextRequest) {
     /^[A-Za-z0-9_.:-]+$/.test(inboundId)
   const requestId = isValidInbound ? inboundId : crypto.randomUUID()
 
+  // Wave 11 — W3C trace-context. If a CF Worker / Vercel OTEL
+  // collector / upstream service already provided a valid
+  // `traceparent`, we honour it and our Node handlers will
+  // continue the same trace. Otherwise we mint a fresh one here
+  // so the *entire* request — middleware + handler + outbound
+  // fetches — shares a single trace id. The Edge runtime lacks
+  // AsyncLocalStorage, so we forward via request header and
+  // Node's `withRouteContext` picks it up.
+  const inboundTraceparent = request.headers.get('traceparent')
+  const validTraceparent =
+    inboundTraceparent &&
+    /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/i.test(inboundTraceparent.trim()) &&
+    !/^00-0{32}-/.test(inboundTraceparent.trim()) &&
+    !/-0{16}-/.test(inboundTraceparent.trim())
+  const traceparent = validTraceparent
+    ? inboundTraceparent!.trim().toLowerCase()
+    : `00-${crypto.randomUUID().replace(/-/g, '')}-${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}-01`
+
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-request-id', requestId)
+  requestHeaders.set('traceparent', traceparent)
 
   // Wave 5 — CSRF gate for state-changing /api/** calls. Webhooks, cron,
   // and Inngest are exempt (checkCsrf knows the prefix list). Origin /
@@ -98,13 +119,17 @@ export async function middleware(request: NextRequest) {
       // endpoint would look like a success from an HTTP client.
       return NextResponse.json(
         { error: 'csrf_blocked', reason: csrf.reason ?? 'csrf_blocked' },
-        { status: 403, headers: { 'X-Request-ID': requestId } }
+        {
+          status: 403,
+          headers: { 'X-Request-ID': requestId, traceparent },
+        }
       )
     }
   }
 
   let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
   supabaseResponse.headers.set('X-Request-ID', requestId)
+  supabaseResponse.headers.set('traceparent', traceparent)
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -118,6 +143,7 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
           supabaseResponse.headers.set('X-Request-ID', requestId)
+          supabaseResponse.headers.set('traceparent', traceparent)
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )

@@ -1854,3 +1854,180 @@ Commit `7dce4ff`, push to `main`:
 - **Security Scan run**: `24605451517` (1m45s) — <https://github.com/cabralandre82/clinipharma/actions/runs/24605451517>
 
 ---
+
+## Wave 11 — Observabilidade ponta-a-ponta com trace-context + SLO as code (2026-04-17)
+
+### Escopo
+
+Fechar o loop de observabilidade: dar a toda requisição um
+**trace id estável** propagado até bordas externas (Asaas,
+Clicksign), publicar um **endpoint Prometheus** protegido,
+versionar **SLIs/SLOs como código** com queries PromQL e
+**dashboards Grafana** JSON, e documentar o runbook da própria
+camada de observação. Pré-req: W6 (health checks) ✓ + W10
+(métricas de rate-limit + Turnstile) ✓.
+
+### Deliverables
+
+1. **`lib/trace.ts`** — módulo server-only com:
+   - `parseTraceparent()` / `formatTraceparent()` — parser/
+     serializer W3C estrito (rejeita ids all-zero, normaliza
+     case) com 5 testes de unidade.
+   - `newTraceId()` / `newSpanId()` / `currentTraceParent()` —
+     geração randômica via `node:crypto` + integração com o
+     `AsyncLocalStorage` de `lib/logger/context.ts`.
+   - `updateTraceFromHeaders()` — carimba trace/span ids no
+     ALS a partir de uma requisição inbound (usada por
+     `withRouteContext` no arranque de cada handler).
+   - `fetchWithTrace()` — drop-in `fetch` wrapper que injeta
+     `traceparent` (span filho) + `x-request-id` em headers,
+     emite `http_outbound_total{service,method,outcome}` e
+     `http_outbound_duration_ms{service,method,status}`,
+     aplica timeout default 10s via AbortController, e logia
+     falhas (4xx/5xx/timeout/network) com `durationMs` e
+     `childSpanId` para correlação em Loki.
+   - `enrichSentryScope()` — lê o ALS e stampa tags
+     `request_id`, `trace_id`, `span_id`, `path`, `method`,
+     `userId` no scope atual do Sentry (v8 `getCurrentScope`).
+2. **`middleware.ts`** upgrade — além do `x-request-id` já
+   propagado na Wave 6, agora honra/mint `traceparent` W3C no
+   request header (forward para Node) _e_ response header
+   (para o cliente poder citar trace ids em tickets).
+3. **`lib/logger/wrap.ts`** — `withRouteContext` agora lê
+   `traceparent` do header inbound e popula `traceId`/`spanId`
+   no ALS. Se não houver header, faz mint fresco — a garantia
+   é: toda log line gerada dentro do handler tem trace id.
+4. **`lib/metrics.ts`** — 5 novas constantes de métrica:
+   `HTTP_OUTBOUND_TOTAL`, `HTTP_OUTBOUND_DURATION_MS`,
+   `HTTP_REQUEST_DURATION_MS`, `HTTP_REQUEST_TOTAL`,
+   `METRICS_SCRAPE_TOTAL`.
+5. **`/api/metrics`** — endpoint Prometheus scrape (runtime
+   Node, `force-dynamic`, adicionado a `PUBLIC_ROUTES` do
+   middleware), protegido por `METRICS_SECRET`:
+   - 500 quando o secret não está configurado em
+     `VERCEL_ENV=production|preview` — refusa a servir.
+   - 401 quando o secret está configurado mas o token não é
+     apresentado (`Authorization: Bearer` OU `?token=`), com
+     comparação time-safe via `safeEqualString`.
+   - 200 `text/plain; version=0.0.4` por default, JSON quando
+     `?format=json`.
+   - Aberto em `NODE_ENV=development` (emite warn único no
+     logger) para permitir `curl localhost:3000/api/metrics`.
+6. **`docs/slos.md`** — 8 SLOs versionados:
+   - SLO-01 Checkout ≥ 99.5 % (soft)
+   - SLO-02 Webhook idempotency = 100 % (hard)
+   - SLO-03 Auth p95 ≤ 400 ms (soft)
+   - SLO-04 Cron freshness ≥ 99.9 % (hard)
+   - SLO-05 Rate-limit FP ≤ 1 % (soft)
+   - SLO-06 DSAR SLA = 0 breach (hard, legal)
+   - SLO-07 Money drift = 0 (hard, financial)
+   - SLO-08 3rd-party availability ≥ 99 % (soft)
+   - Política burn-rate multi-window (fast 14.4×, slow 6×) e
+     tabela de ownership com cadência de revisão.
+7. **`docs/sli-queries.md`** — catálogo PromQL executável: 1
+   query primária + suplementares por SLO + query da meta-SLO
+   "scrape está vivo?". Queries referenciadas 1:1 com painéis
+   Grafana.
+8. **`monitoring/grafana/*.json`** — 3 dashboards (22 painéis)
+   em JSON-as-code, sem plugins:
+   - `platform-health.json` — owns SLO-01, 03, 04, 08
+     (checkout, auth p95, cron freshness, outbound success).
+   - `security.json` — owns SLO-05 + CSRF blocks + Turnstile
+     fail rate + suspicious IPs + audit chain integrity.
+   - `money-and-dsar.json` — owns SLO-02, 06, 07 + atomic RPC
+     outcomes + DSAR pipeline + fallback path usage.
+   - `README.md` documenta import por `curl` e config de
+     scrape em Vector.
+9. **`docs/runbooks/observability-gap.md`** — runbook P2 para
+   recuperar visibilidade: triagem < 5 min (health live →
+   scrape próprio → deep health → scraper), ground-truth
+   checks (deploy, CF WAF, log volume, Sentry sampling),
+   mitigação em 4 cenários (500 em prod, dashboards vazios,
+   trace ids não batem, Sentry silente), e quick reference.
+10. **`docs/runbooks/README.md`** — índice atualizado com
+    entrada `observability-gap.md` na seção P2.
+11. **25 novos testes** (`tests/unit/lib/trace.test.ts` com 17
+    - `tests/unit/api/metrics-endpoint.test.ts` com 8).
+      Cobrem parse/format traceparent, geração de ids,
+      `currentTraceParent` dentro/fora de ALS,
+      `updateTraceFromHeaders` com Headers/objeto plano,
+      injeção de headers em `fetchWithTrace` sem sobrescrever
+      valores explícitos, bucketing 4xx/5xx/timeout, 500 em
+      prod sem secret, 401 em mismatch, 200 via Bearer e via
+      `?token=`, JSON `?format=json`, e endpoint aberto em dev.
+      Total de testes: **1407** (+25).
+
+### Impacto operacional
+
+- **Novo SECRET obrigatório em prod**: `METRICS_SECRET` (32+
+  chars random). Sem ele, o endpoint devolve 500 — o scraper
+  não consegue puxar métricas até o operador corrigir.
+- **Sem migração de banco** — toda a mudança é server-side.
+- **Sem mudança de schema** — aproveita `cron_runs`, todas as
+  tabelas de Waves anteriores.
+- **Sentry v8 compatible** — `getCurrentScope()` é o ponto de
+  entrada (breaking change vs. v7 `configureScope`).
+
+### Decisões-chave
+
+1. **W3C traceparent em vez de Sentry-only tracing** — Sentry
+   é um dos consumidores; Vercel OTEL, Grafana Tempo e um
+   futuro Datadog bridge consomem o mesmo header. Padrão W3C
+   é portátil por contrato (RFC TR/trace-context).
+2. **Trace ids sintetizados no Edge, carimbados no Node** —
+   Edge runtime não tem AsyncLocalStorage; middleware emite o
+   header e `withRouteContext` copia para ALS no Node. Fora
+   desse split, `logger.ts` já honra o ALS via
+   `getRequestContext()` de Wave 6.
+3. **`/api/metrics` in-house, não `prom-client`** — nosso
+   registry já é fuse-compatible com `metricsText()` (Wave 6)
+   e adicionar uma dependência só pela exposição renderiza
+   zero ganho além de cardinalidade imposta por
+   `prom-client`. Rastreabilidade prefere o código próprio.
+4. **Gate por secret, não por IP allowlist** — Vercel não
+   garante IP estático para scrapers (Grafana Cloud,
+   Cloudflare Logpush), então IP ACL viraria ruído
+   operacional. Secret-based com `safeEqualString` atende o
+   modelo de ameaça real: atacante externo tenta scrapar sem
+   token.
+5. **SLOs publicados antes da ferramenta de alertas** — a
+   tabela em `docs/slos.md` é a fonte da verdade. A próxima
+   onda (ou W12) encadeia regras do Alertmanager / Grafana
+   Alerts a partir _exatamente_ das queries em
+   `docs/sli-queries.md` — mudança em um arquivo exige PR nos
+   três (doc, query, painel).
+6. **fetchWithTrace opcional** — adoção incremental: trocar
+   `fetch → fetchWithTrace` em Asaas, Clicksign, Zenvia,
+   Resend ao longo da próxima sprint vira ganho direto em
+   SLO-08 sem risco de regressão (contrato de saída idêntico
+   a `fetch`). Os metrics já aceitam uma label `service`.
+
+### Post-merge follow-ups
+
+- [ ] Setar `METRICS_SECRET` em Vercel staging + prod (32+
+      chars). Redeploy necessário.
+- [ ] Configurar scraper de produção (Grafana Agent no
+      Grafana Cloud free tier; ou Vector em container lateral)
+      com scrape a cada 30s. Validar via painéis durante 24h
+      antes de confiar nos alerts.
+- [ ] Importar os 3 dashboards JSON no Grafana (ver
+      `monitoring/grafana/README.md`). Ajustar `$DS_PROM` para
+      o nome do datasource.
+- [ ] Adoção de `fetchWithTrace` em `services/asaas/*.ts`,
+      `services/clicksign/*.ts`, `lib/zenvia.ts`, `lib/resend*`
+      — troca mecânica, PR separado por serviço para manter
+      blame limpo.
+- [ ] Adicionar um synthetic monitor (Cloudflare Health Check
+      ou Pingdom) que raspa `/api/metrics` e alerta quando o
+      tamanho do payload cai > 50 % — proteção contra "o
+      scraper parou mas ninguém viu".
+- [ ] W12 candidato: integrar burn-rate alerting via Grafana
+      Alerting (ou Alertmanager autônomo) consumindo as
+      queries em `docs/sli-queries.md` — hoje os SLOs são
+      observacionais.
+
+### CI / Quality gates — Wave 11
+
+A ser completada após commit + push.
+
+---

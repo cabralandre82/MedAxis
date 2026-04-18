@@ -19,22 +19,23 @@
 
 ### 🟠 P2 — Degradação (cliente afetado pode contornar)
 
-| Runbook                        | Sintoma disparador                                                  | Alerta de origem                         |
-| ------------------------------ | ------------------------------------------------------------------- | ---------------------------------------- |
-| `external-integration-down.md` | Circuit breaker aberto (Asaas/Clicksign/Resend)                     | `/api/health/deep`                       |
-| `cron-job-failing.md`          | Cron em loop de falha                                               | `cron_runs` + email                      |
-| `cron-double-run.md`           | Cron `skipped_locked` repetido ou lock órfão                        | `cron_runs` + `cron_locks`               |
-| `webhook-replay.md`            | `webhook_events.status=failed` acumulando ou sender-loop            | Sentry + `webhook_events`                |
-| `email-deliverability-low.md`  | Taxa de bounce > 5% em 24h                                          | Resend dashboard                         |
-| `connection-pool-exhausted.md` | Supabase pool > 80% por >5 min                                      | `/api/cron/db-pool-health`               |
-| `rbac-permission-denied.md`    | Spike de `permission denied` após ativação de `rbac.fine_grained`   | `server_logs` + painel flags             |
-| `csrf-block-surge.md`          | Spike de `csrf_blocked` em `/api/**` após Wave 5                    | `server_logs` + 403 rate                 |
-| `health-check-failing.md`      | `/api/health/ready` ou `/deep` retornando `degraded` por >5 min     | UptimeRobot + Sentry                     |
-| `alerts-noisy.md`              | Enxurrada de emails / páginas de `lib/alerts` fora de incidente     | PagerDuty + `OPS_ALERT_EMAIL`            |
-| `atomic-rpc-mismatch.md`       | Divergência ou spike de erros nas RPCs atômicas (Wave 7)            | `atomic_rpc_total` + logs                |
-| `money-drift.md`               | `money_drift_view` não vazia: cents ≠ numeric por > 1 cent (Wave 8) | `money_drift_total` + cron               |
-| `dsar-sla-missed.md`           | LGPD DSAR > 15 dias sem fulfill/reject (Wave 9)                     | `dsar_sla_breach_total` + cron           |
-| `rate-limit-abuse.md`          | Spike de HTTP 429 > 10 IPs/h ou credential stuffing (Wave 10)       | `rate_limit_suspicious_ips_total` + cron |
+| Runbook                        | Sintoma disparador                                                   | Alerta de origem                         |
+| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------- |
+| `external-integration-down.md` | Circuit breaker aberto (Asaas/Clicksign/Resend)                      | `/api/health/deep`                       |
+| `cron-job-failing.md`          | Cron em loop de falha                                                | `cron_runs` + email                      |
+| `cron-double-run.md`           | Cron `skipped_locked` repetido ou lock órfão                         | `cron_runs` + `cron_locks`               |
+| `webhook-replay.md`            | `webhook_events.status=failed` acumulando ou sender-loop             | Sentry + `webhook_events`                |
+| `email-deliverability-low.md`  | Taxa de bounce > 5% em 24h                                           | Resend dashboard                         |
+| `connection-pool-exhausted.md` | Supabase pool > 80% por >5 min                                       | `/api/cron/db-pool-health`               |
+| `rbac-permission-denied.md`    | Spike de `permission denied` após ativação de `rbac.fine_grained`    | `server_logs` + painel flags             |
+| `csrf-block-surge.md`          | Spike de `csrf_blocked` em `/api/**` após Wave 5                     | `server_logs` + 403 rate                 |
+| `health-check-failing.md`      | `/api/health/ready` ou `/deep` retornando `degraded` por >5 min      | UptimeRobot + Sentry                     |
+| `alerts-noisy.md`              | Enxurrada de emails / páginas de `lib/alerts` fora de incidente      | PagerDuty + `OPS_ALERT_EMAIL`            |
+| `atomic-rpc-mismatch.md`       | Divergência ou spike de erros nas RPCs atômicas (Wave 7)             | `atomic_rpc_total` + logs                |
+| `money-drift.md`               | `money_drift_view` não vazia: cents ≠ numeric por > 1 cent (Wave 8)  | `money_drift_total` + cron               |
+| `dsar-sla-missed.md`           | LGPD DSAR > 15 dias sem fulfill/reject (Wave 9)                      | `dsar_sla_breach_total` + cron           |
+| `rate-limit-abuse.md`          | Spike de HTTP 429 > 10 IPs/h ou credential stuffing (Wave 10)        | `rate_limit_suspicious_ips_total` + cron |
+| `observability-gap.md`         | Dashboards vazios ou `/api/metrics` sem coleta por >15 min (Wave 11) | Synthetic scrape + deep health           |
 
 ### 🟡 P3 — Degradação silenciosa (backlog)
 

@@ -259,6 +259,11 @@ export const Metrics = {
   RATE_LIMIT_SUSPICIOUS_IPS_TOTAL: 'rate_limit_suspicious_ips_total',
   TURNSTILE_VERIFY_TOTAL: 'turnstile_verify_total',
   TURNSTILE_VERIFY_DURATION_MS: 'turnstile_verify_duration_ms',
+  HTTP_OUTBOUND_TOTAL: 'http_outbound_total',
+  HTTP_OUTBOUND_DURATION_MS: 'http_outbound_duration_ms',
+  HTTP_REQUEST_DURATION_MS: 'http_request_duration_ms',
+  HTTP_REQUEST_TOTAL: 'http_request_total',
+  METRICS_SCRAPE_TOTAL: 'metrics_scrape_total',
 } as const
 
 // ── Surge detector ───────────────────────────────────────────────────────────

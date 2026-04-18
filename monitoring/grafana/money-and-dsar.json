@@ -1,0 +1,157 @@
+{
+  "__comment": "Clinipharma — Money & DSAR dashboard (Wave 11). Owns SLO-02 (webhook idempotency), SLO-06 (DSAR SLA), SLO-07 (money drift). Watch this one daily.",
+  "title": "Clinipharma · Money & DSAR",
+  "uid": "clinipharma-money-dsar",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-7d", "to": "now" },
+  "tags": ["clinipharma", "finance", "lgpd", "wave-11"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROM",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "SLO-07 · Money drift rows",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [{ "refId": "A", "expr": "sum(money_drift_total)" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Reconcile last run (age)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 3600, "color": "yellow" },
+              { "value": 7200, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [{ "refId": "A", "expr": "time() - max(money_reconcile_last_run_ts)" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "SLO-06 · DSAR SLA breaches (15d)",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [{ "refId": "A", "expr": "sum(increase(dsar_sla_breach_total[15d]))" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "DSAR warnings (30d)",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "refId": "A", "expr": "sum(increase(dsar_sla_warning_total[30d]))" }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Atomic RPC outcomes",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{rpc}} · {{outcome}}",
+          "expr": "sum by (rpc, outcome) (rate(atomic_rpc_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "DSAR pipeline",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "opened",
+          "expr": "sum(rate(dsar_opened_total[1h]))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "transitions · {{outcome}}",
+          "expr": "sum by (outcome) (rate(dsar_transition_total[1h]))"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Atomic RPC p95 duration",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{rpc}} p95",
+          "expr": "histogram_quantile(0.95, sum by (rpc, le) (rate(atomic_rpc_duration_ms_bucket[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Fallback path usage",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{rpc}}",
+          "expr": "sum by (rpc) (increase(atomic_rpc_fallback_total[1h]))"
+        }
+      ]
+    }
+  ]
+}
