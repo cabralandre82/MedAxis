@@ -219,6 +219,31 @@ export async function GET(req: NextRequest) {
     checks.backupFreshness = { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
+  // ── Legal holds (Wave 13) ──────────────────────────────────────────────
+  // Count active holds and detect holds whose expires_at has
+  // drifted past now() without the monthly cron sweeping them.
+  // This is always informational — a stuck expired hold does NOT
+  // degrade platform health, but it does signal that the
+  // enforce-retention cron is late.
+  try {
+    const { refreshActiveHoldGauge } = await import('@/lib/legal-hold')
+    const { createAdminClient } = await import('@/lib/db/admin')
+    const active = await refreshActiveHoldGauge()
+    const admin = createAdminClient()
+    const { count: overdue } = await admin
+      .from('legal_holds')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active')
+      .lt('expires_at', new Date().toISOString())
+    checks.legalHolds = {
+      ok: (overdue ?? 0) === 0,
+      details: { active, overdueExpiries: overdue ?? 0 },
+      error: (overdue ?? 0) > 0 ? `${overdue} expired hold(s) not swept` : undefined,
+    }
+  } catch (err) {
+    checks.legalHolds = { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+
   const allOk = Object.values(checks).every((c) => c.ok)
   const totalMs = Date.now() - start
   observeHistogram(Metrics.HEALTH_CHECK_DURATION_MS, totalMs, { endpoint: 'deep' })

@@ -3,6 +3,22 @@ import * as adminModule from '@/lib/db/admin'
 
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
 
+// Wave 13 — retention-policy now consults legal-hold and the
+// feature flag. Default mocks: nothing is held, flag OFF. The
+// `isUnderLegalHold` mock accepts the optional Map cache arg.
+vi.mock('@/lib/legal-hold', () => ({
+  isUnderLegalHold: vi.fn().mockResolvedValue(false),
+  recordPurgeBlocked: vi.fn(),
+  expireStaleHolds: vi.fn().mockResolvedValue({ expired: 0 }),
+  refreshActiveHoldGauge: vi.fn().mockResolvedValue(0),
+}))
+vi.mock('@/lib/features', () => ({
+  isFeatureEnabled: vi.fn().mockResolvedValue(false),
+}))
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}))
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -41,32 +57,59 @@ describe('enforceRetentionPolicy', () => {
     return vi.fn().mockResolvedValue({ data: result.data ?? null, error: result.error ?? null })
   }
 
-  it('anonymizes stale inactive profiles', async () => {
-    const staleProfile = { id: 'user-1', full_name: 'Old User', email: 'old@test.com' }
-
-    vi.mocked(adminModule.createAdminClient).mockReturnValue({
+  /**
+   * Factory for a Supabase admin stub that handles the 3 tables the
+   * retention policy touches post-Wave-13:
+   *   profiles.select.eq.lt.not  → list stale
+   *   profiles.update.eq         → anonymise
+   *   notifications.select.lt.limit → list candidates
+   *   notifications.delete.in.select → remove
+   */
+  function makeRetentionAdmin({
+    profiles = [] as Array<{ id: string; full_name?: string; email?: string }>,
+    notifications = [] as Array<{ id: string; user_id: string | null }>,
+    rpc = mockRpc(),
+  }: {
+    profiles?: Array<{ id: string; full_name?: string; email?: string }>
+    notifications?: Array<{ id: string; user_id: string | null }>
+    rpc?: ReturnType<typeof mockRpc>
+  }) {
+    return {
       from: vi.fn().mockImplementation((table: string) => {
         if (table === 'profiles') {
-          return {
+          const profileChain: Record<string, unknown> = {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             lt: vi.fn().mockReturnThis(),
-            not: vi.fn().mockResolvedValue({ data: [staleProfile], error: null }),
+            not: vi.fn().mockResolvedValue({ data: profiles, error: null }),
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockResolvedValue({ error: null }),
             }),
           }
+          return profileChain
         }
-        // notifications
-        return {
-          delete: vi.fn().mockReturnThis(),
-          lt: vi.fn().mockReturnThis(),
-          not: vi.fn().mockReturnThis(),
-          select: vi.fn().mockResolvedValue({ data: [], error: null }),
+        if (table === 'notifications') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            lt: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({ data: notifications, error: null }),
+            delete: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                select: vi.fn().mockResolvedValue({ data: notifications, error: null }),
+              }),
+            }),
+          }
         }
+        return {}
       }),
-      rpc: mockRpc(),
-    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+      rpc,
+    } as unknown as ReturnType<typeof adminModule.createAdminClient>
+  }
+
+  it('anonymizes stale inactive profiles', async () => {
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      makeRetentionAdmin({ profiles: [{ id: 'user-1', full_name: 'Old', email: 'old@x' }] })
+    )
 
     const { enforceRetentionPolicy } = await import('@/lib/retention-policy')
     const result = await enforceRetentionPolicy()
@@ -76,27 +119,14 @@ describe('enforceRetentionPolicy', () => {
   })
 
   it('counts purged notifications', async () => {
-    vi.mocked(adminModule.createAdminClient).mockReturnValue({
-      from: vi.fn().mockImplementation((table: string) => {
-        if (table === 'profiles') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            lt: vi.fn().mockReturnThis(),
-            not: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }
-        }
-        if (table === 'notifications') {
-          return {
-            delete: vi.fn().mockReturnThis(),
-            lt: vi.fn().mockReturnThis(),
-            select: vi.fn().mockResolvedValue({ data: [{ id: 'n1' }, { id: 'n2' }], error: null }),
-          }
-        }
-        return {}
-      }),
-      rpc: mockRpc(),
-    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      makeRetentionAdmin({
+        notifications: [
+          { id: 'n1', user_id: 'u1' },
+          { id: 'n2', user_id: 'u2' },
+        ],
+      })
+    )
 
     const { enforceRetentionPolicy } = await import('@/lib/retention-policy')
     const result = await enforceRetentionPolicy()
@@ -105,27 +135,12 @@ describe('enforceRetentionPolicy', () => {
   })
 
   it('counts purged audit logs via audit_purge_retention RPC', async () => {
-    const rpcMock = mockRpc({ data: [{ purged_count: 7, checkpoint_id: 42 }], error: null })
+    const rpcMock = mockRpc({
+      data: [{ purged_count: 7, checkpoint_id: 42, held_count: 0 }],
+      error: null,
+    })
 
-    vi.mocked(adminModule.createAdminClient).mockReturnValue({
-      from: vi.fn().mockImplementation((table: string) => {
-        if (table === 'profiles') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            lt: vi.fn().mockReturnThis(),
-            not: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }
-        }
-        // notifications
-        return {
-          delete: vi.fn().mockReturnThis(),
-          lt: vi.fn().mockReturnThis(),
-          select: vi.fn().mockResolvedValue({ data: [], error: null }),
-        }
-      }),
-      rpc: rpcMock,
-    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(makeRetentionAdmin({ rpc: rpcMock }))
 
     const { enforceRetentionPolicy } = await import('@/lib/retention-policy')
     const result = await enforceRetentionPolicy()
@@ -139,17 +154,46 @@ describe('enforceRetentionPolicy', () => {
     )
   })
 
+  it('surfaces held_count from the RPC', async () => {
+    const rpcMock = mockRpc({
+      data: [{ purged_count: 5, checkpoint_id: 88, held_count: 2 }],
+      error: null,
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(makeRetentionAdmin({ rpc: rpcMock }))
+
+    const { enforceRetentionPolicy } = await import('@/lib/retention-policy')
+    const result = await enforceRetentionPolicy()
+
+    expect(result.auditLogsHeldByLegalHold).toBe(2)
+  })
+
+  it('skips profiles under active hold when enforce flag is ON', async () => {
+    const legalHoldMod = await import('@/lib/legal-hold')
+    const featuresMod = await import('@/lib/features')
+    vi.mocked(legalHoldMod.isUnderLegalHold).mockResolvedValue(true)
+    vi.mocked(featuresMod.isFeatureEnabled).mockImplementation(
+      async (key: string) => key === 'legal_hold.block_purge'
+    )
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      makeRetentionAdmin({
+        profiles: [{ id: 'held-user', full_name: 'H', email: 'h@x' }],
+      })
+    )
+
+    const { enforceRetentionPolicy } = await import('@/lib/retention-policy')
+    const result = await enforceRetentionPolicy()
+
+    expect(result.profilesAnonymized).toBe(0)
+    expect(result.profilesHeldByLegalHold).toBe(1)
+  })
+
   it('records audit_logs errors without throwing when RPC fails', async () => {
-    vi.mocked(adminModule.createAdminClient).mockReturnValue({
-      from: vi.fn().mockImplementation(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        lt: vi.fn().mockReturnThis(),
-        not: vi.fn().mockResolvedValue({ data: [], error: null }),
-        delete: vi.fn().mockReturnThis(),
-      })),
-      rpc: vi.fn().mockResolvedValue({ data: null, error: { message: 'DELETE forbidden' } }),
-    } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      makeRetentionAdmin({
+        rpc: vi.fn().mockResolvedValue({ data: null, error: { message: 'DELETE forbidden' } }),
+      })
+    )
 
     const { enforceRetentionPolicy } = await import('@/lib/retention-policy')
     const result = await enforceRetentionPolicy()

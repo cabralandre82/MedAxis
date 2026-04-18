@@ -195,6 +195,40 @@ Burn-rate: SLO-09 is hard — treat any non-zero
 `backup_freshness_breach_total` over a 24 h window as the error
 budget exhausted.
 
+## SLO-10 — Legal-hold preservation (hard)
+
+Primary SLI — the counter MUST stay at zero when enforcement is ON:
+
+```promql
+# No DSAR erasure should be granted on a held subject once
+# legal_hold.block_dsar_erasure is flipped ON.
+sum(increase(legal_hold_blocked_dsar_total[30d]))
+
+# No retention cron should purge held rows once
+# legal_hold.block_purge is flipped ON.
+sum(increase(legal_hold_blocked_purge_total[30d]))
+```
+
+Supplementary (operational health of the hold machinery itself):
+
+```promql
+# How many holds are live — if > 0 for > 7 days without a
+# release event, the DPO review cadence has drifted.
+legal_hold_active_count
+
+# Rate of new holds applied, by reason.
+sum by (reason_code) (rate(legal_hold_apply_total{outcome="ok"}[30d]))
+
+# Auto-expiry counter (monthly cron). A sudden spike after a
+# quiet period signals the expires_at bookkeeping worked.
+sum(increase(legal_hold_expired_total[30d]))
+```
+
+Burn-rate: SLO-10 is hard. The _interpretation_ differs from
+other hard SLOs — the counters are normally 0 and MUST stay 0
+while enforce flags are ON. A single non-zero increment is a
+P1 and must trigger the `legal-hold-received.md` runbook.
+
 ## Observability meta-SLO
 
 We also track the observability stack itself:

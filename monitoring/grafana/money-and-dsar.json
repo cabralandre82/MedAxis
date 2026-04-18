@@ -247,6 +247,100 @@
           "expr": "backup_last_size_bytes{label=\"weekly\"}"
         }
       ]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "SLO-10 · Legal holds active",
+      "gridPos": { "x": 0, "y": 24, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "blue", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "holds",
+          "expr": "max(legal_hold_active_count)"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "SLO-10 · DSAR blocked by hold (30d)",
+      "gridPos": { "x": 6, "y": 24, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "blocked",
+          "expr": "sum(increase(legal_hold_blocked_dsar_total[30d]))"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "SLO-10 · Purge rows held (30d)",
+      "gridPos": { "x": 12, "y": 24, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "expr": "sum by (job) (increase(legal_hold_blocked_purge_total[30d]))"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Legal holds applied by reason",
+      "gridPos": { "x": 18, "y": 24, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{reason_code}}",
+          "expr": "sum by (reason_code) (increase(legal_hold_apply_total{outcome=\"ok\"}[7d]))"
+        }
+      ]
     }
   ]
 }

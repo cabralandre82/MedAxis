@@ -132,6 +132,7 @@ via multi-window / multi-burn-rate (Google SRE, Cap. 5).
 | SLO-07 | Money drift                     | `money_drift_total` = 0                            | 100 % (hard, financial) | 0                  |
 | SLO-08 | Outbound 3rd-party availability | Asaas / Clicksign / Resend success rate (30 d)     | ≥ 99,0 %                | 7,2 h/mês          |
 | SLO-09 | Backup + restore recoverability | Weekly backup idade ≤ 9 d E monthly drill ≤ 35 d   | 100 % (hard, DR)        | 0                  |
+| SLO-10 | Legal-hold preservation         | 0 purges / DSAR erasures contra sujeitos sob hold  | 100 % (hard, legal)     | 0                  |
 
 Classificação de severidade em resposta:
 
@@ -146,6 +147,7 @@ Classificação de severidade em resposta:
 | SLO-07 | hard   | Cents ≠ numeric é perda de verdade financeira        |
 | SLO-08 | soft   | Retry + circuit breaker já compensam                 |
 | SLO-09 | hard   | Sem restore comprovado, RPO/RTO = indefinido         |
+| SLO-10 | hard   | Destruir evidência sob ordem = sanção grave ANPD/CDC |
 
 ### 7.1 Política burn-rate
 
@@ -172,6 +174,7 @@ se o incidente persistisse — tier fast, acorda o on-call.
 | SLO-07 | Finance + SRE  | diária             | 2026-04-17     |
 | SLO-08 | Integrations   | semanal            | 2026-04-17     |
 | SLO-09 | Platform + SRE | diária             | 2026-04-17     |
+| SLO-10 | DPO + Legal    | evento-driven      | 2026-04-17     |
 
 ### 7.3 Changelog
 
@@ -183,3 +186,8 @@ se o incidente persistisse — tier fast, acorda o on-call.
   recoverability) lastreado em `backup_runs` (migração 053) e
   no cron `/api/cron/backup-freshness`. Hard SLO: qualquer
   breach é DR-critical.
+- **2026-04-17** — Wave 13 adiciona SLO-10 (legal-hold
+  preservation), lastreado em `legal_holds` (migração 054) +
+  contadores `legal_hold_blocked_{purge,dsar}_total`. Hard SLO:
+  qualquer purge executado contra sujeito sob ordem ativa é
+  evento reportável ANPD/judicial.

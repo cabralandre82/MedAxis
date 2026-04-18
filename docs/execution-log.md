@@ -2259,3 +2259,183 @@ ORDER BY recorded_at DESC LIMIT 1;` e confirmar que
 ---
 
 ---
+
+### Wave 13 — Legal hold + investigações ANPD/CDC — 2026-04-17 11:20 BRT
+
+**Status:** 🟢 concluído
+**Commits:** (pending)
+**Migrations aplicadas (prod):** `054_legal_holds.sql` @ 2026-04-17
+**Env vars alteradas:** nenhuma (flags `legal_hold.block_purge`, `legal_hold.block_dsar_erasure` default OFF)
+**Testes:** 1474 unit (+32 W13), CI still green
+**Deploy staging:** n/a (Vercel auto)
+**Deploy prod:** pendente push
+
+**Entregáveis:**
+
+- `supabase/migrations/054_legal_holds.sql` — tabela `legal_holds`
+  append-only (trigger `_legal_holds_guard` bloqueia DELETE + mutação de
+  qualquer coluna imutável), estados `active → released | expired`,
+  partial unique index em (subject, reason_code) enquanto ativo;
+  RPCs `legal_hold_apply()`, `legal_hold_release()`,
+  `legal_hold_is_active()`, `legal_hold_expire_stale()`;
+  view `legal_holds_active_view`; redefinição de
+  `audit_purge_retention()` para devolver `held_count` e pular linhas
+  sob hold (via cast defensivo `entity_id::uuid` quando o formato
+  bate); feature flags `legal_hold.block_purge` e
+  `legal_hold.block_dsar_erasure` default OFF. Smoke test cobre
+  apply, idempotência, immutabilidade, release, expire.
+- `lib/legal-hold.ts` — camada Zod v4 + RPC wrapper com métricas:
+  `applyHoldSchema`/`releaseHoldSchema`, `applyLegalHold()`,
+  `releaseLegalHold()`, `isUnderLegalHold()` (com cache opcional e
+  fail-safe=HELD em erro de RPC), `listActiveHolds()`, `listAllHolds()`,
+  `expireStaleHolds()`, `refreshActiveHoldGauge()`,
+  `recordPurgeBlocked()`.
+- `app/api/admin/legal-hold/apply/route.ts` — POST DPO-only, retorna
+  201 em criação nova e 200 `idempotent:true` quando DB devolve
+  linha existente; emite `audit_logs` CREATE.
+- `app/api/admin/legal-hold/release/route.ts` — POST DPO-only,
+  valida release_reason ≥ 10 chars; emite `audit_logs` UPDATE.
+- `app/api/admin/legal-hold/list/route.ts` — GET DPO-only com
+  `scope=active` (default) ou `scope=all` (cap 200 rows).
+- `app/api/admin/lgpd/anonymize/[userId]/route.ts` — hard guard:
+  quando `legal_hold.block_dsar_erasure=true` e sujeito sob hold,
+  responde 409 `LEGAL_HOLD_ACTIVE` antes de tocar qualquer PII.
+  Quando OFF apenas emite `legal_hold_blocked_dsar_total` e um
+  warning "WOULD-HAVE-BLOCKED".
+- `lib/retention-policy.ts` — expande `RetentionSummary` com
+  `profilesHeldByLegalHold`, `notificationsHeldByLegalHold`,
+  `auditLogsHeldByLegalHold`, `legalHoldsExpired`; sweep de
+  expirações + gauge antes do trabalho; cache local de holds por
+  sujeito; notifications agora é list-then-filter-then-delete-by-id
+  para possibilitar o skip.
+- `app/api/health/deep/route.ts` — novo check `legalHolds` com
+  count de holds ativos + detecção de expiries não varridas.
+- `lib/metrics.ts` — novas métricas `legal_hold_apply_total`,
+  `legal_hold_release_total`, `legal_hold_active_count`,
+  `legal_hold_blocked_purge_total`, `legal_hold_blocked_dsar_total`,
+  `legal_hold_expired_total`.
+- `lib/features/index.ts` — adiciona `legal_hold.block_purge` e
+  `legal_hold.block_dsar_erasure` à `FeatureFlagKey`.
+- `docs/runbooks/legal-hold-received.md` — runbook P2/P1 com
+  triagem, identificação do subject_id, payload curl do
+  `/api/admin/legal-hold/apply`, verificação de "já deletamos
+  algo?" (audit chain + checkpoints + DSAR histórico + backups
+  R2), estratégia de flags, release, métricas, pós-incidente.
+- `docs/runbooks/README.md` — indexação do novo runbook.
+- `docs/slos.md` — adiciona **SLO-10 Legal-hold preservation**
+  (hard, legal) com ownership DPO+Legal e changelog Wave 13.
+- `docs/sli-queries.md` — PromQL para SLO-10 (contadores que
+  devem permanecer em 0 com enforcement ON) + sinais
+  operacionais (active_count, apply rate por reason_code,
+  expired).
+- `monitoring/grafana/money-and-dsar.json` — 4 novos painéis
+  (holds ativos, DSAR blocked 30d, purge held 30d, apply por
+  reason_code).
+- `tests/unit/lib/legal-hold.test.ts` — 17 testes (schema,
+  apply/release RPC wiring, isUnderLegalHold com cache +
+  fail-safe, expire envelope, recordPurgeBlocked).
+- `tests/unit/api/legal-hold-routes.test.ts` — 11 testes dos
+  3 endpoints (RBAC, validação, idempotência 200/201,
+  propagação de audit).
+- `tests/unit/lib/retention-policy.test.ts` — refactor do stub
+  (list-then-delete para notifications), novos casos para
+  `held_count` e skip quando flag ON.
+- `tests/unit/api/lgpd.test.ts` — novos casos para 409 com flag
+  ON e 200 quando flag OFF (WOULD-HAVE-BLOCKED).
+
+**Decisões-chave:**
+
+1. **Ledger append-only em Postgres**. Mesma filosofia de
+   `dsar_audit` e `backup_runs` — DROP no trigger protege
+   contra falsificação retroativa e a partial unique index em
+   (subject, reason_code) previne holds duplicados. A linha
+   de release preserva o histórico da ordem ao invés de zerar
+   a row.
+
+2. **`expires_at` NULL = indefinido**. Ordens judiciais
+   tipicamente não trazem prazo; a plataforma não atropela —
+   só o release manual revoga. Quem tem prazo recebe
+   `expires_at` e é varrido pelo mensal.
+
+3. **Fail-safe = HELD em erro de RPC**. O `isUnderLegalHold()`
+   assume hold ativo se não consegue consultar, para nunca
+   destruir evidência por erro transitório de banco. Contraste
+   com `isFeatureEnabled()` que retorna false-seguro (flag OFF)
+   em erro — são dois lados do mesmo princípio: o comportamento
+   mais conservador em incerteza.
+
+4. **`audit_purge_retention` com cast defensivo**. `entity_id`
+   é TEXT (migração 046), nem toda string é UUID. Usamos
+   regex `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+   antes do cast para evitar `invalid input syntax for type
+uuid`. Linhas sem UUID são tratadas como "não há o que
+   casar" → não bloqueia purge dessas linhas (por falta de
+   referência à pessoa/ordem). Consciente: se um audit row
+   tiver `entity_id = 'banana-123'` ele será purgado mesmo
+   sob hold; mitigação = `actor_user_id` ainda é checado, e
+   audit rows financeiros (PAYMENT/COMMISSION/TRANSFER) já
+   estão fora do escopo de purge por excludes.
+
+5. **RETURNS TABLE mudou**: `audit_purge_retention` agora é
+   `(purged_count, checkpoint_id, held_count)`. Postgres não
+   permite alterar return type via CREATE OR REPLACE, então
+   o DROP + CREATE foi feito dentro da mesma transação da
+   migração — se falhar, rollback natural. Os chamadores JS
+   (retention-policy) fazem pick opcional via
+   `(row as { held_count?: number } | null)?.held_count ?? 0`
+   portanto são forward-compatíveis.
+
+6. **Flags default OFF em produção**. Seguindo o padrão
+   estabelecido em Wave 9/10/12, o enforcement fica OFF até
+   observarmos métricas `legal_hold_blocked_*_total` por um
+   ciclo mensal. Assim sabemos o volume realista antes de
+   bloquear purges — se estiver zerado, o flip é seguro.
+
+7. **Não criamos um novo cron dedicado**. A sweep de expiries
+   fica dentro de `enforce-retention` (já mensal, já
+   guardrail-protegido por `withCronGuard`). Reduz surface
+   de agendamento e garante que o gauge de `legal_hold_active_count`
+   é refrescado exatamente quando o sistema rodaria purge.
+
+**Observações / issues encontrados:**
+
+- `audit_logs.entity_id` é TEXT e nem sempre UUID (legacy).
+  Mitigação via regex descrita em §4. Follow-up recomendado:
+  migração 055 para tipar `entity_id` como UUID em rows
+  novas + coluna de tipo.
+- `server_logs` não possui `user_id` direto; `context` é
+  `jsonb`. Decidimos não integrar legal_hold no
+  `/api/cron/purge-server-logs` porque (a) logs de
+  plataforma passam por redação PII antes de gravar e (b)
+  expansão do jsonb inviabiliza índice. Revisitar em Wave 14
+  se compliance requerer.
+
+**Follow-ups criados:**
+
+1. Depois de 30 dias com ≥ 1 hold aplicado em produção,
+   revisar `legal_hold_blocked_purge_total` e flipar
+   `legal_hold.block_purge=true` se volume ≤ esperado.
+2. Revisar com Jurídico a lista de `reason_code` — ajustar
+   se a diretoria de compliance pedir distinções finas
+   (ex: separar `MPF` de `PF`).
+3. Adicionar UI admin (`/admin/legal-holds`) na Wave 14 para
+   que o DPO não dependa de curl — hoje só há API.
+4. Migração 055: considerar colunar `subject_ref` (JSON
+   estruturado) ao invés de `(subject_type, subject_id)`
+   quando o subject precisar combinar múltiplos IDs (ex:
+   usuário + farmácia + período).
+
+### CI run info (Wave 13)
+
+**Quality gates (locais):**
+
+| Gate                   | Status | Notes                                            |
+| ---------------------- | ------ | ------------------------------------------------ |
+| Unit Tests (Vitest)    | 🟢     | 1474 passing (+32 W13)                           |
+| Lint & Type Check      | 🟢     | tsc clean, eslint 0 err (44 warn pré-existentes) |
+| Migration smoke (prod) | 🟢     | 054 aplicada + smoke OK                          |
+
+- **CI run**: pendente push
+- **Security Scan run**: pendente push
+
+---

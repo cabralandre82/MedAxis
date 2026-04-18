@@ -5,6 +5,9 @@ import { createAuditLog, AuditAction, AuditEntity, logPiiView } from '@/lib/audi
 import { revokeAllUserTokens } from '@/lib/token-revocation'
 import { logger } from '@/lib/logger'
 import { transitionDsarRequest, hashCanonicalBundle } from '@/lib/dsar'
+import { isUnderLegalHold } from '@/lib/legal-hold'
+import { isFeatureEnabled } from '@/lib/features'
+import { incCounter, Metrics } from '@/lib/metrics'
 
 /**
  * POST /api/admin/lgpd/anonymize/:userId
@@ -40,6 +43,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         { error: 'Usuário não encontrado' },
         { status: 404, headers: { 'X-Request-ID': requestId } }
       )
+    }
+
+    // Wave 13 — refuse to anonymise a subject under legal hold when
+    // the enforce flag is ON. Always emit the metric so we can
+    // observe "would-have-blocked" during the ramp-up period.
+    if (await isUnderLegalHold('user', userId)) {
+      incCounter(Metrics.LEGAL_HOLD_BLOCKED_DSAR_TOTAL, { subject_type: 'user' })
+      const enforce = await isFeatureEnabled('legal_hold.block_dsar_erasure', {}).catch(() => false)
+      if (enforce) {
+        logger.warn('[lgpd/anonymize] refused — subject under legal hold', {
+          userId,
+          requestId,
+          actorUserId: actor.id,
+        })
+        return NextResponse.json(
+          {
+            error: 'LEGAL_HOLD_ACTIVE',
+            detail:
+              'Sujeito está sob preservação legal (ordem vigente). Libere o hold antes de prosseguir com a anonimização.',
+          },
+          { status: 409, headers: { 'X-Request-ID': requestId } }
+        )
+      }
+      logger.warn('[lgpd/anonymize] WOULD-HAVE-BLOCKED (flag OFF) — subject under legal hold', {
+        userId,
+        requestId,
+        actorUserId: actor.id,
+      })
     }
 
     // Record that we read this subject's PII as part of the admin

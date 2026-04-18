@@ -38,6 +38,8 @@ export type FeatureFlagKey =
   | 'security.turnstile_enforce'
   | 'backup.freshness_enforce'
   | 'dsar.sla_enforce'
+  | 'legal_hold.block_purge'
+  | 'legal_hold.block_dsar_erasure'
   // Future waves extend this union. String literal `string & {}` keeps callers
   // type-safe while allowing new keys without churning this file.
   | (string & {})

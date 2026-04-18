@@ -1,5 +1,12 @@
 import { createAdminClient } from '@/lib/db/admin'
 import { logger } from '@/lib/logger'
+import {
+  isUnderLegalHold,
+  recordPurgeBlocked,
+  expireStaleHolds,
+  refreshActiveHoldGauge,
+} from '@/lib/legal-hold'
+import { isFeatureEnabled } from '@/lib/features'
 
 /**
  * Data Retention Policy — LGPD + Brazilian legal requirements.
@@ -16,6 +23,10 @@ export interface RetentionSummary {
   profilesAnonymized: number
   notificationsPurged: number
   auditLogsPurged: number
+  auditLogsHeldByLegalHold: number
+  profilesHeldByLegalHold: number
+  notificationsHeldByLegalHold: number
+  legalHoldsExpired: number
   errors: string[]
 }
 
@@ -35,9 +46,30 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
 
   const fiveYearsAgo = new Date(now.getTime() - YEARS_MS(5)).toISOString()
 
+  // Wave 13 — per-run legal-hold cache so we don't query the DB
+  // for the same subject twice in one cron. Scope is this function
+  // only; gets GC'd when we return.
+  const holdCache = new Map<string, boolean>()
+  const enforceHoldBlock = await isFeatureEnabled('legal_hold.block_purge', {}).catch(() => false)
+
   let profilesAnonymized = 0
   let notificationsPurged = 0
   let auditLogsPurged = 0
+  let auditLogsHeldByLegalHold = 0
+  let profilesHeldByLegalHold = 0
+  let notificationsHeldByLegalHold = 0
+  let legalHoldsExpired = 0
+
+  // 0. Sweep expired holds so today's retention run sees accurate
+  // state. Non-fatal — if the RPC fails, the holds just linger
+  // another 30 days (safe side).
+  try {
+    const { expired } = await expireStaleHolds()
+    legalHoldsExpired = expired
+    await refreshActiveHoldGauge().catch(() => undefined)
+  } catch (err) {
+    errors.push(`legal_hold_expire_stale: ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   // 1. Anonymize soft-deleted profiles beyond 5 years
   try {
@@ -49,6 +81,20 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
       .not('email', 'ilike', '%@deleted.clinipharma.invalid') // skip already anonymized
 
     for (const profile of stale ?? []) {
+      const held = await isUnderLegalHold('user', profile.id, holdCache)
+      if (held) {
+        profilesHeldByLegalHold++
+        if (enforceHoldBlock) {
+          logger.info('[retentionPolicy] profile skipped — legal hold', {
+            profileId: profile.id,
+          })
+          continue
+        }
+        // flag OFF: observe but still purge
+        logger.warn('[retentionPolicy] profile WOULD-HAVE-BEEN-HELD (flag OFF)', {
+          profileId: profile.id,
+        })
+      }
       const { error: anonErr } = await admin
         .from('profiles')
         .update({
@@ -73,16 +119,39 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
     errors.push(`profiles: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  // 2. Purge notifications beyond 5 years
+  // 2. Purge notifications beyond 5 years. Notifications are
+  // user-scoped (user_id column), so we also consult the hold
+  // cache. At 5 y of accumulated data the page-iteration cost
+  // dwarfs the per-row RPC, so no bulk optimisation is needed yet.
   try {
-    const { data: purged, error: notifErr } = await admin
+    const { data: stale, error: notifFetchErr } = await admin
       .from('notifications')
-      .delete()
+      .select('id, user_id')
       .lt('created_at', fiveYearsAgo)
-      .select('id')
+      .limit(10_000)
 
-    if (notifErr) errors.push(`notifications: ${notifErr.message}`)
-    else notificationsPurged = purged?.length ?? 0
+    if (notifFetchErr) {
+      errors.push(`notifications.list: ${notifFetchErr.message}`)
+    } else {
+      const toDelete: string[] = []
+      for (const n of stale ?? []) {
+        const held = n.user_id ? await isUnderLegalHold('user', n.user_id, holdCache) : false
+        if (held) {
+          notificationsHeldByLegalHold++
+          if (enforceHoldBlock) continue
+        }
+        toDelete.push(n.id)
+      }
+      if (toDelete.length > 0) {
+        const { data: purged, error: notifErr } = await admin
+          .from('notifications')
+          .delete()
+          .in('id', toDelete)
+          .select('id')
+        if (notifErr) errors.push(`notifications: ${notifErr.message}`)
+        else notificationsPurged = purged?.length ?? 0
+      }
+    }
   } catch (err) {
     errors.push(`notifications: ${err instanceof Error ? err.message : String(err)}`)
   }
@@ -94,6 +163,9 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
   // `clinipharma.audit_allow_delete=on` GUC inside its own transaction and
   // appends a row to `audit_chain_checkpoints` so the forensic trail is
   // preserved. Financial entities are never purged (passed as exclusion list).
+  // Wave 13 extends the RPC to also skip rows whose actor_user_id /
+  // entity_id is under active legal hold; held_count is surfaced so
+  // the cron can emit a metric.
   try {
     const { data: purged, error: auditErr } = await admin.rpc('audit_purge_retention', {
       p_cutoff: fiveYearsAgo,
@@ -105,12 +177,29 @@ export async function enforceRetentionPolicy(): Promise<RetentionSummary> {
     } else {
       const row = Array.isArray(purged) ? purged[0] : purged
       auditLogsPurged = Number((row as { purged_count?: number } | null)?.purged_count ?? 0)
+      auditLogsHeldByLegalHold = Number((row as { held_count?: number } | null)?.held_count ?? 0)
     }
   } catch (err) {
     errors.push(`audit_logs: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  return { profilesAnonymized, notificationsPurged, auditLogsPurged, errors }
+  // Surface aggregate legal-hold blocks as a single metric label.
+  const totalBlocked =
+    profilesHeldByLegalHold + notificationsHeldByLegalHold + auditLogsHeldByLegalHold
+  if (totalBlocked > 0) {
+    recordPurgeBlocked('enforce-retention', totalBlocked)
+  }
+
+  return {
+    profilesAnonymized,
+    notificationsPurged,
+    auditLogsPurged,
+    auditLogsHeldByLegalHold,
+    profilesHeldByLegalHold,
+    notificationsHeldByLegalHold,
+    legalHoldsExpired,
+    errors,
+  }
 }
 
 /** Returns the scheduled purge dates for a given entity created/deleted at a timestamp. */

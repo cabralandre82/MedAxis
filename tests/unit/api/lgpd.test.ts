@@ -49,6 +49,16 @@ vi.mock('@/lib/turnstile', () => ({
   verifyTurnstile: vi.fn().mockResolvedValue({ ok: true, bypass: 'flag-off' }),
   extractTurnstileToken: vi.fn().mockResolvedValue(null),
 }))
+// Wave 13 — anonymize route now consults legal-hold + feature flag.
+// Default mocks: subject is NOT under hold, and the enforce flag is
+// OFF so existing happy-path tests keep passing. Individual tests
+// can override per-case.
+vi.mock('@/lib/legal-hold', () => ({
+  isUnderLegalHold: vi.fn().mockResolvedValue(false),
+}))
+vi.mock('@/lib/features', () => ({
+  isFeatureEnabled: vi.fn().mockResolvedValue(false),
+}))
 
 function makeRequest(method = 'GET', body?: unknown, headers?: Record<string, string>) {
   return new NextRequest('http://localhost:3000/api/lgpd/export', {
@@ -297,6 +307,72 @@ describe('POST /api/admin/lgpd/anonymize/:userId', () => {
     const userId = '00000000-0000-0000-0000-000000000001'
     const res = await POST(makeAnonymizeRequest(userId), { params: Promise.resolve({ userId }) })
     expect(res.status).toBe(403)
+  })
+
+  // Wave 13 — legal-hold guard.
+  it('returns 409 LEGAL_HOLD_ACTIVE when subject is held AND enforce flag is ON', async () => {
+    const legalHoldMod = await import('@/lib/legal-hold')
+    const featuresMod = await import('@/lib/features')
+    vi.mocked(legalHoldMod.isUnderLegalHold).mockResolvedValueOnce(true)
+    vi.mocked(featuresMod.isFeatureEnabled).mockImplementation(async (key: string) =>
+      key === 'legal_hold.block_dsar_erasure' ? true : false
+    )
+
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      makeAdminWithData({
+        profile: { full_name: 'André', email: 'a@a.com', phone: '11999' },
+      }) as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const { POST } = await import('@/app/api/admin/lgpd/anonymize/[userId]/route')
+    const userId = '00000000-0000-0000-0000-000000000002'
+    const res = await POST(makeAnonymizeRequest(userId), { params: Promise.resolve({ userId }) })
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error).toBe('LEGAL_HOLD_ACTIVE')
+    // Must NOT have actually anonymized
+    expect(vi.mocked(tokenModule.revokeAllUserTokens)).not.toHaveBeenCalled()
+  })
+
+  it('ALLOWS anonymization when held but enforce flag is OFF (observe-only)', async () => {
+    const legalHoldMod = await import('@/lib/legal-hold')
+    const featuresMod = await import('@/lib/features')
+    vi.mocked(legalHoldMod.isUnderLegalHold).mockResolvedValueOnce(true)
+    vi.mocked(featuresMod.isFeatureEnabled).mockResolvedValue(false)
+
+    const updateChain = { eq: vi.fn().mockResolvedValue({ error: null }) }
+    const admin = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { full_name: 'André', email: 'a@a.com', phone: '11999' },
+          error: null,
+        }),
+        update: vi.fn().mockReturnValue(updateChain),
+        delete: vi.fn().mockReturnThis(),
+        not: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
+      }),
+      auth: {
+        admin: {
+          updateUserById: vi.fn().mockResolvedValue({ error: null }),
+          signOut: vi.fn().mockResolvedValue({ error: null }),
+        },
+      },
+    }
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const { POST } = await import('@/app/api/admin/lgpd/anonymize/[userId]/route')
+    const userId = '00000000-0000-0000-0000-000000000003'
+    const res = await POST(makeAnonymizeRequest(userId), { params: Promise.resolve({ userId }) })
+
+    expect(res.status).toBe(200)
+    expect(vi.mocked(tokenModule.revokeAllUserTokens)).toHaveBeenCalledWith(userId)
   })
 })
 

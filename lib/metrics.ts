@@ -273,6 +273,13 @@ export const Metrics = {
   BACKUP_CHAIN_BREAK_TOTAL: 'backup_chain_break_total',
   RESTORE_DRILL_LAST_SUCCESS_TS: 'restore_drill_last_success_ts',
   RESTORE_DRILL_AGE_SECONDS: 'restore_drill_age_seconds',
+  // Wave 13 — legal holds
+  LEGAL_HOLD_APPLY_TOTAL: 'legal_hold_apply_total',
+  LEGAL_HOLD_RELEASE_TOTAL: 'legal_hold_release_total',
+  LEGAL_HOLD_ACTIVE_COUNT: 'legal_hold_active_count',
+  LEGAL_HOLD_BLOCKED_PURGE_TOTAL: 'legal_hold_blocked_purge_total',
+  LEGAL_HOLD_BLOCKED_DSAR_TOTAL: 'legal_hold_blocked_dsar_total',
+  LEGAL_HOLD_EXPIRED_TOTAL: 'legal_hold_expired_total',
 } as const
 
 // ── Surge detector ───────────────────────────────────────────────────────────
