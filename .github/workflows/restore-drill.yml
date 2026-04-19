@@ -37,7 +37,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_USER: drill
           POSTGRES_PASSWORD: drill
@@ -61,13 +61,16 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install tools
-        # Supabase is on PostgreSQL 17 as of 2026-04 — client major must match.
+        # Supabase prod is on PostgreSQL 18 as of 2026-04 (dump format 1.16).
+        # pg_restore must match or exceed the dump format major, so we pin to
+        # client 18. Use the explicit /usr/lib path to bypass pg_wrapper.
         # awscli v2 and jq are pre-installed on ubuntu-latest.
         run: |
           sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client-17 age
+          sudo apt-get install -y postgresql-client-18 age
+          /usr/lib/postgresql/18/bin/pg_restore --version
           aws --version
           jq --version
 
@@ -134,8 +137,11 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP/restore"
           DUMP=$(ls db-*.dump | head -1)
+          # Explicit path so pg_wrapper can't drop us back onto an older
+          # binary that doesn't understand the dump format.
+          PG_RESTORE=/usr/lib/postgresql/18/bin/pg_restore
           START=$(date +%s)
-          pg_restore \
+          "$PG_RESTORE" \
             --no-owner --no-privileges \
             --clean --if-exists \
             --dbname=postgresql://drill:drill@localhost:5432/drill \
@@ -159,7 +165,7 @@ jobs:
           PGPASSWORD: drill
         run: |
           set -euo pipefail
-          PSQL="psql postgresql://drill:drill@localhost:5432/drill -v ON_ERROR_STOP=1 -X -A -t -c"
+          PSQL="/usr/lib/postgresql/18/bin/psql postgresql://drill:drill@localhost:5432/drill -v ON_ERROR_STOP=1 -X -A -t -c"
           echo "Tables present:"      && $PSQL "SELECT count(*) FROM pg_tables WHERE schemaname='public';"
           echo "Users:"                && $PSQL "SELECT count(*) FROM auth.users;" || true
           echo "Orders:"               && $PSQL "SELECT count(*) FROM public.orders;"

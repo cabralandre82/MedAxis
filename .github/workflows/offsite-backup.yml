@@ -51,15 +51,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install PostgreSQL client 17 and age
-        # Supabase is on PostgreSQL 17 as of 2026-04. Client major must be >=
-        # server major or pg_dump refuses with a version-mismatch error.
+      - name: Install PostgreSQL client 18 and age
+        # Supabase prod is on PostgreSQL 18 as of 2026-04 (dump format 1.16).
+        # Client major must be >= server major or pg_dump refuses with a
+        # version-mismatch error. We pin to 18 so the produced custom-format
+        # dump is restorable by the matching restore-drill.
         # awscli is pre-installed on ubuntu-latest (v2).
         run: |
           sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client-17 age
+          sudo apt-get install -y postgresql-client-18 age
           aws --version
 
       - name: Compute snapshot metadata
@@ -92,9 +94,10 @@ jobs:
           esac
           echo "DB URL host: $(echo "$DB_URL" | sed -E 's|^[^@]*@([^/?]*).*|\1|')"
 
-          # Prefer the explicit v16 binary — the default /usr/bin/pg_dump on
-          # ubuntu-latest may route through pg_wrapper to an older cluster.
-          PG_DUMP=/usr/lib/postgresql/17/bin/pg_dump
+          # Pin to the v18 binary explicitly — /usr/bin/pg_dump on
+          # ubuntu-latest routes through pg_wrapper which can pick the
+          # wrong cluster if multiple majors are installed.
+          PG_DUMP=/usr/lib/postgresql/18/bin/pg_dump
           [ -x "$PG_DUMP" ] || PG_DUMP=$(command -v pg_dump)
           "$PG_DUMP" --version
 
