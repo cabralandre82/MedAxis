@@ -48,6 +48,7 @@ import { randomBytes } from 'node:crypto'
 import { getRequestContext, updateRequestContext } from '@/lib/logger/context'
 import { Metrics, incCounter, observeHistogram } from '@/lib/metrics'
 import { logger } from '@/lib/logger'
+import { chaosTick } from '@/lib/chaos/injector'
 
 // ── W3C parse / emit ─────────────────────────────────────────────────────
 
@@ -261,6 +262,13 @@ export async function fetchWithTrace(
 
   const startedAt = Date.now()
   try {
+    // Wave Hardening II #9 — chaos hook. No-op when chaos is
+    // disarmed (the common case). When armed, sleeps and/or throws
+    // BEFORE the real fetch so injected delays show up in the
+    // outbound histogram exactly like organic ones, and injected
+    // errors take the same `catch` branch below as real network
+    // failures (translates into `outcome=error_network|timeout`).
+    await chaosTick('outbound', service)
     const response = await fetch(input, {
       ...init,
       headers: outgoingHeaders,

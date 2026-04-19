@@ -11,6 +11,7 @@
  */
 
 import { trace, SpanStatusCode, type Attributes } from '@opentelemetry/api'
+import { chaosTick } from '@/lib/chaos/injector'
 
 const tracer = trace.getTracer('clinipharma', process.env.npm_package_version ?? '1.0.0')
 
@@ -53,6 +54,14 @@ export async function withDbSpan<T>(
   operation: 'select' | 'insert' | 'update' | 'delete' | 'upsert' | 'rpc',
   fn: () => Promise<T>
 ): Promise<T> {
+  // Wave Hardening II #9 — chaos hook for DB. We restrict injection
+  // to **read** operations (`select` and `rpc`) and refuse to fire
+  // on writes/deletes even if the operator misconfigures the env.
+  // Mutating customer data with a fault-injection harness is a
+  // class of accident we want to make structurally impossible.
+  if (operation === 'select' || operation === 'rpc') {
+    await chaosTick('db', table)
+  }
   return withSpan(`db.${table}.${operation}`, fn, {
     'db.system': 'postgresql',
     'db.name': 'supabase',
