@@ -1,0 +1,949 @@
+Restore drill	Set up job	﻿2026-04-19T14:35:41.8156861Z Current runner version: '2.333.1'
+Restore drill	Set up job	2026-04-19T14:35:41.8182370Z ##[group]Runner Image Provisioner
+Restore drill	Set up job	2026-04-19T14:35:41.8183412Z Hosted Compute Agent
+Restore drill	Set up job	2026-04-19T14:35:41.8184031Z Version: 20260213.493
+Restore drill	Set up job	2026-04-19T14:35:41.8185027Z Commit: 5c115507f6dd24b8de37d8bbe0bb4509d0cc0fa3
+Restore drill	Set up job	2026-04-19T14:35:41.8185998Z Build Date: 2026-02-13T00:28:41Z
+Restore drill	Set up job	2026-04-19T14:35:41.8186996Z Worker ID: {fff35a20-c965-45bc-9388-368da755ecce}
+Restore drill	Set up job	2026-04-19T14:35:41.8187864Z Azure Region: westus
+Restore drill	Set up job	2026-04-19T14:35:41.8188467Z ##[endgroup]
+Restore drill	Set up job	2026-04-19T14:35:41.8189959Z ##[group]Operating System
+Restore drill	Set up job	2026-04-19T14:35:41.8190840Z Ubuntu
+Restore drill	Set up job	2026-04-19T14:35:41.8191389Z 24.04.4
+Restore drill	Set up job	2026-04-19T14:35:41.8192022Z LTS
+Restore drill	Set up job	2026-04-19T14:35:41.8192560Z ##[endgroup]
+Restore drill	Set up job	2026-04-19T14:35:41.8193116Z ##[group]Runner Image
+Restore drill	Set up job	2026-04-19T14:35:41.8193831Z Image: ubuntu-24.04
+Restore drill	Set up job	2026-04-19T14:35:41.8194425Z Version: 20260413.86.1
+Restore drill	Set up job	2026-04-19T14:35:41.8195535Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260413.86/images/ubuntu/Ubuntu2404-Readme.md
+Restore drill	Set up job	2026-04-19T14:35:41.8197581Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260413.86
+Restore drill	Set up job	2026-04-19T14:35:41.8198694Z ##[endgroup]
+Restore drill	Set up job	2026-04-19T14:35:41.8199813Z ##[group]GITHUB_TOKEN Permissions
+Restore drill	Set up job	2026-04-19T14:35:41.8202026Z Contents: read
+Restore drill	Set up job	2026-04-19T14:35:41.8202678Z Metadata: read
+Restore drill	Set up job	2026-04-19T14:35:41.8203409Z ##[endgroup]
+Restore drill	Set up job	2026-04-19T14:35:41.8205521Z Secret source: Actions
+Restore drill	Set up job	2026-04-19T14:35:41.8206747Z Prepare workflow directory
+Restore drill	Set up job	2026-04-19T14:35:41.8822433Z Prepare all required actions
+Restore drill	Set up job	2026-04-19T14:35:41.8860836Z Getting action download info
+Restore drill	Set up job	2026-04-19T14:35:42.3633440Z Download action repository 'actions/checkout@v6' (SHA:de0fac2e4500dabe0009e67214ff5f5447ce83dd)
+Restore drill	Set up job	2026-04-19T14:35:42.5089600Z Download action repository 'actions/upload-artifact@v7' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+Restore drill	Set up job	2026-04-19T14:35:43.2972098Z Complete job name: Restore drill
+Restore drill	Initialize containers	﻿2026-04-19T14:35:43.3563727Z ##[group]Checking docker version
+Restore drill	Initialize containers	2026-04-19T14:35:43.3578579Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+Restore drill	Initialize containers	2026-04-19T14:35:43.7385183Z '1.48'
+Restore drill	Initialize containers	2026-04-19T14:35:43.7402371Z Docker daemon API version: '1.48'
+Restore drill	Initialize containers	2026-04-19T14:35:43.7403996Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+Restore drill	Initialize containers	2026-04-19T14:35:43.7558280Z '1.48'
+Restore drill	Initialize containers	2026-04-19T14:35:43.7570517Z Docker client API version: '1.48'
+Restore drill	Initialize containers	2026-04-19T14:35:43.7577196Z ##[endgroup]
+Restore drill	Initialize containers	2026-04-19T14:35:43.7580825Z ##[group]Clean up resources from previous jobs
+Restore drill	Initialize containers	2026-04-19T14:35:43.7586791Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=25b495"
+Restore drill	Initialize containers	2026-04-19T14:35:43.7728371Z ##[command]/usr/bin/docker network prune --force --filter "label=25b495"
+Restore drill	Initialize containers	2026-04-19T14:35:43.7875552Z ##[endgroup]
+Restore drill	Initialize containers	2026-04-19T14:35:43.7877574Z ##[group]Create local container network
+Restore drill	Initialize containers	2026-04-19T14:35:43.7892831Z ##[command]/usr/bin/docker network create --label 25b495 github_network_7d82adb427c2464fa00b686213032aea
+Restore drill	Initialize containers	2026-04-19T14:35:43.8394197Z bc8f8b78a3cfe45fb10056e7cafbfb414132ca9241d420435c09b01bd03ce0bd
+Restore drill	Initialize containers	2026-04-19T14:35:43.8413947Z ##[endgroup]
+Restore drill	Initialize containers	2026-04-19T14:35:43.8440921Z ##[group]Starting postgres service container
+Restore drill	Initialize containers	2026-04-19T14:35:43.8463090Z ##[command]/usr/bin/docker pull postgres:18
+Restore drill	Initialize containers	2026-04-19T14:35:44.7237015Z 18: Pulling from library/postgres
+Restore drill	Initialize containers	2026-04-19T14:35:44.9918418Z 5435b2dcdf5c: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9919161Z baf06005f9e9: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9919740Z 7cec73702fc3: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9920124Z fecac0093525: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9920474Z eb4cdb4c077a: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9920946Z f4deb76cb231: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9921297Z 11c182969642: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9921630Z 2140605cc9e3: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9922032Z 7a79188b0f04: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9922433Z 484cf2ee784f: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9922788Z b21c9fd89a08: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9923202Z 8d02d282ee5a: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9923650Z 464872ed796d: Pulling fs layer
+Restore drill	Initialize containers	2026-04-19T14:35:44.9924495Z 2140605cc9e3: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9924876Z b21c9fd89a08: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9925176Z fecac0093525: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9925464Z 484cf2ee784f: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9925905Z eb4cdb4c077a: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9926209Z f4deb76cb231: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9926662Z 8d02d282ee5a: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9927159Z 464872ed796d: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:44.9927450Z 11c182969642: Waiting
+Restore drill	Initialize containers	2026-04-19T14:35:45.2425851Z baf06005f9e9: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.2428265Z baf06005f9e9: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:45.2657472Z 7cec73702fc3: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.4073409Z 5435b2dcdf5c: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.4074919Z 5435b2dcdf5c: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:45.5088070Z fecac0093525: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.5089514Z fecac0093525: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:45.5549983Z eb4cdb4c077a: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.5554065Z eb4cdb4c077a: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:45.6655597Z f4deb76cb231: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.6656785Z f4deb76cb231: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:45.7485417Z 11c182969642: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.7487191Z 11c182969642: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:45.8107180Z 2140605cc9e3: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:45.8109043Z 2140605cc9e3: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:46.0087730Z 484cf2ee784f: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:46.0088340Z 484cf2ee784f: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:46.0629219Z b21c9fd89a08: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:46.0629943Z b21c9fd89a08: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:46.2608464Z 8d02d282ee5a: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:46.2609200Z 8d02d282ee5a: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:46.3107601Z 464872ed796d: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:46.3108354Z 464872ed796d: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:46.3709953Z 7a79188b0f04: Verifying Checksum
+Restore drill	Initialize containers	2026-04-19T14:35:46.3710594Z 7a79188b0f04: Download complete
+Restore drill	Initialize containers	2026-04-19T14:35:46.5819021Z 5435b2dcdf5c: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:46.8669386Z baf06005f9e9: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:47.0559908Z 7cec73702fc3: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:47.1033352Z fecac0093525: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:47.4143599Z eb4cdb4c077a: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:47.4995865Z f4deb76cb231: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:47.5088237Z 11c182969642: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:47.5233076Z 2140605cc9e3: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:50.6254290Z 7a79188b0f04: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:50.6416089Z 484cf2ee784f: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:50.6547712Z b21c9fd89a08: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:50.6672193Z 8d02d282ee5a: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:50.6803210Z 464872ed796d: Pull complete
+Restore drill	Initialize containers	2026-04-19T14:35:50.6844410Z Digest: sha256:52e6ffd11fddd081ae63880b635b2a61c14008c17fc98cdc7ce5472265516dd0
+Restore drill	Initialize containers	2026-04-19T14:35:50.6862888Z Status: Downloaded newer image for postgres:18
+Restore drill	Initialize containers	2026-04-19T14:35:50.6870926Z docker.io/library/postgres:18
+Restore drill	Initialize containers	2026-04-19T14:35:50.6958395Z ##[command]/usr/bin/docker create --name c06619223b7549d5ae02df5d3515425c_postgres18_0f8c00 --label 25b495 --network github_network_7d82adb427c2464fa00b686213032aea --network-alias postgres -p 5432:5432 --health-cmd "pg_isready -U drill" --health-interval 5s --health-timeout 5s --health-retries 10 -e "POSTGRES_USER=drill" -e "POSTGRES_PASSWORD=drill" -e "POSTGRES_DB=drill" -e GITHUB_ACTIONS=true -e CI=true postgres:18
+Restore drill	Initialize containers	2026-04-19T14:35:50.7241887Z cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Initialize containers	2026-04-19T14:35:50.7265234Z ##[command]/usr/bin/docker start cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Initialize containers	2026-04-19T14:35:51.0181052Z cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Initialize containers	2026-04-19T14:35:51.0196862Z ##[command]/usr/bin/docker ps --all --filter id=cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8 --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+Restore drill	Initialize containers	2026-04-19T14:35:51.0326687Z cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8 Up Less than a second (health: starting)
+Restore drill	Initialize containers	2026-04-19T14:35:51.0350519Z ##[command]/usr/bin/docker port cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Initialize containers	2026-04-19T14:35:51.0514685Z 5432/tcp -> 0.0.0.0:5432
+Restore drill	Initialize containers	2026-04-19T14:35:51.0515171Z 5432/tcp -> [::]:5432
+Restore drill	Initialize containers	2026-04-19T14:35:51.0563492Z ##[endgroup]
+Restore drill	Initialize containers	2026-04-19T14:35:51.0572058Z ##[group]Waiting for all services to be ready
+Restore drill	Initialize containers	2026-04-19T14:35:51.0586102Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Initialize containers	2026-04-19T14:35:51.0721952Z starting
+Restore drill	Initialize containers	2026-04-19T14:35:51.0745996Z postgres service is starting, waiting 2 seconds before checking again.
+Restore drill	Initialize containers	2026-04-19T14:35:53.0750001Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Initialize containers	2026-04-19T14:35:53.0872412Z starting
+Restore drill	Initialize containers	2026-04-19T14:35:53.0884099Z postgres service is starting, waiting 3 seconds before checking again.
+Restore drill	Initialize containers	2026-04-19T14:35:57.0492570Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Initialize containers	2026-04-19T14:35:57.0608757Z healthy
+Restore drill	Initialize containers	2026-04-19T14:35:57.0623446Z postgres service is healthy.
+Restore drill	Initialize containers	2026-04-19T14:35:57.0624186Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	﻿2026-04-19T14:35:57.0935331Z ##[group]Run actions/checkout@v6
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0935927Z with:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0936165Z   repository: cabralandre82/clinipharma
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0936850Z   token: ***
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0937081Z   ssh-strict: true
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0937306Z   ssh-user: git
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0937529Z   persist-credentials: true
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0937776Z   clean: true
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0937996Z   sparse-checkout-cone-mode: true
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0938256Z   fetch-depth: 1
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0938463Z   fetch-tags: false
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0938679Z   show-progress: true
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0938897Z   lfs: false
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0939101Z   submodules: false
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0939336Z   set-safe-directory: true
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0939791Z env:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0939991Z   TZ: America/Sao_Paulo
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0940442Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0940862Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0941275Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0941563Z   AWS_DEFAULT_REGION: auto
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.0941791Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1853193Z Syncing repository: cabralandre82/clinipharma
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1854480Z ##[group]Getting Git version info
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1854914Z Working directory is '/home/runner/work/clinipharma/clinipharma'
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1855517Z [command]/usr/bin/git version
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1904108Z git version 2.53.0
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1927172Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1941175Z Temporarily overriding HOME='/home/runner/work/_temp/a5812fda-3726-4b1e-8059-aa4b490af599' before making global git config changes
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1942621Z Adding repository directory to the temporary git global config as a safe directory
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1946177Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/clinipharma/clinipharma
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1978950Z Deleting the contents of '/home/runner/work/clinipharma/clinipharma'
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1983464Z ##[group]Initializing the repository
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.1988308Z [command]/usr/bin/git init /home/runner/work/clinipharma/clinipharma
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2095994Z hint: Using 'master' as the name for the initial branch. This default branch name
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2097398Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2098348Z hint: to use in all of your new repositories, which will suppress this warning,
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2099154Z hint: call:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2099543Z hint:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2100079Z hint: 	git config --global init.defaultBranch <name>
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2100776Z hint:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2101378Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2102719Z hint: 'development'. The just-created branch can be renamed via this command:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2103509Z hint:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2103927Z hint: 	git branch -m <name>
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2104382Z hint:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2104970Z hint: Disable this message with "git config set advice.defaultBranchName false"
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2105986Z Initialized empty Git repository in /home/runner/work/clinipharma/clinipharma/.git/
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2110237Z [command]/usr/bin/git remote add origin https://github.com/cabralandre82/clinipharma
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2176792Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2177283Z ##[group]Disabling automatic garbage collection
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2182013Z [command]/usr/bin/git config --local gc.auto 0
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2209475Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2210137Z ##[group]Setting up auth
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2211050Z Removing SSH command configuration
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2217841Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2247817Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2554559Z Removing HTTP extra header
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2560639Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2593054Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2801664Z Removing includeIf entries pointing to credentials config files
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2807698Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.2838283Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3057118Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3093303Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/clinipharma/clinipharma/.git.path /home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3121242Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/clinipharma/clinipharma/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3150269Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3178985Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3204561Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3205217Z ##[group]Fetching the repository
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:57.3213739Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +4112341f3f208a0d96fb7950ba705a7a530cb5a3:refs/remotes/origin/main
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1126438Z From https://github.com/cabralandre82/clinipharma
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1127460Z  * [new ref]         4112341f3f208a0d96fb7950ba705a7a530cb5a3 -> origin/main
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1159120Z [command]/usr/bin/git branch --list --remote origin/main
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1184018Z   origin/main
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1192326Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1213454Z 4112341f3f208a0d96fb7950ba705a7a530cb5a3
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1217828Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1218332Z ##[group]Determining the checkout info
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1219181Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1224336Z [command]/usr/bin/git sparse-checkout disable
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1260345Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1285874Z ##[group]Checking out the ref
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1290106Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1893016Z Switched to a new branch 'main'
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1895216Z branch 'main' set up to track 'origin/main'.
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1902326Z ##[endgroup]
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1945338Z [command]/usr/bin/git log -1 --format=%H
+Restore drill	Run actions/checkout@v6	2026-04-19T14:35:58.1970036Z 4112341f3f208a0d96fb7950ba705a7a530cb5a3
+Restore drill	Install tools	﻿2026-04-19T14:35:58.2142110Z ##[group]Run sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+Restore drill	Install tools	2026-04-19T14:35:58.2143157Z [36;1msudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'[0m
+Restore drill	Install tools	2026-04-19T14:35:58.2144104Z [36;1mcurl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg[0m
+Restore drill	Install tools	2026-04-19T14:35:58.2144722Z [36;1msudo apt-get update -qq[0m
+Restore drill	Install tools	2026-04-19T14:35:58.2145060Z [36;1msudo apt-get install -y postgresql-client-18 age[0m
+Restore drill	Install tools	2026-04-19T14:35:58.2145466Z [36;1m/usr/lib/postgresql/18/bin/pg_restore --version[0m
+Restore drill	Install tools	2026-04-19T14:35:58.2145788Z [36;1maws --version[0m
+Restore drill	Install tools	2026-04-19T14:35:58.2146017Z [36;1mjq --version[0m
+Restore drill	Install tools	2026-04-19T14:35:58.2171152Z shell: /usr/bin/bash -e {0}
+Restore drill	Install tools	2026-04-19T14:35:58.2171426Z env:
+Restore drill	Install tools	2026-04-19T14:35:58.2171625Z   TZ: America/Sao_Paulo
+Restore drill	Install tools	2026-04-19T14:35:58.2172136Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Install tools	2026-04-19T14:35:58.2172574Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Install tools	2026-04-19T14:35:58.2172980Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Install tools	2026-04-19T14:35:58.2173234Z   AWS_DEFAULT_REGION: auto
+Restore drill	Install tools	2026-04-19T14:35:58.2173464Z ##[endgroup]
+Restore drill	Install tools	2026-04-19T14:36:10.6489765Z Reading package lists...
+Restore drill	Install tools	2026-04-19T14:36:10.8155710Z Building dependency tree...
+Restore drill	Install tools	2026-04-19T14:36:10.8163266Z Reading state information...
+Restore drill	Install tools	2026-04-19T14:36:10.9653683Z Suggested packages:
+Restore drill	Install tools	2026-04-19T14:36:10.9654168Z   postgresql-18 postgresql-doc-18
+Restore drill	Install tools	2026-04-19T14:36:11.0000433Z The following NEW packages will be installed:
+Restore drill	Install tools	2026-04-19T14:36:11.0008518Z   age postgresql-client-18
+Restore drill	Install tools	2026-04-19T14:36:11.0225418Z 0 upgraded, 2 newly installed, 0 to remove and 19 not upgraded.
+Restore drill	Install tools	2026-04-19T14:36:11.0226043Z Need to get 3716 kB of archives.
+Restore drill	Install tools	2026-04-19T14:36:11.0226430Z After this operation, 16.4 MB of additional disk space will be used.
+Restore drill	Install tools	2026-04-19T14:36:11.0227282Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Restore drill	Install tools	2026-04-19T14:36:11.0637742Z Get:3 http://apt.postgresql.org/pub/repos/apt noble-pgdg/main amd64 postgresql-client-18 amd64 18.3-1.pgdg24.04+1 [2086 kB]
+Restore drill	Install tools	2026-04-19T14:36:11.1661501Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 age amd64 1.1.1-1ubuntu0.24.04.3 [1630 kB]
+Restore drill	Install tools	2026-04-19T14:36:11.9132467Z Fetched 3716 kB in 1s (5764 kB/s)
+Restore drill	Install tools	2026-04-19T14:36:11.9427273Z Selecting previously unselected package age.
+Restore drill	Install tools	2026-04-19T14:36:12.0461537Z (Reading database ... 
+Restore drill	Install tools	2026-04-19T14:36:12.0462284Z (Reading database ... 5%
+Restore drill	Install tools	2026-04-19T14:36:12.0462725Z (Reading database ... 10%
+Restore drill	Install tools	2026-04-19T14:36:12.0463134Z (Reading database ... 15%
+Restore drill	Install tools	2026-04-19T14:36:12.0463492Z (Reading database ... 20%
+Restore drill	Install tools	2026-04-19T14:36:12.0463746Z (Reading database ... 25%
+Restore drill	Install tools	2026-04-19T14:36:12.0463993Z (Reading database ... 30%
+Restore drill	Install tools	2026-04-19T14:36:12.0464244Z (Reading database ... 35%
+Restore drill	Install tools	2026-04-19T14:36:12.0464488Z (Reading database ... 40%
+Restore drill	Install tools	2026-04-19T14:36:12.0464742Z (Reading database ... 45%
+Restore drill	Install tools	2026-04-19T14:36:12.0464986Z (Reading database ... 50%
+Restore drill	Install tools	2026-04-19T14:36:12.0887970Z (Reading database ... 55%
+Restore drill	Install tools	2026-04-19T14:36:12.4019827Z (Reading database ... 60%
+Restore drill	Install tools	2026-04-19T14:36:12.6200773Z (Reading database ... 65%
+Restore drill	Install tools	2026-04-19T14:36:12.9074963Z (Reading database ... 70%
+Restore drill	Install tools	2026-04-19T14:36:13.2104056Z (Reading database ... 75%
+Restore drill	Install tools	2026-04-19T14:36:13.6233177Z (Reading database ... 80%
+Restore drill	Install tools	2026-04-19T14:36:14.1924217Z (Reading database ... 85%
+Restore drill	Install tools	2026-04-19T14:36:14.8317005Z (Reading database ... 90%
+Restore drill	Install tools	2026-04-19T14:36:15.4569700Z (Reading database ... 95%
+Restore drill	Install tools	2026-04-19T14:36:15.4570187Z (Reading database ... 100%
+Restore drill	Install tools	2026-04-19T14:36:15.4570657Z (Reading database ... 220764 files and directories currently installed.)
+Restore drill	Install tools	2026-04-19T14:36:15.4619926Z Preparing to unpack .../age_1.1.1-1ubuntu0.24.04.3_amd64.deb ...
+Restore drill	Install tools	2026-04-19T14:36:15.4651486Z Unpacking age (1.1.1-1ubuntu0.24.04.3) ...
+Restore drill	Install tools	2026-04-19T14:36:15.5427692Z Selecting previously unselected package postgresql-client-18.
+Restore drill	Install tools	2026-04-19T14:36:15.5564281Z Preparing to unpack .../postgresql-client-18_18.3-1.pgdg24.04+1_amd64.deb ...
+Restore drill	Install tools	2026-04-19T14:36:15.5573552Z Unpacking postgresql-client-18 (18.3-1.pgdg24.04+1) ...
+Restore drill	Install tools	2026-04-19T14:36:15.7671516Z Setting up postgresql-client-18 (18.3-1.pgdg24.04+1) ...
+Restore drill	Install tools	2026-04-19T14:36:16.1254730Z update-alternatives: using /usr/share/postgresql/18/man/man1/psql.1.gz to provide /usr/share/man/man1/psql.1.gz (psql.1.gz) in auto mode
+Restore drill	Install tools	2026-04-19T14:36:16.2258740Z Setting up age (1.1.1-1ubuntu0.24.04.3) ...
+Restore drill	Install tools	2026-04-19T14:36:16.2287314Z Processing triggers for postgresql-common (290.pgdg24.04+1) ...
+Restore drill	Install tools	2026-04-19T14:36:16.3572594Z Building PostgreSQL dictionaries from installed myspell/hunspell packages...
+Restore drill	Install tools	2026-04-19T14:36:16.3679803Z   en_us
+Restore drill	Install tools	2026-04-19T14:36:16.4448599Z Removing obsolete dictionary files:
+Restore drill	Install tools	2026-04-19T14:36:16.4655859Z Processing triggers for man-db (2.12.0-4build2) ...
+Restore drill	Install tools	2026-04-19T14:36:16.4677271Z Not building database; man-db/auto-update is not 'true'.
+Restore drill	Install tools	2026-04-19T14:36:17.5572463Z 
+Restore drill	Install tools	2026-04-19T14:36:17.5573214Z Running kernel seems to be up-to-date.
+Restore drill	Install tools	2026-04-19T14:36:17.5573667Z 
+Restore drill	Install tools	2026-04-19T14:36:17.5573854Z No services need to be restarted.
+Restore drill	Install tools	2026-04-19T14:36:17.5574186Z 
+Restore drill	Install tools	2026-04-19T14:36:17.5574367Z No containers need to be restarted.
+Restore drill	Install tools	2026-04-19T14:36:17.5574675Z 
+Restore drill	Install tools	2026-04-19T14:36:17.5574894Z No user sessions are running outdated binaries.
+Restore drill	Install tools	2026-04-19T14:36:17.5575246Z 
+Restore drill	Install tools	2026-04-19T14:36:17.5575578Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+Restore drill	Install tools	2026-04-19T14:36:18.4077121Z pg_restore (PostgreSQL) 18.3 (Ubuntu 18.3-1.pgdg24.04+1)
+Restore drill	Install tools	2026-04-19T14:36:20.6599754Z aws-cli/2.34.30 Python/3.14.4 Linux/6.17.0-1010-azure exe/x86_64.ubuntu.24
+Restore drill	Install tools	2026-04-19T14:36:20.7580835Z jq-1.7
+Restore drill	Locate backup prefix	﻿2026-04-19T14:36:20.7617105Z ##[group]Run set -euo pipefail
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7617480Z [36;1mset -euo pipefail[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7617735Z [36;1mPREFIX=""[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7617972Z [36;1mif [ -z "$PREFIX" ]; then[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7618299Z [36;1m  PREFIX=$(aws --endpoint-url="$R2_ENDPOINT" \[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7618650Z [36;1m    s3api list-objects-v2 \[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7619062Z [36;1m    --bucket "***" \[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7619326Z [36;1m    --prefix weekly/ \[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7619612Z [36;1m    --query 'Contents[].Key' \[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7620039Z [36;1m    --output text | tr '\t' '\n' | grep -E '\.age$' | sed 's|/[^/]*$||' | sort -u | tail -1)[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7620456Z [36;1mfi[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7620670Z [36;1mif [ -z "$PREFIX" ]; then[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7621002Z [36;1m  echo "::error::No backups found in R2 bucket"[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7621309Z [36;1m  exit 1[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7621514Z [36;1mfi[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7621752Z [36;1mecho "prefix=$PREFIX" >> "$GITHUB_OUTPUT"[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7622100Z [36;1mecho "Using prefix: $PREFIX"[0m
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7642865Z shell: /usr/bin/bash -e {0}
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7643122Z env:
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7643325Z   TZ: America/Sao_Paulo
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7643762Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7644150Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7644566Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7644823Z   AWS_DEFAULT_REGION: auto
+Restore drill	Locate backup prefix	2026-04-19T14:36:20.7645057Z ##[endgroup]
+Restore drill	Locate backup prefix	2026-04-19T14:36:21.7669238Z Using prefix: weekly/20260419T080245Z
+Restore drill	Fetch backup artefacts	﻿2026-04-19T14:36:21.7712487Z ##[group]Run set -euo pipefail
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7712825Z [36;1mset -euo pipefail[0m
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7713109Z [36;1mmkdir -p "$RUNNER_TEMP/restore"[0m
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7713606Z [36;1maws --endpoint-url="$R2_ENDPOINT" \[0m
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7714121Z [36;1m  s3 sync "s3://***/weekly/20260419T080245Z/" \[0m
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7714448Z [36;1m  "$RUNNER_TEMP/restore/" \[0m
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7714716Z [36;1m  --no-progress[0m
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7714967Z [36;1mls -lh "$RUNNER_TEMP/restore/"[0m
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7736006Z shell: /usr/bin/bash -e {0}
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7736269Z env:
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7736701Z   TZ: America/Sao_Paulo
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7737224Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7737652Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7738063Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7738321Z   AWS_DEFAULT_REGION: auto
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:21.7738560Z ##[endgroup]
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.7073332Z download: s3://***/weekly/20260419T080245Z/db-20260419T080245Z.dump.age to ../../_temp/restore/db-20260419T080245Z.dump.age
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.7178850Z download: s3://***/weekly/20260419T080245Z/storage-20260419T080245Z.tgz.age to ../../_temp/restore/storage-20260419T080245Z.tgz.age
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.7190438Z download: s3://***/weekly/20260419T080245Z/manifest-sha256.txt.age to ../../_temp/restore/manifest-sha256.txt.age
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.7605621Z download: s3://***/weekly/20260419T080245Z/manifest.json.age to ../../_temp/restore/manifest.json.age
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.8861975Z total 960K
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.8862533Z -rw-r--r-- 1 runner runner 701K Apr 19 05:02 db-20260419T080245Z.dump.age
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.8863352Z -rw-r--r-- 1 runner runner  386 Apr 19 05:02 manifest-sha256.txt.age
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.8864077Z -rw-r--r-- 1 runner runner  462 Apr 19 05:02 manifest.json.age
+Restore drill	Fetch backup artefacts	2026-04-19T14:36:22.8864879Z -rw-r--r-- 1 runner runner 245K Apr 19 05:02 storage-20260419T080245Z.tgz.age
+Restore drill	Decrypt with age private key	﻿2026-04-19T14:36:22.8894334Z ##[group]Run set -euo pipefail
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8894675Z [36;1mset -euo pipefail[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8894940Z [36;1mcd "$RUNNER_TEMP/restore"[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8895323Z [36;1m# Keep the identity OUTSIDE the restore dir so the *.age glob[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8895799Z [36;1m# below cannot accidentally try to "decrypt" the private key[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8896241Z [36;1m# itself (which fails with a redacted "unexpected intro: ***"[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8897075Z [36;1m# error that wastes everyone's time during a real incident).[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8897476Z [36;1mIDENTITY="$RUNNER_TEMP/identity.age"[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8897776Z [36;1mumask 077[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8898051Z [36;1mprintf '%s\n' "$AGE_PRIVATE_KEY" > "$IDENTITY"[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8898367Z [36;1mfor f in *.age; do[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8898616Z [36;1m  plain="${f%.age}"[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8898887Z [36;1m  age -d -i "$IDENTITY" -o "$plain" "$f"[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8899180Z [36;1mdone[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8899440Z [36;1mrm -f "$IDENTITY"[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8899676Z [36;1mls -lh[0m
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8920336Z shell: /usr/bin/bash -e {0}
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8940468Z env:
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8940736Z   TZ: America/Sao_Paulo
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8941221Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8941623Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8942053Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8942308Z   AWS_DEFAULT_REGION: auto
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8943229Z   AGE_PRIVATE_KEY: ***
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.8943464Z ##[endgroup]
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9115187Z total 1.9M
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9115729Z -rw------- 1 runner runner 701K Apr 19 11:36 db-20260419T080245Z.dump
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9116896Z -rw-r--r-- 1 runner runner 701K Apr 19 05:02 db-20260419T080245Z.dump.age
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9117660Z -rw------- 1 runner runner  186 Apr 19 11:36 manifest-sha256.txt
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9118436Z -rw-r--r-- 1 runner runner  386 Apr 19 05:02 manifest-sha256.txt.age
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9119353Z -rw------- 1 runner runner  262 Apr 19 11:36 manifest.json
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9119878Z -rw-r--r-- 1 runner runner  462 Apr 19 05:02 manifest.json.age
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9120522Z -rw------- 1 runner runner 245K Apr 19 11:36 storage-20260419T080245Z.tgz
+Restore drill	Decrypt with age private key	2026-04-19T14:36:22.9120998Z -rw-r--r-- 1 runner runner 245K Apr 19 05:02 storage-20260419T080245Z.tgz.age
+Restore drill	Verify checksums	﻿2026-04-19T14:36:22.9144148Z ##[group]Run set -euo pipefail
+Restore drill	Verify checksums	2026-04-19T14:36:22.9144476Z [36;1mset -euo pipefail[0m
+Restore drill	Verify checksums	2026-04-19T14:36:22.9144741Z [36;1mcd "$RUNNER_TEMP/restore"[0m
+Restore drill	Verify checksums	2026-04-19T14:36:22.9145037Z [36;1msha256sum -c manifest-sha256.txt[0m
+Restore drill	Verify checksums	2026-04-19T14:36:22.9164494Z shell: /usr/bin/bash -e {0}
+Restore drill	Verify checksums	2026-04-19T14:36:22.9164755Z env:
+Restore drill	Verify checksums	2026-04-19T14:36:22.9164958Z   TZ: America/Sao_Paulo
+Restore drill	Verify checksums	2026-04-19T14:36:22.9165405Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Verify checksums	2026-04-19T14:36:22.9165816Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Verify checksums	2026-04-19T14:36:22.9166227Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Verify checksums	2026-04-19T14:36:22.9166776Z   AWS_DEFAULT_REGION: auto
+Restore drill	Verify checksums	2026-04-19T14:36:22.9167087Z ##[endgroup]
+Restore drill	Verify checksums	2026-04-19T14:36:22.9275785Z db-20260419T080245Z.dump: OK
+Restore drill	Verify checksums	2026-04-19T14:36:22.9277996Z storage-20260419T080245Z.tgz: OK
+Restore drill	Bootstrap Supabase-shaped placeholders	﻿2026-04-19T14:36:22.9304718Z ##[group]Run set -euo pipefail
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9305096Z [36;1mset -euo pipefail[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9305385Z [36;1mPSQL=/usr/lib/postgresql/18/bin/psql[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9305797Z [36;1m# Pre-create the Supabase-managed roles, schemas, extensions and[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9306265Z [36;1m# the handful of catalogue tables that the production dump[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9307012Z [36;1m# references. Without these, pg_restore emits hundreds of[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9307474Z [36;1m# noise errors ("role X does not exist", "extension Y is not[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9307912Z [36;1m# available") and the drill's signal-to-noise drops to zero.[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9308258Z [36;1m#[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9308549Z [36;1m# Extensions only available inside Supabase (pg_graphql,[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9309006Z [36;1m# supabase_vault, pgsodium, pg_net) cannot be installed on a[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9309483Z [36;1m# vanilla postgres:18 image — those errors remain tolerable[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9309977Z [36;1m# and are filtered by the success-evaluation step below.[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9310560Z [36;1m$PSQL "***localhost:5432/drill" \[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9310888Z [36;1m  -v ON_ERROR_STOP=1 -X <<'SQL'[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9311194Z [36;1mCREATE SCHEMA IF NOT EXISTS auth;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9311505Z [36;1mCREATE SCHEMA IF NOT EXISTS storage;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9311827Z [36;1mCREATE SCHEMA IF NOT EXISTS realtime;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9312160Z [36;1mCREATE SCHEMA IF NOT EXISTS vault;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9312482Z [36;1mCREATE SCHEMA IF NOT EXISTS extensions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9312807Z [36;1mCREATE SCHEMA IF NOT EXISTS graphql;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9313152Z [36;1mCREATE SCHEMA IF NOT EXISTS graphql_public;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9313493Z [36;1mCREATE SCHEMA IF NOT EXISTS _realtime;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9313865Z [36;1mCREATE SCHEMA IF NOT EXISTS supabase_functions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9314184Z [36;1m[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9314492Z [36;1mCREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9314970Z [36;1mCREATE EXTENSION IF NOT EXISTS pgcrypto   SCHEMA extensions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9315426Z [36;1mCREATE EXTENSION IF NOT EXISTS pg_trgm    SCHEMA extensions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9315871Z [36;1mCREATE EXTENSION IF NOT EXISTS btree_gin  SCHEMA extensions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9316321Z [36;1mCREATE EXTENSION IF NOT EXISTS btree_gist SCHEMA extensions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9316958Z [36;1m[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9317278Z [36;1mALTER DATABASE drill SET search_path = "$user", public, extensions;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9317659Z [36;1m[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9318054Z [36;1mDO $$ BEGIN CREATE ROLE anon NOLOGIN;                     EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9318747Z [36;1mDO $$ BEGIN CREATE ROLE authenticated NOLOGIN;            EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9319481Z [36;1mDO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS;   EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9320413Z [36;1mDO $$ BEGIN CREATE ROLE supabase_admin SUPERUSER;         EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9321143Z [36;1mDO $$ BEGIN CREATE ROLE supabase_auth_admin NOINHERIT;    EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9321879Z [36;1mDO $$ BEGIN CREATE ROLE supabase_storage_admin NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9322632Z [36;1mDO $$ BEGIN CREATE ROLE supabase_realtime_admin NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9323403Z [36;1mDO $$ BEGIN CREATE ROLE supabase_functions_admin NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9324195Z [36;1mDO $$ BEGIN CREATE ROLE supabase_replication_admin REPLICATION; EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9325060Z [36;1mDO $$ BEGIN CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD 'placeholder'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9326007Z [36;1mDO $$ BEGIN CREATE ROLE pgsodium_keyholder;               EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9327022Z [36;1mDO $$ BEGIN CREATE ROLE pgsodium_keymaker;                EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9327749Z [36;1mDO $$ BEGIN CREATE ROLE pgsodium_keyiduser;               EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9328234Z [36;1m[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9328534Z [36;1m-- vault.secrets is created by the supabase_vault extension on[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9329015Z [36;1m-- managed Supabase. Stub a compatible shape so policies in the[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9329432Z [36;1m-- dump can be reattached without errors.[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9329785Z [36;1mCREATE TABLE IF NOT EXISTS vault.secrets ([0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9330196Z [36;1m  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9330549Z [36;1m  name            text,[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9330831Z [36;1m  description     text DEFAULT '',[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9331127Z [36;1m  secret          text NOT NULL,[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9331406Z [36;1m  key_id          uuid,[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9331661Z [36;1m  nonce           bytea,[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9331982Z [36;1m  created_at      timestamptz NOT NULL DEFAULT now(),[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9332375Z [36;1m  updated_at      timestamptz NOT NULL DEFAULT now()[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9332701Z [36;1m);[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9332895Z [36;1m[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9333314Z [36;1mDO $$ BEGIN CREATE PUBLICATION supabase_realtime; EXCEPTION WHEN duplicate_object THEN NULL; END $$;[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9333811Z [36;1mSQL[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9334032Z [36;1mecho "✓ placeholders ready"[0m
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9353099Z shell: /usr/bin/bash -e {0}
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9353381Z env:
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9353592Z   TZ: America/Sao_Paulo
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9354049Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9354463Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9354870Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9355125Z   AWS_DEFAULT_REGION: auto
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9355363Z   PGPASSWORD: drill
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9355580Z ##[endgroup]
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9534623Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9538730Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9542032Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9544574Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9548070Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9551447Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9554660Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9558233Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9561949Z CREATE SCHEMA
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9588024Z CREATE EXTENSION
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9620774Z CREATE EXTENSION
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9679179Z CREATE EXTENSION
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:22.9808209Z CREATE EXTENSION
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0056051Z CREATE EXTENSION
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0061400Z ALTER DATABASE
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0068357Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0072006Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0075370Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0078594Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0081796Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0085278Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0088504Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0091739Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0095001Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0132632Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0136674Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0140144Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0144142Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0174003Z CREATE TABLE
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0179842Z WARNING:  "wal_level" is insufficient to publish logical changes
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0180809Z HINT:  Set "wal_level" to "logical" before creating subscriptions.
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0181528Z DO
+Restore drill	Bootstrap Supabase-shaped placeholders	2026-04-19T14:36:23.0195517Z ✓ placeholders ready
+Restore drill	Restore database	﻿2026-04-19T14:36:23.0223486Z ##[group]Run set -uo pipefail
+Restore drill	Restore database	2026-04-19T14:36:23.0223853Z [36;1mset -uo pipefail[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0224117Z [36;1mcd "$RUNNER_TEMP/restore"[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0224427Z [36;1mDUMP=$(ls db-*.dump | head -1)[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0224845Z [36;1m# Explicit path so pg_wrapper can't drop us back onto an older[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0225282Z [36;1m# binary that doesn't understand the dump format.[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0225665Z [36;1mPG_RESTORE=/usr/lib/postgresql/18/bin/pg_restore[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0225993Z [36;1mSTART=$(date +%s)[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0226325Z [36;1m# We do NOT use --exit-on-error: a Supabase dump will always[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0227047Z [36;1m# produce a handful of tolerable errors (extensions only[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0227509Z [36;1m# available in managed Supabase, roles owned by the platform).[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0227975Z [36;1m# Capture stderr to a log so the eval step can grade what[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0228371Z [36;1m# actually failed vs what was expected noise.[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0228719Z [36;1mset +e[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0228953Z [36;1m"$PG_RESTORE" \[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0229221Z [36;1m  --no-owner --no-privileges \[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0229518Z [36;1m  --clean --if-exists \[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0230096Z [36;1m  --dbname=***localhost:5432/drill \[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0230406Z [36;1m  --jobs=4 \[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0230656Z [36;1m  "$DUMP" \[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0230917Z [36;1m  2> "$RUNNER_TEMP/pg_restore.stderr"[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0231218Z [36;1mPG_RESTORE_RC=$?[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0231450Z [36;1mset -e[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0231667Z [36;1mEND=$(date +%s)[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0231913Z [36;1mDURATION=$((END - START))[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0232229Z [36;1mecho "restore_seconds=$DURATION" >> "$GITHUB_ENV"[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0232626Z [36;1mecho "pg_restore_rc=$PG_RESTORE_RC"  >> "$GITHUB_ENV"[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0233069Z [36;1mecho "Restore took ${DURATION}s (pg_restore exit ${PG_RESTORE_RC})"[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0233470Z [36;1mecho "--- stderr tail ---"[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0233822Z [36;1mtail -n 40 "$RUNNER_TEMP/pg_restore.stderr" || true[0m
+Restore drill	Restore database	2026-04-19T14:36:23.0254397Z shell: /usr/bin/bash -e {0}
+Restore drill	Restore database	2026-04-19T14:36:23.0254661Z env:
+Restore drill	Restore database	2026-04-19T14:36:23.0254863Z   TZ: America/Sao_Paulo
+Restore drill	Restore database	2026-04-19T14:36:23.0255306Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Restore database	2026-04-19T14:36:23.0255705Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Restore database	2026-04-19T14:36:23.0256119Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Restore database	2026-04-19T14:36:23.0256373Z   AWS_DEFAULT_REGION: auto
+Restore drill	Restore database	2026-04-19T14:36:23.0256899Z   PGPASSWORD: drill
+Restore drill	Restore database	2026-04-19T14:36:23.0257132Z ##[endgroup]
+Restore drill	Restore database	2026-04-19T14:36:23.8386970Z Restore took 0s (pg_restore exit 1)
+Restore drill	Restore database	2026-04-19T14:36:23.8387564Z --- stderr tail ---
+Restore drill	Restore database	2026-04-19T14:36:23.8397052Z pg_restore: error: could not execute query: ERROR:  cannot drop schema vault because other objects depend on it
+Restore drill	Restore database	2026-04-19T14:36:23.8397977Z DETAIL:  table vault.secrets depends on schema vault
+Restore drill	Restore database	2026-04-19T14:36:23.8398735Z HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+Restore drill	Restore database	2026-04-19T14:36:23.8399435Z Command was: DROP SCHEMA IF EXISTS vault;
+Restore drill	Restore database	2026-04-19T14:36:23.8400318Z pg_restore: error: could not execute query: ERROR:  cannot drop schema extensions because other objects depend on it
+Restore drill	Restore database	2026-04-19T14:36:23.8401560Z DETAIL:  extension pg_trgm depends on schema extensions
+Restore drill	Restore database	2026-04-19T14:36:23.8402162Z extension btree_gin depends on schema extensions
+Restore drill	Restore database	2026-04-19T14:36:23.8402722Z extension btree_gist depends on schema extensions
+Restore drill	Restore database	2026-04-19T14:36:23.8403341Z HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+Restore drill	Restore database	2026-04-19T14:36:23.8403951Z Command was: DROP SCHEMA IF EXISTS extensions;
+Restore drill	Restore database	2026-04-19T14:36:23.8404678Z pg_restore: error: could not execute query: ERROR:  schema "extensions" already exists
+Restore drill	Restore database	2026-04-19T14:36:23.8405405Z Command was: CREATE SCHEMA extensions;
+Restore drill	Restore database	2026-04-19T14:36:23.8405605Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8405611Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8405834Z pg_restore: error: could not execute query: ERROR:  schema "vault" already exists
+Restore drill	Restore database	2026-04-19T14:36:23.8406436Z Command was: CREATE SCHEMA vault;
+Restore drill	Restore database	2026-04-19T14:36:23.8406937Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8406947Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8407348Z pg_restore: error: could not execute query: ERROR:  extension "pg_graphql" is not available
+Restore drill	Restore database	2026-04-19T14:36:23.8408332Z HINT:  The extension must first be installed on the system where PostgreSQL is running.
+Restore drill	Restore database	2026-04-19T14:36:23.8409105Z Command was: CREATE EXTENSION IF NOT EXISTS pg_graphql WITH SCHEMA graphql;
+Restore drill	Restore database	2026-04-19T14:36:23.8409403Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8409407Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8409649Z pg_restore: error: could not execute query: ERROR:  extension "pg_graphql" does not exist
+Restore drill	Restore database	2026-04-19T14:36:23.8410194Z Command was: COMMENT ON EXTENSION pg_graphql IS 'pg_graphql: GraphQL support';
+Restore drill	Restore database	2026-04-19T14:36:23.8410497Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8410500Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8410758Z pg_restore: error: could not execute query: ERROR:  extension "supabase_vault" is not available
+Restore drill	Restore database	2026-04-19T14:36:23.8411340Z HINT:  The extension must first be installed on the system where PostgreSQL is running.
+Restore drill	Restore database	2026-04-19T14:36:23.8411883Z Command was: CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;
+Restore drill	Restore database	2026-04-19T14:36:23.8412191Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8412200Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8412454Z pg_restore: error: could not execute query: ERROR:  extension "supabase_vault" does not exist
+Restore drill	Restore database	2026-04-19T14:36:23.8413004Z Command was: COMMENT ON EXTENSION supabase_vault IS 'Supabase Vault Extension';
+Restore drill	Restore database	2026-04-19T14:36:23.8413309Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8413319Z 
+Restore drill	Restore database	2026-04-19T14:36:23.8413451Z pg_restore: warning: errors ignored on restore: 8
+Restore drill	Evaluate restore outcome	﻿2026-04-19T14:36:23.8439327Z ##[group]Run set -euo pipefail
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8439698Z [36;1mset -euo pipefail[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8440010Z [36;1mERR_LOG="$RUNNER_TEMP/pg_restore.stderr"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8440433Z [36;1m[ -f "$ERR_LOG" ] || { echo "::error::pg_restore stderr missing"; exit 1; }[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8440904Z [36;1mTOTAL=$(grep -c '^pg_restore: error:' "$ERR_LOG" || true)[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8441362Z [36;1m# Tolerable: extensions only available inside Supabase, plus[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8441815Z [36;1m# ALTER OWNER / GRANT to platform-owned roles that we can't[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8442296Z [36;1m# impersonate. These cannot be exercised in a vanilla PG drill.[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8442689Z [36;1m# Tolerable patterns:[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8443048Z [36;1m#  1. Supabase-managed extensions not available in vanilla PG[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8443520Z [36;1m#  2. Supabase-managed role names (rare here since we pre-create them)[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8443990Z [36;1m#  3. Schema already exists / cannot drop schema — direct[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8444459Z [36;1m#     consequence of bootstrapping the same schemas the dump[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8444873Z [36;1m#     also tries to recreate via --clean --if-exists.[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8445299Z [36;1mTOLERABLE=$(grep -E '^pg_restore: error:' "$ERR_LOG" | grep -cE \[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8447627Z [36;1m  'extension "(pg_graphql|supabase_vault|pgsodium|pg_net|pgaudit|pg_cron|pg_jsonschema|wrappers|hypopg|index_advisor|pgmq|http|plpgsql_check|plv8)"|role "(supabase_admin|supabase_auth_admin|supabase_storage_admin|supabase_realtime_admin|supabase_functions_admin|supabase_replication_admin|pgsodium_|authenticator)"|schema "(vault|extensions|auth|storage|realtime|graphql|graphql_public|_realtime|supabase_functions)" already exists|cannot drop schema (vault|extensions|auth|storage|realtime|graphql|graphql_public|_realtime|supabase_functions)' \[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8449808Z [36;1m  || true)[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8450042Z [36;1mREAL=$((TOTAL - TOLERABLE))[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8450435Z [36;1mecho "pg_restore errors: total=$TOTAL tolerable=$TOLERABLE real=$REAL"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8450824Z [36;1m{[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8451049Z [36;1m  echo "## pg_restore error summary"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8451341Z [36;1m  echo "- total: $TOTAL"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8451706Z [36;1m  echo "- tolerable (Supabase-managed extensions/roles): $TOLERABLE"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8452093Z [36;1m  echo "- **real:** $REAL"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8452359Z [36;1m} >> "$GITHUB_STEP_SUMMARY"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8452710Z [36;1m# Threshold: allow up to 25 unaccounted errors before failing.[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8453156Z [36;1m# A real corruption or schema drift produces hundreds.[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8453496Z [36;1mif [ "$REAL" -gt 25 ]; then[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8453884Z [36;1m  echo "::error::$REAL unexpected pg_restore errors — see stderr log artefact"[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8454289Z [36;1m  exit 1[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8454495Z [36;1mfi[0m
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8474849Z shell: /usr/bin/bash -e {0}
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8475109Z env:
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8475312Z   TZ: America/Sao_Paulo
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8475759Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8476187Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8476880Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8477152Z   AWS_DEFAULT_REGION: auto
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8477395Z   restore_seconds: 0
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8477616Z   pg_restore_rc: 1
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8477829Z ##[endgroup]
+Restore drill	Evaluate restore outcome	2026-04-19T14:36:23.8556083Z pg_restore errors: total=8 tolerable=8 real=0
+Restore drill	Storage archive structural check	﻿2026-04-19T14:36:23.8590069Z ##[group]Run set -euo pipefail
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8590402Z [36;1mset -euo pipefail[0m
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8590668Z [36;1mcd "$RUNNER_TEMP/restore"[0m
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8590959Z [36;1mSTG=$(ls storage-*.tgz | head -1)[0m
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8591249Z [36;1mtar -tzf "$STG" >/dev/null[0m
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8591534Z [36;1mecho "Storage archive header OK"[0m
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8610318Z shell: /usr/bin/bash -e {0}
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8610577Z env:
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8610776Z   TZ: America/Sao_Paulo
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8611204Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8611611Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8612021Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8612280Z   AWS_DEFAULT_REGION: auto
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8612518Z   restore_seconds: 0
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8612741Z   pg_restore_rc: 1
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8612953Z ##[endgroup]
+Restore drill	Storage archive structural check	2026-04-19T14:36:23.8708048Z Storage archive header OK
+Restore drill	Integrity queries	﻿2026-04-19T14:36:23.8731876Z ##[group]Run set -euo pipefail
+Restore drill	Integrity queries	2026-04-19T14:36:23.8732225Z [36;1mset -euo pipefail[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8732829Z [36;1mPSQL="/usr/lib/postgresql/18/bin/psql ***localhost:5432/drill -X -A -t -c"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8733353Z [36;1m# Each query is wrapped: missing tables are flagged but don't[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8733794Z [36;1m# short-circuit the rest of the integrity sweep. The drill[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8734211Z [36;1m# cares about which tables came back, not about a single[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8734565Z [36;1m# missing optional one.[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8734823Z [36;1mprobe() {[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8735069Z [36;1m  local label="$1"; local sql="$2"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8735357Z [36;1m  local out[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8735598Z [36;1m  if out=$($PSQL "$sql" 2>&1); then[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8735883Z [36;1m    echo "  ✓ $label: $out"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8736137Z [36;1m  else[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8736395Z [36;1m    echo "  ✗ $label: $(echo "$out" | head -1)"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8737247Z [36;1m  fi[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8737456Z [36;1m}[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8737675Z [36;1mecho "Tables present:"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8738116Z [36;1mprobe "public tables count"  "SELECT count(*) FROM pg_tables WHERE schemaname='public';"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8738734Z [36;1mprobe "auth tables count"    "SELECT count(*) FROM pg_tables WHERE schemaname='auth';"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8739186Z [36;1mecho "Row counts:"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8739523Z [36;1mprobe "auth.users"            "SELECT count(*) FROM auth.users;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8739986Z [36;1mprobe "public.orders"         "SELECT count(*) FROM public.orders;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8740475Z [36;1mprobe "public.payments"       "SELECT count(*) FROM public.payments;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8740984Z [36;1mprobe "public.audit_logs"     "SELECT count(*) FROM public.audit_logs;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8741515Z [36;1mprobe "public.audit_logs max" "SELECT max(created_at) FROM public.audit_logs;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8742139Z [36;1mprobe "public.audit_chain_checkpoints" "SELECT count(*) FROM public.audit_chain_checkpoints;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8742747Z [36;1mprobe "public.feature_flags"  "SELECT count(*) FROM public.feature_flags;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8743264Z [36;1mprobe "public.products"       "SELECT count(*) FROM public.products;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8743769Z [36;1mprobe "public.pharmacies"     "SELECT count(*) FROM public.pharmacies;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8744263Z [36;1mprobe "public.clinics"        "SELECT count(*) FROM public.clinics;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8744777Z [36;1mprobe "public.prescriptions"  "SELECT count(*) FROM public.prescriptions;"[0m
+Restore drill	Integrity queries	2026-04-19T14:36:23.8774292Z shell: /usr/bin/bash -e {0}
+Restore drill	Integrity queries	2026-04-19T14:36:23.8774554Z env:
+Restore drill	Integrity queries	2026-04-19T14:36:23.8774755Z   TZ: America/Sao_Paulo
+Restore drill	Integrity queries	2026-04-19T14:36:23.8775190Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Integrity queries	2026-04-19T14:36:23.8775600Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Integrity queries	2026-04-19T14:36:23.8776014Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Integrity queries	2026-04-19T14:36:23.8776284Z   AWS_DEFAULT_REGION: auto
+Restore drill	Integrity queries	2026-04-19T14:36:23.8776783Z   restore_seconds: 0
+Restore drill	Integrity queries	2026-04-19T14:36:23.8777030Z   pg_restore_rc: 1
+Restore drill	Integrity queries	2026-04-19T14:36:23.8777247Z   PGPASSWORD: drill
+Restore drill	Integrity queries	2026-04-19T14:36:23.8777473Z ##[endgroup]
+Restore drill	Integrity queries	2026-04-19T14:36:23.8814479Z Tables present:
+Restore drill	Integrity queries	2026-04-19T14:36:23.8974656Z   ✓ public tables count: 65
+Restore drill	Integrity queries	2026-04-19T14:36:23.9131151Z   ✓ auth tables count: 23
+Restore drill	Integrity queries	2026-04-19T14:36:23.9131687Z Row counts:
+Restore drill	Integrity queries	2026-04-19T14:36:23.9277957Z   ✓ auth.users: 9
+Restore drill	Integrity queries	2026-04-19T14:36:23.9420718Z   ✓ public.orders: 3
+Restore drill	Integrity queries	2026-04-19T14:36:23.9562981Z   ✓ public.payments: 3
+Restore drill	Integrity queries	2026-04-19T14:36:23.9698787Z   ✓ public.audit_logs: 37
+Restore drill	Integrity queries	2026-04-19T14:36:23.9841499Z   ✓ public.audit_logs max: 2026-04-15 16:00:11.385003+00
+Restore drill	Integrity queries	2026-04-19T14:36:23.9976363Z   ✓ public.audit_chain_checkpoints: 1
+Restore drill	Integrity queries	2026-04-19T14:36:24.0116224Z   ✓ public.feature_flags: 17
+Restore drill	Integrity queries	2026-04-19T14:36:24.0254858Z   ✓ public.products: 5
+Restore drill	Integrity queries	2026-04-19T14:36:24.0390914Z   ✓ public.pharmacies: 2
+Restore drill	Integrity queries	2026-04-19T14:36:24.0540596Z   ✓ public.clinics: 2
+Restore drill	Integrity queries	2026-04-19T14:36:24.0710989Z   ✗ public.prescriptions: ERROR:  relation "public.prescriptions" does not exist
+Restore drill	Upload pg_restore stderr (for forensics)	﻿2026-04-19T14:36:24.0780944Z ##[group]Run actions/upload-artifact@v7
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0781274Z with:
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0781495Z   name: pg_restore-stderr
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0781786Z   path: /home/runner/work/_temp/pg_restore.stderr
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0782097Z   retention-days: 30
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0782331Z   if-no-files-found: ignore
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0782576Z   compression-level: 6
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0782802Z   overwrite: false
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0783020Z   include-hidden-files: false
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0783264Z   archive: true
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0783464Z env:
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0783653Z   TZ: America/Sao_Paulo
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0784087Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0784469Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0784899Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0785152Z   AWS_DEFAULT_REGION: auto
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0785389Z   restore_seconds: 0
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0785779Z   pg_restore_rc: 1
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.0785991Z ##[endgroup]
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.2238281Z With the provided path, there will be 1 file uploaded
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.2243280Z Artifact name is valid!
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.2243971Z Root directory input is valid!
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.4826910Z Uploading artifact: pg_restore-stderr.zip
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.4873616Z Beginning upload of artifact content to blob storage
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.8102770Z Uploaded bytes 625
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.8893163Z Finished uploading artifact content to blob storage!
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.8894205Z SHA256 digest of uploaded artifact is 3a1d94169c4ffeeca6408b8a09131802667b9f1bd9b5c7c43689bf4bd3926671
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:24.8895119Z Finalizing artifact upload
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:25.1891680Z Artifact pg_restore-stderr successfully finalized. Artifact ID 6518878161
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:25.1893247Z Artifact pg_restore-stderr has been successfully uploaded! Final size is 625 bytes. Artifact ID is 6518878161
+Restore drill	Upload pg_restore stderr (for forensics)	2026-04-19T14:36:25.1896972Z Artifact download URL: https://github.com/cabralandre82/clinipharma/actions/runs/24631516271/artifacts/6518878161
+Restore drill	Record outcome to platform ledger	﻿2026-04-19T14:36:25.2000948Z ##[group]Run if [ -z "${LEDGER_URL:-}" ] || [ -z "${LEDGER_SECRET:-}" ]; then
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2001495Z [36;1mif [ -z "${LEDGER_URL:-}" ] || [ -z "${LEDGER_SECRET:-}" ]; then[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2001991Z [36;1m  echo "::warning::BACKUP_LEDGER_URL/SECRET unset — skipping ledger record"[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2002402Z [36;1m  exit 0[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2002619Z [36;1mfi[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2002829Z [36;1mOUTCOME=ok[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2003092Z [36;1m[ "success" = "success" ] || OUTCOME=fail[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2003396Z [36;1mBODY=$(jq -cn \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2003661Z [36;1m  --arg kind "RESTORE_DRILL" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2003961Z [36;1m  --arg label "monthly" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2004269Z [36;1m  --arg prefix "weekly/20260419T080245Z" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2004590Z [36;1m  --arg outcome "$OUTCOME" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2005077Z [36;1m  --arg url "https://github.com/cabralandre82/clinipharma/actions/runs/24631516271" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2005603Z [36;1m  --argjson dur "${restore_seconds:-0}" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2006025Z [36;1m  --arg commit "4112341f3f208a0d96fb7950ba705a7a530cb5a3" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2007024Z [36;1m  '{kind: $kind, label: $label, r2_prefix: $prefix, outcome: $outcome, source_url: $url, metadata: {restore_seconds: $dur, commit: $commit}}')[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2007645Z [36;1mfor DELAY in 2 5 15 0; do[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2007993Z [36;1m  HTTP=$(curl -sS -o /tmp/ledger.json -w '%{http_code}' \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2008355Z [36;1m    -X POST "$LEDGER_URL" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2008764Z [36;1m    -H "Authorization: ***" \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2009105Z [36;1m    -H 'Content-Type: application/json' \[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2009429Z [36;1m    -d "$BODY") || HTTP=000[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2009744Z [36;1m  if [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ]; then[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2010137Z [36;1m    echo "Ledger recorded: $(cat /tmp/ledger.json)"[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2010471Z [36;1m    exit 0[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2010699Z [36;1m  fi[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2011023Z [36;1m  echo "::warning::ledger POST returned $HTTP, retrying in ${DELAY}s"[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2011444Z [36;1m  [ "$DELAY" = "0" ] || sleep "$DELAY"[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2011729Z [36;1mdone[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2012045Z [36;1mecho "::error::failed to record restore-drill into platform ledger"[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2012446Z [36;1mcat /tmp/ledger.json || true[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2012723Z [36;1mexit 0[0m
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2033147Z shell: /usr/bin/bash -e {0}
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2033417Z env:
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2033626Z   TZ: America/Sao_Paulo
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2034056Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2034459Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2034870Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2035297Z   AWS_DEFAULT_REGION: auto
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2035541Z   restore_seconds: 0
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2035765Z   pg_restore_rc: 1
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2035998Z   LEDGER_URL: 
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2036217Z   LEDGER_SECRET: 
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2036433Z ##[endgroup]
+Restore drill	Record outcome to platform ledger	2026-04-19T14:36:25.2092531Z ##[warning]BACKUP_LEDGER_URL/SECRET unset — skipping ledger record
+Restore drill	Write drill result to summary	﻿2026-04-19T14:36:25.2132131Z ##[group]Run {
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2132485Z [36;1m{[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2132765Z [36;1m  echo "# Restore drill — $(date -Iseconds)"[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2133084Z [36;1m  echo ""[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2133381Z [36;1m  echo "**Source prefix:** weekly/20260419T080245Z"[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2133725Z [36;1m  echo ""[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2134015Z [36;1m  echo "**Restore duration:** ${restore_seconds:-?} s"[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2134350Z [36;1m  echo ""[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2134586Z [36;1m  echo "**Status:** success"[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2134873Z [36;1m} >> "$GITHUB_STEP_SUMMARY"[0m
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2153421Z shell: /usr/bin/bash -e {0}
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2153688Z env:
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2153902Z   TZ: America/Sao_Paulo
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2154330Z   R2_ENDPOINT: https://***.r2.cloudflarestorage.com
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2154733Z   AWS_ACCESS_KEY_ID: ***
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2155154Z   AWS_SECRET_ACCESS_KEY: ***
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2155420Z   AWS_DEFAULT_REGION: auto
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2155715Z   restore_seconds: 0
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2155941Z   pg_restore_rc: 1
+Restore drill	Write drill result to summary	2026-04-19T14:36:25.2156156Z ##[endgroup]
+Restore drill	Post Run actions/checkout@v6	﻿2026-04-19T14:36:25.2269405Z Post job cleanup.
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3042330Z [command]/usr/bin/git version
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3080286Z git version 2.53.0
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3154334Z Temporarily overriding HOME='/home/runner/work/_temp/5a626e9d-88ec-4e4a-b769-dda820f3ddbd' before making global git config changes
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3155763Z Adding repository directory to the temporary git global config as a safe directory
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3160712Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/clinipharma/clinipharma
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3191052Z Removing SSH command configuration
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3197976Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3232347Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3449931Z Removing HTTP extra header
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3454273Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3485680Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3698321Z Removing includeIf entries pointing to credentials config files
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3704460Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3727113Z includeif.gitdir:/home/runner/work/clinipharma/clinipharma/.git.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3728181Z includeif.gitdir:/home/runner/work/clinipharma/clinipharma/.git/worktrees/*.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3729066Z includeif.gitdir:/github/workspace/.git.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3729749Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3738656Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/clinipharma/clinipharma/.git.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3760237Z /home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3770522Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/clinipharma/clinipharma/.git.path /home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3802213Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/clinipharma/clinipharma/.git/worktrees/*.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3823056Z /home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3833285Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/clinipharma/clinipharma/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3863351Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3883491Z /github/runner_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3892393Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3922561Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3942977Z /github/runner_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3951539Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.3981714Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Restore drill	Post Run actions/checkout@v6	2026-04-19T14:36:25.4217833Z Removing credentials config '/home/runner/work/_temp/git-credentials-7deaab3a-44fc-4827-8ef3-1405d06ae6ce.config'
+Restore drill	Stop containers	﻿2026-04-19T14:36:25.4339495Z Print service container logs: c06619223b7549d5ae02df5d3515425c_postgres18_0f8c00
+Restore drill	Stop containers	2026-04-19T14:36:25.4344396Z ##[command]/usr/bin/docker logs --details cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Stop containers	2026-04-19T14:36:25.4478977Z  initdb: warning: enabling "trust" authentication for local connections
+Restore drill	Stop containers	2026-04-19T14:36:25.4480548Z  The files belonging to this database system will be owned by user "postgres".
+Restore drill	Stop containers	2026-04-19T14:36:25.4481768Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+Restore drill	Stop containers	2026-04-19T14:36:25.4482980Z  2026-04-19 14:35:51.991 UTC [1] LOG:  starting PostgreSQL 18.3 (Debian 18.3-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+Restore drill	Stop containers	2026-04-19T14:36:25.4537595Z  2026-04-19 14:35:51.991 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+Restore drill	Stop containers	2026-04-19T14:36:25.4538519Z  2026-04-19 14:35:51.991 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+Restore drill	Stop containers	2026-04-19T14:36:25.4539345Z  2026-04-19 14:35:51.992 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+Restore drill	Stop containers	2026-04-19T14:36:25.4540333Z  2026-04-19 14:35:51.996 UTC [73] LOG:  database system was shut down at 2026-04-19 14:35:51 UTC
+Restore drill	Stop containers	2026-04-19T14:36:25.4541045Z  2026-04-19 14:35:51.999 UTC [1] LOG:  database system is ready to accept connections
+Restore drill	Stop containers	2026-04-19T14:36:25.4541596Z  2026-04-19 14:36:23.017 UTC [126] WARNING:  "wal_level" is insufficient to publish logical changes
+Restore drill	Stop containers	2026-04-19T14:36:25.4542220Z  2026-04-19 14:36:23.017 UTC [126] HINT:  Set "wal_level" to "logical" before creating subscriptions.
+Restore drill	Stop containers	2026-04-19T14:36:25.4542805Z  2026-04-19 14:36:23.017 UTC [126] CONTEXT:  SQL statement "CREATE PUBLICATION supabase_realtime"
+Restore drill	Stop containers	2026-04-19T14:36:25.4543320Z  	PL/pgSQL function inline_code_block line 1 at SQL statement
+Restore drill	Stop containers	2026-04-19T14:36:25.4543834Z  2026-04-19 14:36:23.198 UTC [127] ERROR:  cannot drop schema vault because other objects depend on it
+Restore drill	Stop containers	2026-04-19T14:36:25.4544388Z  2026-04-19 14:36:23.198 UTC [127] DETAIL:  table vault.secrets depends on schema vault
+Restore drill	Stop containers	2026-04-19T14:36:25.4544955Z  2026-04-19 14:36:23.198 UTC [127] HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+Restore drill	Stop containers	2026-04-19T14:36:25.4545453Z  2026-04-19 14:36:23.198 UTC [127] STATEMENT:  DROP SCHEMA IF EXISTS vault;
+Restore drill	Stop containers	2026-04-19T14:36:25.4545806Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4546172Z  2026-04-19 14:36:23.216 UTC [127] ERROR:  cannot drop schema extensions because other objects depend on it
+Restore drill	Stop containers	2026-04-19T14:36:25.4547348Z  2026-04-19 14:36:23.216 UTC [127] DETAIL:  extension pg_trgm depends on schema extensions
+Restore drill	Stop containers	2026-04-19T14:36:25.4547804Z  	extension btree_gin depends on schema extensions
+Restore drill	Stop containers	2026-04-19T14:36:25.4548153Z  	extension btree_gist depends on schema extensions
+Restore drill	Stop containers	2026-04-19T14:36:25.4548599Z  2026-04-19 14:36:23.216 UTC [127] HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+Restore drill	Stop containers	2026-04-19T14:36:25.4549119Z  2026-04-19 14:36:23.216 UTC [127] STATEMENT:  DROP SCHEMA IF EXISTS extensions;
+Restore drill	Stop containers	2026-04-19T14:36:25.4549482Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4549768Z  2026-04-19 14:36:23.221 UTC [127] ERROR:  schema "extensions" already exists
+Restore drill	Stop containers	2026-04-19T14:36:25.4550215Z  2026-04-19 14:36:23.221 UTC [127] STATEMENT:  CREATE SCHEMA extensions;
+Restore drill	Stop containers	2026-04-19T14:36:25.4550557Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4550732Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4550907Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4551161Z  2026-04-19 14:36:23.223 UTC [127] ERROR:  schema "vault" already exists
+Restore drill	Stop containers	2026-04-19T14:36:25.4551569Z  2026-04-19 14:36:23.223 UTC [127] STATEMENT:  CREATE SCHEMA vault;
+Restore drill	Stop containers	2026-04-19T14:36:25.4551901Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4552070Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4552236Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4552518Z  2026-04-19 14:36:23.223 UTC [127] ERROR:  extension "pg_graphql" is not available
+Restore drill	Stop containers	2026-04-19T14:36:25.4553115Z  2026-04-19 14:36:23.223 UTC [127] HINT:  The extension must first be installed on the system where PostgreSQL is running.
+Restore drill	Stop containers	2026-04-19T14:36:25.4553849Z  2026-04-19 14:36:23.223 UTC [127] STATEMENT:  CREATE EXTENSION IF NOT EXISTS pg_graphql WITH SCHEMA graphql;
+Restore drill	Stop containers	2026-04-19T14:36:25.4554544Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4554719Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4554888Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4555165Z  2026-04-19 14:36:23.224 UTC [127] ERROR:  extension "pg_graphql" does not exist
+Restore drill	Stop containers	2026-04-19T14:36:25.4555732Z  2026-04-19 14:36:23.224 UTC [127] STATEMENT:  COMMENT ON EXTENSION pg_graphql IS 'pg_graphql: GraphQL support';
+Restore drill	Stop containers	2026-04-19T14:36:25.4556194Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4556364Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4556777Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4557110Z  2026-04-19 14:36:23.238 UTC [127] ERROR:  extension "supabase_vault" is not available
+Restore drill	Stop containers	2026-04-19T14:36:25.4557746Z  2026-04-19 14:36:23.238 UTC [127] HINT:  The extension must first be installed on the system where PostgreSQL is running.
+Restore drill	Stop containers	2026-04-19T14:36:25.4558443Z  2026-04-19 14:36:23.238 UTC [127] STATEMENT:  CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;
+Restore drill	Stop containers	2026-04-19T14:36:25.4558901Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4559074Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4559246Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4559535Z  2026-04-19 14:36:23.238 UTC [127] ERROR:  extension "supabase_vault" does not exist
+Restore drill	Stop containers	2026-04-19T14:36:25.4560119Z  2026-04-19 14:36:23.238 UTC [127] STATEMENT:  COMMENT ON EXTENSION supabase_vault IS 'Supabase Vault Extension';
+Restore drill	Stop containers	2026-04-19T14:36:25.4560591Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4560763Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4560930Z  	
+Restore drill	Stop containers	2026-04-19T14:36:25.4561263Z  2026-04-19 14:36:23.806 UTC [131] WARNING:  "wal_level" is insufficient to publish logical changes
+Restore drill	Stop containers	2026-04-19T14:36:25.4561839Z  2026-04-19 14:36:23.806 UTC [131] HINT:  Set "wal_level" to "logical" before creating subscriptions.
+Restore drill	Stop containers	2026-04-19T14:36:25.4562420Z  2026-04-19 14:36:23.808 UTC [128] WARNING:  "wal_level" is insufficient to publish logical changes
+Restore drill	Stop containers	2026-04-19T14:36:25.4562996Z  2026-04-19 14:36:23.808 UTC [128] HINT:  Set "wal_level" to "logical" before creating subscriptions.
+Restore drill	Stop containers	2026-04-19T14:36:25.4563610Z  2026-04-19 14:36:24.067 UTC [145] ERROR:  relation "public.prescriptions" does not exist at character 22
+Restore drill	Stop containers	2026-04-19T14:36:25.4564193Z  2026-04-19 14:36:24.067 UTC [145] STATEMENT:  SELECT count(*) FROM public.prescriptions;
+Restore drill	Stop containers	2026-04-19T14:36:25.4564646Z  This user must also own the server process.
+Restore drill	Stop containers	2026-04-19T14:36:25.4564927Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4565220Z  The database cluster will be initialized with locale "en_US.utf8".
+Restore drill	Stop containers	2026-04-19T14:36:25.4565672Z  The default database encoding has accordingly been set to "UTF8".
+Restore drill	Stop containers	2026-04-19T14:36:25.4566107Z  The default text search configuration will be set to "english".
+Restore drill	Stop containers	2026-04-19T14:36:25.4566444Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4567033Z  Data page checksums are enabled.
+Restore drill	Stop containers	2026-04-19T14:36:25.4567298Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4567620Z  fixing permissions on existing directory /var/lib/postgresql/18/docker ... ok
+Restore drill	Stop containers	2026-04-19T14:36:25.4568048Z  creating subdirectories ... ok
+Restore drill	Stop containers	2026-04-19T14:36:25.4568373Z  selecting dynamic shared memory implementation ... posix
+Restore drill	Stop containers	2026-04-19T14:36:25.4568736Z  selecting default "max_connections" ... 100
+Restore drill	Stop containers	2026-04-19T14:36:25.4569053Z  selecting default "shared_buffers" ... 128MB
+Restore drill	Stop containers	2026-04-19T14:36:25.4569357Z  selecting default time zone ... Etc/UTC
+Restore drill	Stop containers	2026-04-19T14:36:25.4569653Z  creating configuration files ... ok
+Restore drill	Stop containers	2026-04-19T14:36:25.4569944Z  running bootstrap script ... ok
+Restore drill	Stop containers	2026-04-19T14:36:25.4570260Z  performing post-bootstrap initialization ... ok
+Restore drill	Stop containers	2026-04-19T14:36:25.4570571Z  syncing data to disk ... ok
+Restore drill	Stop containers	2026-04-19T14:36:25.4570812Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4570992Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4571232Z  Success. You can now start the database server using:
+Restore drill	Stop containers	2026-04-19T14:36:25.4571533Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4571801Z      pg_ctl -D /var/lib/postgresql/18/docker -l logfile start
+Restore drill	Stop containers	2026-04-19T14:36:25.4572124Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4572770Z  waiting for server to start....2026-04-19 14:35:51.668 UTC [51] LOG:  starting PostgreSQL 18.3 (Debian 18.3-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+Restore drill	Stop containers	2026-04-19T14:36:25.4573648Z  2026-04-19 14:35:51.669 UTC [51] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+Restore drill	Stop containers	2026-04-19T14:36:25.4574218Z  2026-04-19 14:35:51.673 UTC [57] LOG:  database system was shut down at 2026-04-19 14:35:51 UTC
+Restore drill	Stop containers	2026-04-19T14:36:25.4574874Z  2026-04-19 14:35:51.676 UTC [51] LOG:  database system is ready to accept connections
+Restore drill	Stop containers	2026-04-19T14:36:25.4575250Z   done
+Restore drill	Stop containers	2026-04-19T14:36:25.4575442Z  server started
+Restore drill	Stop containers	2026-04-19T14:36:25.4575650Z  CREATE DATABASE
+Restore drill	Stop containers	2026-04-19T14:36:25.4575856Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4576029Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4576350Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+Restore drill	Stop containers	2026-04-19T14:36:25.4577067Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4577451Z  waiting for server to shut down...2026-04-19 14:35:51.870 UTC [51] LOG:  received fast shutdown request
+Restore drill	Stop containers	2026-04-19T14:36:25.4577986Z  .2026-04-19 14:35:51.871 UTC [51] LOG:  aborting any active transactions
+Restore drill	Stop containers	2026-04-19T14:36:25.4578569Z  2026-04-19 14:35:51.873 UTC [51] LOG:  background worker "logical replication launcher" (PID 60) exited with exit code 1
+Restore drill	Stop containers	2026-04-19T14:36:25.4579110Z  2026-04-19 14:35:51.874 UTC [55] LOG:  shutting down
+Restore drill	Stop containers	2026-04-19T14:36:25.4579509Z  2026-04-19 14:35:51.875 UTC [55] LOG:  checkpoint starting: shutdown immediate
+Restore drill	Stop containers	2026-04-19T14:36:25.4580666Z  2026-04-19 14:35:51.891 UTC [55] LOG:  checkpoint complete: wrote 943 buffers (5.8%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.012 s, sync=0.003 s, total=0.017 s; sync files=303, longest=0.002 s, average=0.001 s; distance=4352 kB, estimate=4352 kB; lsn=0/1B9FBA0, redo lsn=0/1B9FBA0
+Restore drill	Stop containers	2026-04-19T14:36:25.4581787Z  2026-04-19 14:35:51.901 UTC [51] LOG:  database system is shut down
+Restore drill	Stop containers	2026-04-19T14:36:25.4582120Z   done
+Restore drill	Stop containers	2026-04-19T14:36:25.4582315Z  server stopped
+Restore drill	Stop containers	2026-04-19T14:36:25.4582515Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4582757Z  PostgreSQL init process complete; ready for start up.
+Restore drill	Stop containers	2026-04-19T14:36:25.4583063Z  
+Restore drill	Stop containers	2026-04-19T14:36:25.4589158Z Stop and remove container: c06619223b7549d5ae02df5d3515425c_postgres18_0f8c00
+Restore drill	Stop containers	2026-04-19T14:36:25.4593762Z ##[command]/usr/bin/docker rm --force cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Stop containers	2026-04-19T14:36:25.9746976Z cfccb94250d6f5fa4002b421a91bf0ceed8cc05803af86feba7653ebbc3d0bd8
+Restore drill	Stop containers	2026-04-19T14:36:25.9772450Z Remove container network: github_network_7d82adb427c2464fa00b686213032aea
+Restore drill	Stop containers	2026-04-19T14:36:25.9777425Z ##[command]/usr/bin/docker network rm github_network_7d82adb427c2464fa00b686213032aea
+Restore drill	Stop containers	2026-04-19T14:36:26.0892708Z github_network_7d82adb427c2464fa00b686213032aea
+Restore drill	Complete job	﻿2026-04-19T14:36:26.0954057Z Cleaning up orphan processes

@@ -306,7 +306,7 @@ jobs:
           probe "public.products"       "SELECT count(*) FROM public.products;"
           probe "public.pharmacies"     "SELECT count(*) FROM public.pharmacies;"
           probe "public.clinics"        "SELECT count(*) FROM public.clinics;"
-          probe "public.prescriptions"  "SELECT count(*) FROM public.prescriptions;"
+          probe "public.order_item_prescriptions" "SELECT count(*) FROM public.order_item_prescriptions;"
 
       - name: Upload pg_restore stderr (for forensics)
         if: always()

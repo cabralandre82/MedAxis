@@ -1,10 +1,13 @@
 # DISASTER RECOVERY DRILL — 2026 Q2
 
-**Status:** ✅ EXECUTADO (modo tabletop) em **2026-04-18**.
-**Próximo drill (live):** 2026-Q3 — após provisão de staging Vercel + Supabase.
+**Status:**
 
-**Evidência da execução tabletop:** `docs/security/dr-evidence/2026-04-18/`
-**Postmortem:** `docs/security/dr-evidence/2026-04-18/postmortem.md`
+- ✅ EXECUTADO (modo tabletop, 5 cenários) em **2026-04-18**.
+- ✅ EXECUTADO (modo **live**, Cenário 3 — restore real do offsite backup) em **2026-04-19** via workflow `restore-drill.yml`. Total **51s**, 0 erros reais, 65+23 tabelas, 9 users, 37 audit_logs restaurados de R2 → vanilla `postgres:18` ephemeral.
+- 🟡 Próximo drill **live multi-cenário** (1, 2, 4, 5): 2026-Q3 — depende de provisão de staging Vercel + Supabase staging.
+
+**Evidência tabletop:** `docs/security/dr-evidence/2026-04-18/` (postmortem incluso)
+**Evidência live restore (2026-04-19):** `docs/security/dr-evidence/2026-04-19/` ([postmortem](../security/dr-evidence/2026-04-19/postmortem.md), [run](https://github.com/cabralandre82/clinipharma/actions/runs/24631516271))
 
 ---
 
@@ -102,6 +105,8 @@ Cada cenário é **independente**. Em cada cenário:
 ---
 
 ### CENÁRIO 3 — Backup corrupto / restore necessário
+
+> **EXECUTADO LIVE em 2026-04-19** via workflow `restore-drill.yml` ([postmortem](../security/dr-evidence/2026-04-19/postmortem.md)). RTO end-to-end medido: **51s** (pg_restore: 1s) num PostgreSQL 18 efêmero do CI, com 0 erros não-classificados. Backup origem: `weekly/20260419T080245Z` em R2, decryptado com chave `age` armazenada em `secrets.AGE_PRIVATE_KEY`. O drill é agora **mensal e automático** (cron `0 8 1 * *`).
 
 **Como simular:** apagar a tabela `orders` em staging (via psql `TRUNCATE orders CASCADE` em transação revertível para safety) e iniciar restore.
 
