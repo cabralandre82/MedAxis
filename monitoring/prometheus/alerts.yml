@@ -1,0 +1,539 @@
+# Prometheus alert rules — Clinipharma platform
+#
+# Wave Hardening II #6
+#
+# Aligned with `docs/observability/metrics.md` §6 and the SLO matrix
+# in `docs/observability/slos.md` (when published).
+#
+# Naming convention:
+#   - severity: critical | warning | info
+#   - team: sre | security | dpo | finance
+#   - service: clinipharma
+#
+# Each alert has at least:
+#   - severity, team, runbook annotations
+#   - dedup key implicitly = alert name + labels
+#
+# To load this file:
+#   - With Prometheus Operator: ship as PrometheusRule CRD wrapping
+#     the `groups:` field below.
+#   - With vanilla Prometheus: include this file in
+#     `prometheus.yml`'s `rule_files:`.
+#   - With Grafana Cloud Alerting: import via the file-based
+#     provisioning at /api/v1/provisioning/alert-rules/files.
+#
+# CI: validated by tests/unit/lib/metrics-catalog.test.ts which
+# parses this file and asserts every metric referenced exists in
+# Metrics constant.
+
+groups:
+  # ───────────────────────────────────────────────────────────────
+  # 1. Rate-limit (Wave Hardening II #6 — focus)
+  # ───────────────────────────────────────────────────────────────
+  - name: rate_limit
+    interval: 30s
+    rules:
+      - alert: RateLimitHighDenyRate
+        expr: |
+          sum by (bucket) (rate(rate_limit_denied_total[15m]))
+          /
+          clamp_min(sum by (bucket) (rate(rate_limit_hits_total[15m])), 1e-9)
+          > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Rate limit deny rate > 5% on bucket {{ $labels.bucket }}'
+          description: |
+            Bucket `{{ $labels.bucket }}` is rejecting more than 5% of
+            requests over the last 15 minutes (current value:
+            {{ $value | humanizePercentage }}). Healthy operation
+            sits well below 1%; sustained 5% indicates either a
+            misconfigured client, a brute-force campaign, or a
+            limiter that is too tight.
+          runbook: docs/runbooks/rate-limit-abuse.md
+          dashboard: monitoring/grafana/security.json
+
+      - alert: RateLimitSuspiciousIpsCritical
+        expr: sum(increase(rate_limit_suspicious_ips_total{severity="critical"}[15m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Critical rate-limit anomaly — credential stuffing or DoS likely'
+          description: |
+            The hourly rate-limit-report cron classified the situation
+            as CRITICAL: 50+ distinct IPs blocked, OR a single IP
+            with > 500 hits, OR a single IP hitting > 5 distinct
+            buckets in the last hour. Investigate immediately.
+          runbook: docs/runbooks/rate-limit-abuse.md
+          dashboard: monitoring/grafana/security.json
+
+      - alert: RateLimitSuspiciousIpsWarning
+        expr: sum(increase(rate_limit_suspicious_ips_total{severity="warning"}[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Elevated rate-limit denials — possible scan/abuse'
+          description: |
+            10–49 distinct IPs were blocked in the last hour, OR a
+            single IP exceeded 100 hits. Not yet critical but worth
+            a triage pass.
+          runbook: docs/runbooks/rate-limit-abuse.md
+
+      - alert: RateLimitCheckSlow
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (bucket, le) (rate(rate_limit_check_duration_ms_bucket[5m]))
+          ) > 200
+        for: 10m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'Rate-limit check p95 latency > 200ms on {{ $labels.bucket }}'
+          description: |
+            Sustained slow checks usually indicate a Redis backend
+            issue (Upstash region degraded). The fail-open path
+            still allows traffic, so user impact is low, but the
+            limiter effectiveness is reduced.
+          runbook: docs/runbooks/rate-limit-abuse.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 2. Metrics pipeline self-observation
+  # ───────────────────────────────────────────────────────────────
+  - name: observability
+    interval: 1m
+    rules:
+      - alert: MetricsScrapeFailing
+        expr: |
+          sum(increase(metrics_scrape_total{outcome="ok"}[10m])) == 0
+          and on() (sum(increase(metrics_scrape_total[10m])) > 0)
+        for: 10m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'No successful /api/metrics scrapes in the last 10 minutes'
+          description: |
+            The endpoint is being hit but every scrape is returning
+            non-200. Most likely: METRICS_SECRET rotation that did
+            not propagate to the scraper. Check secret-rotation
+            ledger and scraper config.
+          runbook: docs/runbooks/secret-rotation.md
+
+      - alert: MetricsScrapeUnauthorized
+        expr: sum(increase(metrics_scrape_total{outcome="unauthorized"}[10m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Repeated unauthorized scrape attempts on /api/metrics'
+          description: |
+            Someone (or some misconfigured scraper) is hammering the
+            metrics endpoint with a wrong token. Could be a leaked
+            old secret or a probing actor.
+          runbook: docs/runbooks/secret-compromise.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 3. HTTP / availability
+  # ───────────────────────────────────────────────────────────────
+  - name: http
+    interval: 30s
+    rules:
+      - alert: HttpHighErrorRate
+        expr: |
+          sum by (route) (rate(http_request_total{status_class="5xx"}[5m]))
+          /
+          clamp_min(sum by (route) (rate(http_request_total[5m])), 1e-9)
+          > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: '5xx rate > 5% on {{ $labels.route }}'
+          runbook: docs/runbooks/incident-response.md
+
+      - alert: HttpLatencyP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (route, le) (rate(http_request_duration_ms_bucket[5m]))
+          ) > 1500
+        for: 15m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'p95 latency > 1.5s on {{ $labels.route }}'
+          runbook: docs/runbooks/slow-requests.md
+
+      - alert: CircuitBreakerOpen
+        expr: max by (provider) (circuit_breaker_state) == 2
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'Circuit breaker OPEN for {{ $labels.provider }}'
+          description: |
+            The circuit breaker for {{ $labels.provider }} has been
+            open for at least 5 minutes (5 consecutive failures with
+            no successful half-open probe). Calls are failing fast.
+          runbook: docs/runbooks/circuit-breaker.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 4. Cron jobs
+  # ───────────────────────────────────────────────────────────────
+  - name: cron
+    interval: 1m
+    rules:
+      - alert: CronJobFailing
+        expr: |
+          sum by (job) (increase(cron_run_total{outcome="error"}[30m])) >= 2
+          and on (job) (sum by (job) (increase(cron_run_total{outcome="ok"}[30m])) == 0)
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'Cron job {{ $labels.job }} failing repeatedly'
+          description: |
+            Two or more consecutive runs of `{{ $labels.job }}` failed
+            in the last 30 minutes with no successful runs in between.
+          runbook: docs/runbooks/cron-failures.md
+
+      - alert: CronJobMissing
+        expr: |
+          time() - (max by (job) (
+            cron_run_total
+          )) > 86400
+        for: 0m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'Cron job {{ $labels.job }} did not run in the last 24h'
+          runbook: docs/runbooks/cron-failures.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 5. Backups & DR
+  # ───────────────────────────────────────────────────────────────
+  - name: backups
+    interval: 1m
+    rules:
+      - alert: BackupStale
+        expr: backup_age_seconds > 25 * 3600
+        for: 0m
+        labels:
+          severity: critical
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'No fresh backup in the last 25 hours'
+          description: |
+            backup_age_seconds = {{ $value | humanizeDuration }}.
+            Daily target is < 25h. Check Supabase backup status.
+          runbook: docs/runbooks/backup-missing.md
+
+      - alert: BackupFreshnessBreach
+        expr: increase(backup_freshness_breach_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'Backup freshness check breached at least once in the last hour'
+          runbook: docs/runbooks/backup-missing.md
+
+      - alert: BackupChainBreak
+        expr: increase(backup_chain_break_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'Backup hash chain integrity broken'
+          description: |
+            Tamper-evidence chain on backup_runs detected a break.
+            Treat as a SEV-1 until proven benign.
+          runbook: docs/runbooks/backup-missing.md
+
+      - alert: RestoreDrillStale
+        expr: restore_drill_age_seconds > 180 * 86400
+        for: 0m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'No DR drill executed in the last 180 days'
+          runbook: docs/runbooks/dr-drill-2026-04.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 5b. Audit chain integrity
+  # ───────────────────────────────────────────────────────────────
+  - name: audit_chain
+    interval: 30s
+    rules:
+      - alert: AuditChainTampered
+        expr: increase(audit_chain_break_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Audit-log hash chain inconsistency detected'
+          description: |
+            verify-audit-chain found {{ $value }} broken row(s) in the
+            last lookback window. Treat as SEV-1: someone tampered
+            with audit_logs post-insert OR a bug in the chain trigger.
+          runbook: docs/runbooks/audit-chain-tampered.md
+
+      - alert: AuditChainVerifyStale
+        expr: time() - audit_chain_last_verify_ts > 26 * 3600
+        for: 0m
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Audit chain has not been verified in the last 26 hours'
+          runbook: docs/runbooks/audit-chain-tampered.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 5c. Content Security Policy (Wave Hardening II #8)
+  # ───────────────────────────────────────────────────────────────
+  - name: csp
+    interval: 1m
+    rules:
+      # Spike on a *single* directive: indicates either a real XSS
+      # attempt or a genuine bundle drift that lost its nonce. Either
+      # way, on-call needs to investigate inside ~15 min.
+      - alert: CspViolationSpike
+        expr: |
+          sum by (directive) (
+            increase(csp_violation_total{disposition="enforce"}[15m])
+          ) > 50
+        for: 0m
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'CSP enforce-mode spike on {{ $labels.directive }}'
+          description: |
+            More than 50 enforced CSP violations on directive
+            "{{ $labels.directive }}" in the last 15 minutes.
+            Either an attacker is probing for XSS or a recent deploy
+            broke the nonce flow. Check `/api/csp-report` mirrored in
+            `server_logs` for the offending `blocked_uri`.
+          runbook: docs/security/csp.md
+
+      # `blocked_host=inline` for `script-src` is the canary for actual
+      # XSS attempts (no legitimate inline scripts exist in the app).
+      - alert: CspInlineScriptBlocked
+        expr: |
+          sum(
+            increase(
+              csp_violation_total{
+                directive=~"script-src.*",
+                blocked_host="inline",
+                disposition="enforce"
+              }[10m]
+            )
+          ) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Inline script blocked by CSP — possible XSS'
+          description: |
+            The browser blocked an inline script tag in enforce mode.
+            Investigate within 1h: pull the matching `csp_violation`
+            warn rows from `server_logs` and inspect `script_sample`
+            and `document_uri`.
+          runbook: docs/security/csp.md
+
+      # If we see a sudden flood of *invalid* report payloads we are
+      # either being abused or something on a major browser broke.
+      - alert: CspReportInvalidFlood
+        expr: |
+          sum(
+            increase(csp_report_invalid_total[10m])
+          ) > 200
+        for: 0m
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'CSP report endpoint flooded with invalid payloads'
+          runbook: docs/security/csp.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 6. RLS canary (data-isolation)
+  # ───────────────────────────────────────────────────────────────
+  - name: rls
+    interval: 30s
+    rules:
+      - alert: RlsCanaryViolation
+        expr: increase(rls_canary_violations_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'RLS canary detected an isolation violation'
+          description: |
+            One or more tables returned data that should not have been
+            visible to the canary tenant. Treat as SEV-1.
+          runbook: docs/runbooks/rls-incident.md
+
+      - alert: RlsCanaryStale
+        expr: rls_canary_age_seconds > 26 * 3600
+        for: 0m
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'RLS canary did not run in the last 26 hours'
+          runbook: docs/runbooks/rls-incident.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 7. Secret rotation (Wave Hardening II #4)
+  # ───────────────────────────────────────────────────────────────
+  - name: secrets
+    interval: 5m
+    rules:
+      - alert: SecretRotationOverdue
+        expr: secret_rotation_overdue_count > 0
+        for: 24h
+        labels:
+          severity: warning
+          team: security
+          service: clinipharma
+        annotations:
+          summary: '{{ $value }} secret(s) overdue for rotation in tier {{ $labels.tier }}'
+          runbook: docs/runbooks/secret-rotation.md
+
+      - alert: SecretRotationFailure
+        expr: increase(secret_rotation_failures_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          service: clinipharma
+        annotations:
+          summary: 'Secret rotation failed for {{ $labels.secret }} (tier {{ $labels.tier }})'
+          runbook: docs/runbooks/secret-rotation.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 8. Legal hold (Wave 13)
+  # ───────────────────────────────────────────────────────────────
+  - name: legal_hold
+    interval: 10m
+    rules:
+      - alert: LegalHoldStuckPurge
+        expr: increase(legal_hold_blocked_purge_total[30d]) > 0
+        for: 30d
+        labels:
+          severity: warning
+          team: dpo
+          service: clinipharma
+        annotations:
+          summary: 'Retention purge has been blocked by legal hold for 30+ days'
+          description: |
+            A legal hold has been suspending normal retention for at
+            least 30 days. DPO should re-confirm the hold is still
+            warranted.
+          runbook: docs/runbooks/legal-hold-procedures.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 9. DSAR (LGPD art. 18)
+  # ───────────────────────────────────────────────────────────────
+  - name: dsar
+    interval: 30s
+    rules:
+      - alert: DsarSlaBreach
+        expr: increase(dsar_sla_breach_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: dpo
+          service: clinipharma
+        annotations:
+          summary: 'DSAR SLA breached — 15-day legal deadline missed'
+          description: |
+            A data-subject access request exceeded the 15-day legal
+            deadline (LGPD art. 19, II). This is a regulatory
+            exposure — the DPO must act today.
+          runbook: docs/runbooks/incident-response.md
+
+      - alert: DsarSlaWarning
+        expr: increase(dsar_sla_warning_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: dpo
+          service: clinipharma
+        annotations:
+          summary: 'DSAR approaching SLA (48h remaining)'
+          runbook: docs/runbooks/incident-response.md
+
+  # ───────────────────────────────────────────────────────────────
+  # 10. Money reconciliation
+  # ───────────────────────────────────────────────────────────────
+  - name: money
+    interval: 1m
+    rules:
+      - alert: MoneyDrift
+        expr: increase(money_drift_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: finance
+          service: clinipharma
+        annotations:
+          summary: 'Reconciliation found drift between ledger and provider'
+          description: |
+            Cron money-reconcile detected a discrepancy. Check the
+            `entity` label for the affected payment / commission /
+            transfer chain and refer to the runbook.
+          runbook: docs/runbooks/money-reconcile.md
+
+      - alert: MoneyReconcileStale
+        expr: time() - money_reconcile_last_run_ts > 3600
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+          service: clinipharma
+        annotations:
+          summary: 'Money reconciliation has not run in the last hour'
+          runbook: docs/runbooks/money-reconcile.md

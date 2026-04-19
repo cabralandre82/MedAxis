@@ -319,7 +319,11 @@ export async function createOrderAtomic(
     'create_order_atomic',
     payload
   )
-  if (error) return { error }
+  if (error) {
+    incCounter(Metrics.ORDERS_CREATED_TOTAL, { outcome: 'error', buyer_type: args.buyerType })
+    return { error }
+  }
+  incCounter(Metrics.ORDERS_CREATED_TOTAL, { outcome: 'ok', buyer_type: args.buyerType })
   return {
     data: {
       order_id: String(data?.order_id),

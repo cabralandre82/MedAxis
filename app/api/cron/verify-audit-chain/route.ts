@@ -14,6 +14,7 @@
 import { createAdminClient } from '@/lib/db/admin'
 import { logger } from '@/lib/logger'
 import { withCronGuard } from '@/lib/cron/guarded'
+import { incCounter, setGauge, Metrics } from '@/lib/metrics'
 
 interface VerifyRow {
   scanned_rows: number | null
@@ -51,7 +52,13 @@ export const GET = withCronGuard('verify-audit-chain', async () => {
   const scanned = Number(summary?.scanned_rows ?? 0)
   const inconsistent = Number(summary?.inconsistent_count ?? 0)
 
+  incCounter(Metrics.AUDIT_CHAIN_VERIFY_TOTAL, {
+    outcome: inconsistent > 0 ? 'tampered' : 'ok',
+  })
+  setGauge(Metrics.AUDIT_CHAIN_LAST_VERIFY_TS, Math.floor(Date.now() / 1000))
+
   if (inconsistent > 0) {
+    incCounter(Metrics.AUDIT_CHAIN_BREAK_TOTAL, {}, inconsistent)
     logger.error('audit chain tampered', {
       module: 'cron/verify-audit-chain',
       action: 'verify-audit-chain',
