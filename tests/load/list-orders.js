@@ -2,20 +2,19 @@
  * Load test 3: GET /api/orders with pagination — authenticated.
  * Tests the orders listing endpoint under sustained load.
  *
- * Run:
- *   BASE_URL=https://clinipharma.com.br \
- *   AUTH_TOKEN=<supabase-jwt> \
- *   k6 run tests/load/list-orders.js
+ * Token is acquired automatically in setup() — no need to pass AUTH_TOKEN.
  *
- * Get AUTH_TOKEN:
- *   curl -X POST https://<project>.supabase.co/auth/v1/token?grant_type=password \
- *     -H "apikey: <anon>" -H "Content-Type: application/json" \
- *     -d '{"email":"admin@clinipharma.com.br","password":"Clinipharma@2026"}' \
- *     | jq -r .access_token
+ * Run:
+ *   BASE_URL=https://staging.clinipharma.com.br \
+ *   SUPABASE_URL=https://<project>.supabase.co \
+ *   SUPABASE_ANON_KEY=<key> \
+ *   LOAD_TEST_PASSWORD=<password> \
+ *   k6 run tests/load/list-orders.js
  */
 import http from 'k6/http'
 import { check, sleep } from 'k6'
 import { Rate } from 'k6/metrics'
+import { getAuthToken, authHeaders, pick, randInt } from './_helpers.js'
 
 const errorRate = new Rate('errors')
 
@@ -30,28 +29,26 @@ export const options = {
     http_req_failed: ['rate<0.001'],
     errors: ['rate<0.001'],
   },
+  tags: { test_type: 'list-orders' },
 }
 
-const BASE_URL = __ENV.BASE_URL || 'https://clinipharma.com.br'
-const AUTH_TOKEN = __ENV.AUTH_TOKEN || ''
+const BASE_URL = __ENV.BASE_URL || 'https://staging.clinipharma.com.br'
 
-export default function () {
-  if (!AUTH_TOKEN) {
-    console.error('AUTH_TOKEN is required — see script header for instructions')
-    return
+export function setup() {
+  // Allow override with AUTH_TOKEN if user prefers manual mode.
+  if (__ENV.AUTH_TOKEN) {
+    return { token: __ENV.AUTH_TOKEN }
   }
+  return { token: getAuthToken() }
+}
 
-  const page = Math.floor(Math.random() * 5) + 1
-  const status = ['PENDING', 'PROCESSING', 'COMPLETED', ''][
-    Math.floor(Math.random() * 4)
-  ]
+export default function (data) {
+  const page = randInt(1, 5)
+  const status = pick(['PENDING', 'PROCESSING', 'COMPLETED', ''])
   const qs = status ? `?limit=20&page=${page}&status=${status}` : `?limit=20&page=${page}`
 
   const res = http.get(`${BASE_URL}/api/orders${qs}`, {
-    headers: {
-      Authorization: `Bearer ${AUTH_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
+    headers: authHeaders(data.token),
     timeout: '15s',
   })
 
@@ -60,7 +57,7 @@ export default function () {
     'has data array': (r) => {
       try {
         const body = r.json()
-        return Array.isArray(body.data) || Array.isArray(body)
+        return Array.isArray(body?.data) || Array.isArray(body)
       } catch {
         return false
       }
@@ -69,4 +66,19 @@ export default function () {
 
   errorRate.add(!ok)
   sleep(0.5)
+}
+
+export function handleSummary(data) {
+  return {
+    stdout: shortSummary(data),
+    'tests/load/results/list-orders.json': JSON.stringify(data, null, 2),
+  }
+}
+
+function shortSummary(data) {
+  const m = data.metrics
+  const p95 = m.http_req_duration?.values?.['p(95)']?.toFixed(0) ?? 'n/a'
+  const failRate = ((m.http_req_failed?.values?.rate ?? 0) * 100).toFixed(2)
+  const reqs = m.http_reqs?.values?.count ?? 0
+  return `\nLIST-ORDERS SUMMARY\n  Requests: ${reqs}\n  HTTP p95: ${p95} ms\n  failure:  ${failRate}%\n`
 }
