@@ -70,6 +70,11 @@ const CSRF_EXEMPT_PREFIXES = [
   '/api/tracking',
   // Public health — GET only anyway, but be explicit.
   '/api/health',
+  // Wave Hardening II #8 — CSP violation reports are sent by the
+  // browser without credentials and from any origin (the page that
+  // violated the policy). They have their own bounded payload size
+  // and per-IP rate limiter inside the route handler.
+  '/api/csp-report',
 ]
 
 export interface CsrfDecision {

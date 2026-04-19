@@ -2,6 +2,13 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/db/admin'
 import { checkCsrf, ensureCsrfCookie } from '@/lib/security/csrf'
+import {
+  buildCsp,
+  buildReportToHeader,
+  cspHeaderName,
+  generateNonce,
+  NONCE_HEADER,
+} from '@/lib/security/csp'
 import { incCounter, Metrics } from '@/lib/metrics'
 
 const PUBLIC_ROUTES = [
@@ -35,6 +42,9 @@ const PUBLIC_ROUTES = [
   // LGPD public pages
   '/privacy',
   '/terms',
+  // CSP violation report endpoint — browsers send these without
+  // user credentials and they must not be redirected to /login.
+  '/api/csp-report',
 ]
 
 /** Extract JWT payload without verifying signature (Supabase already verified it). */
@@ -104,6 +114,35 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set('x-request-id', requestId)
   requestHeaders.set('traceparent', traceparent)
 
+  // Wave Hardening II #8 — per-request CSP nonce.
+  // The nonce flows in TWO directions:
+  //   • request header  → consumed by SSR (`headers().get('x-nonce')`)
+  //                        so server components / `<Script>` can attach
+  //                        it to inline tags they emit;
+  //   • response header → emitted as part of the CSP value so the
+  //                        browser actually trusts those tags.
+  // We mint here (Edge runtime) so every request — including 304s —
+  // gets a fresh nonce. Reusing nonces across requests defeats the
+  // protection, hence no caching.
+  const nonce = generateNonce()
+  requestHeaders.set(NONCE_HEADER, nonce)
+  const cspReportOnly = process.env.CSP_REPORT_ONLY === 'true'
+  const allowEval = process.env.NODE_ENV !== 'production'
+  const cspValue = buildCsp({ nonce, reportOnly: cspReportOnly, allowEval })
+  const cspHeader = cspHeaderName(cspReportOnly)
+  const reportToValue = buildReportToHeader()
+
+  // Helper: stamp the per-request transport headers on every response
+  // we emit so they survive across the various branches below
+  // (CSRF block, redirect, supabase response, …).
+  const stampHeaders = (res: NextResponse): NextResponse => {
+    res.headers.set('X-Request-ID', requestId)
+    res.headers.set('traceparent', traceparent)
+    res.headers.set(cspHeader, cspValue)
+    res.headers.set('Report-To', reportToValue)
+    return res
+  }
+
   // Wave 5 — CSRF gate for state-changing /api/** calls. Webhooks, cron,
   // and Inngest are exempt (checkCsrf knows the prefix list). Origin /
   // Referer must match the request's own origin. The double-submit
@@ -120,19 +159,16 @@ export async function middleware(request: NextRequest) {
       incCounter(Metrics.CSRF_BLOCKED_TOTAL, { reason: csrf.reason ?? 'csrf_blocked' })
       // Only block API calls — a redirect-to-login response on a JSON
       // endpoint would look like a success from an HTTP client.
-      return NextResponse.json(
-        { error: 'csrf_blocked', reason: csrf.reason ?? 'csrf_blocked' },
-        {
-          status: 403,
-          headers: { 'X-Request-ID': requestId, traceparent },
-        }
+      return stampHeaders(
+        NextResponse.json(
+          { error: 'csrf_blocked', reason: csrf.reason ?? 'csrf_blocked' },
+          { status: 403 }
+        )
       )
     }
   }
 
-  let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
-  supabaseResponse.headers.set('X-Request-ID', requestId)
-  supabaseResponse.headers.set('traceparent', traceparent)
+  let supabaseResponse = stampHeaders(NextResponse.next({ request: { headers: requestHeaders } }))
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -144,9 +180,9 @@ export async function middleware(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
-          supabaseResponse.headers.set('X-Request-ID', requestId)
-          supabaseResponse.headers.set('traceparent', traceparent)
+          supabaseResponse = stampHeaders(
+            NextResponse.next({ request: { headers: requestHeaders } })
+          )
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -169,11 +205,11 @@ export async function middleware(request: NextRequest) {
   if (!user && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(loginUrl)
+    return stampHeaders(NextResponse.redirect(loginUrl))
   }
 
   if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return stampHeaders(NextResponse.redirect(new URL('/dashboard', request.url)))
   }
 
   // Token revocation check — only for authenticated requests on protected routes
@@ -186,7 +222,7 @@ export async function middleware(request: NextRequest) {
       // Clear the session cookie and redirect to login
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('reason', 'session_revoked')
-      const redirectResponse = NextResponse.redirect(loginUrl)
+      const redirectResponse = stampHeaders(NextResponse.redirect(loginUrl))
       // Clear Supabase auth cookies
       request.cookies.getAll().forEach(({ name }) => {
         if (name.startsWith('sb-')) redirectResponse.cookies.delete(name)

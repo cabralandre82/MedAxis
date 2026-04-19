@@ -2,30 +2,33 @@ import type { NextConfig } from 'next'
 import path from 'path'
 import { withSentryConfig } from '@sentry/nextjs'
 
-const ContentSecurityPolicy = `
-  default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://apis.google.com;
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https://jomdntqlgrupvhrqoyai.supabase.co;
-  font-src 'self';
-  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://o4510907598700544.ingest.us.sentry.io https://www.googleapis.com https://fcm.googleapis.com;
-  frame-src 'none';
-  frame-ancestors 'none';
-  object-src 'none';
-  base-uri 'self';
-  form-action 'self';
-`
-  .replace(/\n/g, ' ')
-  .trim()
-
+// NOTE: `Content-Security-Policy` is intentionally NOT in this static
+// list. It is emitted per-request by `middleware.ts` so each response
+// carries a fresh nonce — see `lib/security/csp.ts` and
+// `docs/security/csp.md` (Wave Hardening II #8). Defining it here too
+// would clash with the dynamic header (the static one ships first and
+// the middleware overwrites, but having both is brittle).
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
-  { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
+  {
+    key: 'Permissions-Policy',
+    value:
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()',
+  },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  { key: 'Content-Security-Policy', value: ContentSecurityPolicy },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+  { key: 'Origin-Agent-Cluster', value: '?1' },
+]
+
+const apiCacheHeaders = [
+  { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, proxy-revalidate' },
+  { key: 'Pragma', value: 'no-cache' },
+  { key: 'Expires', value: '0' },
 ]
 
 const nextConfig: NextConfig = {
@@ -49,6 +52,14 @@ const nextConfig: NextConfig = {
       {
         source: '/(.*)',
         headers: securityHeaders,
+      },
+      {
+        source: '/api/(.*)',
+        headers: [...securityHeaders, ...apiCacheHeaders],
+      },
+      {
+        source: '/.well-known/security.txt',
+        headers: [{ key: 'Content-Type', value: 'text/plain; charset=utf-8' }],
       },
     ]
   },
