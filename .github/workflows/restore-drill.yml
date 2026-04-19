@@ -107,13 +107,18 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/restore"
-          echo "$AGE_PRIVATE_KEY" > identity.age
-          chmod 600 identity.age
+          # Keep the identity OUTSIDE the restore dir so the *.age glob
+          # below cannot accidentally try to "decrypt" the private key
+          # itself (which fails with a redacted "unexpected intro: ***"
+          # error that wastes everyone's time during a real incident).
+          IDENTITY="$RUNNER_TEMP/identity.age"
+          umask 077
+          printf '%s\n' "$AGE_PRIVATE_KEY" > "$IDENTITY"
           for f in *.age; do
             plain="${f%.age}"
-            age -d -i identity.age -o "$plain" "$f"
+            age -d -i "$IDENTITY" -o "$plain" "$f"
           done
-          rm -f identity.age
+          rm -f "$IDENTITY"
           ls -lh
 
       - name: Verify checksums
