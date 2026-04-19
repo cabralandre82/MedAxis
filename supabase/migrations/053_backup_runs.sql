@@ -306,6 +306,18 @@ BEGIN
   );
   ASSERT v_first.prev_hash IS NULL, 'first chain entry must have NULL prev_hash';
 
+  -- Both backup_record_run calls happen inside this same transaction,
+  -- which means now() returns the same timestamp for each. The chain
+  -- verifier orders rows by (recorded_at ASC, id ASC); when timestamps
+  -- tie, the secondary uuid order is non-deterministic and the verifier
+  -- can read row #2 first, see a non-NULL prev_hash where it expects
+  -- NULL, and report a false-positive break. In production each
+  -- backup_record_run call is its own transaction so this never bites,
+  -- but Layer 1 of schema-drift CI runs the migration in a single
+  -- transaction. A 1-ms gap is enough to make recorded_at strictly
+  -- monotonic without measurably slowing the migration.
+  PERFORM pg_sleep(0.001);
+
   v_second := public.backup_record_run(
     'BACKUP', 'smoke', 'smoke/stamp2', 'cc:3333', 67890, 'ok',
     '{"source":"migration-053-smoke"}'::jsonb, 'https://example.test/run/2'
