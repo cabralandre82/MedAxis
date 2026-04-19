@@ -58,7 +58,7 @@ jobs:
       AWS_DEFAULT_REGION: auto
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install tools
         # Supabase is on PostgreSQL 17 as of 2026-04 — client major must match.
