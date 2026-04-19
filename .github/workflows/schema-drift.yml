@@ -100,6 +100,21 @@ jobs:
           -- Stub the auth helper functions our policies reference. We
           -- never INVOKE them in this job (no rows are inserted), but
           -- CREATE POLICY validates the function signature at parse time.
+          -- Storage stub. Migration 011 inserts a row into storage.buckets;
+          -- in real Supabase this table comes from the storage extension.
+          -- Signature must match (id, name, public) at minimum.
+          CREATE TABLE IF NOT EXISTS storage.buckets (
+            id text PRIMARY KEY,
+            name text NOT NULL,
+            owner uuid,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now(),
+            public boolean DEFAULT false,
+            avif_autodetection boolean DEFAULT false,
+            file_size_limit bigint,
+            allowed_mime_types text[]
+          );
+
           CREATE TABLE IF NOT EXISTS auth.users (
             id uuid PRIMARY KEY,
             email text,
