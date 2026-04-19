@@ -1,0 +1,41 @@
+# OWASP ZAP baseline rule overrides — clinipharma.com.br
+# ────────────────────────────────────────────────────────
+# Format: <plugin_id>\t<action>\t<comment>
+#   action ∈ { IGNORE, WARN, FAIL }
+#
+# IGNORE means the rule is silenced everywhere. Prefer WARN over IGNORE
+# whenever we want the finding visible (in the HTML report) but not
+# blocking the build.
+#
+# Every IGNORE here MUST justify why we accept the finding — drift in
+# the rationale is a code-review smell. Re-evaluate annually.
+#
+# Reference: https://www.zaproxy.org/docs/alerts/
+
+# ─── Anti-CSRF tokens (10202) ────────────────────────────────────────
+# We protect mutating endpoints with the Origin/Referer + double-submit
+# cookie pattern (lib/security/csrf.ts), not synchroniser tokens. ZAP's
+# heuristic does not recognise this pattern, so the alert fires on
+# every form. Documented in docs/security/dynamic-scanning.md.
+10202	IGNORE	(Anti-CSRF: we use Origin+double-submit, see lib/security/csrf.ts)
+
+# ─── Storable but non-cacheable content (10049) ──────────────────────
+# Next.js streams server components without `Cache-Control: no-store`
+# on intentionally public pages (/, /login, /trust). The framework's
+# default is correct for our threat model — sensitive responses already
+# carry `Cache-Control: private, no-store` via dedicated handlers.
+10049	IGNORE	(Streaming RSC default; sensitive routes set their own no-store)
+
+# ─── Cookie without SameSite attribute (10054) ───────────────────────
+# Supabase SSR sets short-lived auth cookies WITHOUT SameSite at the
+# JWT-cookie layer (the host-level SameSite=Lax default applies). The
+# CSRF mitigation lives one layer higher (Origin + double-submit), so
+# this finding is not a security gap for our model. Tracked: revisit
+# when @supabase/ssr exposes a SameSite=Strict opt-in.
+10054	WARN	(Supabase SSR cookies — SameSite via browser default; CSRF via Origin+double-submit)
+
+# ─── X-Content-Type-Options (10021) ──────────────────────────────────
+# Already enforced via next.config.ts securityHeaders. ZAP sometimes
+# misses it on streaming responses where the header arrives in the
+# initial chunk. Keep as WARN so a real regression still surfaces.
+10021	WARN	(Header set in next.config.ts; streaming may delay first-chunk inspection)

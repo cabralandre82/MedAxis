@@ -1,11 +1,11 @@
 # Synthetic Monitoring
 
-| Field         | Value                                                                   |
-| ------------- | ----------------------------------------------------------------------- |
-| Owner         | Engineering / SRE                                                       |
-| Last reviewed | 2026-04-19                                                              |
-| Pairs with    | `docs/observability/slos.md`, `docs/observability/burn-rate.md`         |
-| Layers active | **Layer 1** (in-cluster cron) + **Layer 2** (external — GitHub Actions) |
+| Field         | Value                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| Owner         | Engineering / SRE                                                                                        |
+| Last reviewed | 2026-04-19                                                                                               |
+| Pairs with    | `docs/observability/slos.md`, `docs/observability/burn-rate.md`                                          |
+| Layers active | **L1** (in-cluster cron, 5 min) + **L2** (external availability, 5 min) + **L3** (external DAST, weekly) |
 
 ## Why synthetic monitoring exists
 
@@ -21,24 +21,34 @@ two are complementary:
 | Vercel project paused / deleted | NO                 | YES             |
 | Firewall / regional blackhole   | NO                 | YES             |
 
-We have **two layers**:
+We have **three layers**:
 
-1. **In-cluster probe** — `/api/cron/synthetic-probe`, every 5 min,
-   hits `/api/health/{live,ready}` + `/api/status/summary` from
-   _another_ function in the same Vercel project. Catches everything
-   except a full Vercel project outage.
-2. **External probe** — `.github/workflows/external-probe.yml`, every
-   5 min, hits the same public URLs from a GitHub Actions runner.
-   GitHub Actions runs on Microsoft Azure, completely independent of
-   our Vercel project, so it stays up when Vercel is down. Catches
-   the failures the in-cluster probe cannot see.
+1. **In-cluster availability probe** — `/api/cron/synthetic-probe`,
+   every 5 min, hits `/api/health/{live,ready}` + `/api/status/summary`
+   from _another_ function in the same Vercel project. Catches
+   everything except a full Vercel project outage.
+2. **External availability probe** —
+   `.github/workflows/external-probe.yml`, every 5 min, hits the same
+   public URLs from a GitHub Actions runner. GitHub Actions runs on
+   Microsoft Azure, completely independent of our Vercel project, so
+   it stays up when Vercel is down. Catches the failures the
+   in-cluster probe cannot see.
+3. **External security probe (DAST)** —
+   `.github/workflows/zap-baseline.yml`, weekly OWASP ZAP baseline
+   scan against the production URL. Catches a different failure
+   class entirely: not "is it up?" but "is it still configured
+   securely?" — header drift, TLS regressions, info disclosure.
+   Detailed in [`docs/security/dynamic-scanning.md`](../security/dynamic-scanning.md).
 
-Both layers are shipped and active. The split between them is
-load-bearing: a green Layer 1 + red Layer 2 means our edge is fine but
-the platform is unreachable from outside (DNS, TLS, Vercel-wide
-outage); a red Layer 1 + green Layer 2 means the public surface is
+All three layers are shipped and active. The L1/L2 split is
+load-bearing for availability: a green L1 + red L2 means our edge is
+fine but the platform is unreachable from outside (DNS, TLS,
+Vercel-wide outage); a red L1 + green L2 means the public surface is
 healthy but our internal control plane is broken (cron infra, DB
-connectivity from cron, etc.).
+connectivity from cron, etc.). L3 is orthogonal: a green L1 + L2 + red
+L3 means the app is up and serving traffic, but a security control
+silently regressed and we'd never have caught it from availability
+metrics alone.
 
 ## Layer 1 — In-cluster probe (shipped)
 

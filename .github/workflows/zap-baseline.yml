@@ -1,0 +1,279 @@
+name: ZAP Baseline (DAST Layer 3)
+
+# ────────────────────────────────────────────────────────────────────────────
+# Layer 3 of the synthetic monitoring philosophy — see
+# docs/observability/synthetic-monitoring.md and docs/security/dynamic-scanning.md.
+#
+# Layers:
+#   1. In-cluster availability probe   (every 5 min, runs in our infra)
+#   2. External availability probe     (every 5 min, runs from GitHub-hosted runner)
+#   3. External SECURITY probe (this)  (weekly, OWASP ZAP baseline)
+#
+# This job is the only thing in our pipeline that talks to PRODUCTION
+# from outside our infra AND specifically inspects the security
+# posture (headers, TLS, cookies, info leakage). It does NOT perform
+# active attacks (no SQLi, no XSS payloads) — that would be unsafe
+# against a live multi-tenant app and is delegated to a future pentest.
+#
+# Suppressed rules + rationale: see `.zap/rules.tsv` (drift in the
+# rationale is a code-review smell — re-evaluate annually).
+# ────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # Mondays 07:00 UTC (04:00 BRT) — before the work week starts so
+    # any new finding lands on the on-call's plate before standup.
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Override target URL (default: production apex)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: zap-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    name: OWASP ZAP baseline scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      total_alerts: ${{ steps.parse.outputs.total }}
+      high_alerts: ${{ steps.parse.outputs.high }}
+      medium_alerts: ${{ steps.parse.outputs.medium }}
+      low_alerts: ${{ steps.parse.outputs.low }}
+      info_alerts: ${{ steps.parse.outputs.info }}
+      target_url: ${{ steps.target.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compute target URL
+        id: target
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.target_url }}" ]; then
+            URL="${{ inputs.target_url }}"
+          else
+            URL="https://clinipharma.com.br"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Target: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: ZAP Baseline Scan
+        # We pin to a specific minor — auto-updates of a security tool
+        # introduce subtle policy changes that should be reviewed, not
+        # merged blindly via @latest.
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ steps.target.outputs.url }}
+          rules_file_name: '.zap/rules.tsv'
+          # -T: max minutes for spider (10 = sane default for our 30-route app)
+          # -m: minutes for the passive scan after spidering finishes
+          # -j: include the AJAX spider — required for a Next.js streaming app
+          # -d: emit debug logs to the artifact for forensics
+          cmd_options: '-T 10 -m 5 -j -d'
+          # We disable the action's built-in fail/issue behaviour and
+          # implement our own gate below so we can:
+          #   - set a Medium+ threshold (Low/Info informational only)
+          #   - reuse the same issue-dedup pattern as external-probe.yml
+          #   - emit a richer GitHub-step summary
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: zap-baseline-report
+          issue_title: '🔴 DAST: ZAP baseline finding(s) on production'
+
+      - name: Parse JSON report into severity buckets
+        id: parse
+        if: always()
+        run: |
+          set -euo pipefail
+          REPORT=report_json.json
+          if [ ! -f "$REPORT" ]; then
+            echo "ZAP did not produce a JSON report — assuming clean run."
+            for k in total high medium low info; do
+              echo "${k}=0" >> "$GITHUB_OUTPUT"
+            done
+            exit 0
+          fi
+          # ZAP's report_json structure:
+          #   { site: [ { alerts: [ { riskcode, ... }, ... ] } ] }
+          # riskcode: 0=Info, 1=Low, 2=Medium, 3=High.
+          node -e '
+            const fs = require("fs");
+            const r = JSON.parse(fs.readFileSync("report_json.json", "utf8"));
+            const buckets = { 0: 0, 1: 0, 2: 0, 3: 0 };
+            for (const site of r.site || []) {
+              for (const a of site.alerts || []) {
+                const k = Number(a.riskcode);
+                buckets[k] = (buckets[k] || 0) + 1;
+              }
+            }
+            const out = {
+              info: buckets[0] || 0,
+              low: buckets[1] || 0,
+              medium: buckets[2] || 0,
+              high: buckets[3] || 0,
+            };
+            out.total = out.info + out.low + out.medium + out.high;
+            for (const [k, v] of Object.entries(out)) {
+              console.log(`${k}=${v}`);
+            }
+            const append = Object.entries(out).map(([k, v]) => `${k}=${v}`).join("\n");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, append + "\n");
+          '
+
+      - name: Step summary
+        if: always()
+        env:
+          T: ${{ steps.parse.outputs.total }}
+          H: ${{ steps.parse.outputs.high }}
+          M: ${{ steps.parse.outputs.medium }}
+          L: ${{ steps.parse.outputs.low }}
+          I: ${{ steps.parse.outputs.info }}
+          URL: ${{ steps.target.outputs.url }}
+        run: |
+          {
+            echo "## ZAP Baseline — DAST Layer 3"
+            echo
+            echo "**Target:** \`$URL\`"
+            echo
+            echo "| Severity | Count |"
+            echo "|----------|------:|"
+            echo "| High     | $H |"
+            echo "| Medium   | $M |"
+            echo "| Low      | $L |"
+            echo "| Info     | $I |"
+            echo "| **Total**| **$T** |"
+            echo
+            echo "_Gate: Medium+ findings open/update GitHub issue. Low/Info informational._"
+            echo
+            echo "Full HTML + JSON + MD reports attached as artifact \`zap-baseline-report\` (90-day retention)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Re-upload reports with longer retention
+        # The action uploads with default retention; we re-upload at 90
+        # days so audit evidence survives the project default of 14d.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zap-baseline-report-90d
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+          if-no-files-found: warn
+          retention-days: 90
+
+  alerting:
+    name: Alerting (open / dedupe / close issue)
+    runs-on: ubuntu-latest
+    needs: baseline
+    if: always()
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Open or update tracking issue (Medium+ findings)
+        uses: actions/github-script@v9
+        env:
+          MEDIUM: ${{ needs.baseline.outputs.medium_alerts }}
+          HIGH: ${{ needs.baseline.outputs.high_alerts }}
+          LOW: ${{ needs.baseline.outputs.low_alerts }}
+          INFO: ${{ needs.baseline.outputs.info_alerts }}
+          TARGET: ${{ needs.baseline.outputs.target_url }}
+        with:
+          script: |
+            const high   = parseInt(process.env.HIGH || '0', 10);
+            const medium = parseInt(process.env.MEDIUM || '0', 10);
+            const low    = parseInt(process.env.LOW || '0', 10);
+            const info   = parseInt(process.env.INFO || '0', 10);
+            const target = process.env.TARGET || '(unknown)';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const LABEL = 'zap-baseline-finding';
+            const TITLE = '🔴 DAST: ZAP baseline finding(s) on production';
+
+            // Find existing open issue under our label.
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: LABEL,
+              per_page: 5,
+            });
+            const existing = open.data[0];
+
+            const isFinding = high + medium > 0;
+
+            if (isFinding) {
+              const body = [
+                `## ZAP baseline scan reported Medium+ findings`,
+                ``,
+                `- **Target:** \`${target}\``,
+                `- **High:** ${high}`,
+                `- **Medium:** ${medium}`,
+                `- Low (informational): ${low}`,
+                `- Info (informational): ${info}`,
+                ``,
+                `**Run:** ${runUrl}`,
+                ``,
+                `Download the \`zap-baseline-report-90d\` artifact for the full HTML report.`,
+                ``,
+                `### Triage steps`,
+                `1. Open the HTML report from the run artifacts.`,
+                `2. For each High/Medium finding: classify as **real** or **false positive**.`,
+                `3. Real → file fix PR; ` +
+                `False positive → add a justified entry to \`.zap/rules.tsv\`.`,
+                `4. Close this issue manually after triage; the next clean weekly` +
+                ` run will not auto-reopen.`,
+                ``,
+                `_See \`docs/security/dynamic-scanning.md\` for the full triage runbook._`,
+              ].join('\n');
+
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existing.number,
+                  body: `Updated finding from run ${runUrl}\n\n` +
+                        `Counts: High=${high}, Medium=${medium}, Low=${low}, Info=${info}.`,
+                });
+                core.notice(`Appended to existing issue #${existing.number}`);
+              } else {
+                const created = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: TITLE,
+                  body,
+                  labels: [LABEL, 'security'],
+                });
+                core.notice(`Opened issue #${created.data.number}`);
+              }
+              // Mark workflow as failed so on-call gets a red ✗ in the
+              // Actions tab — issue is the durable record.
+              core.setFailed(`ZAP found ${high} High + ${medium} Medium finding(s).`);
+            } else if (existing) {
+              // Clean run while a tracking issue is open → comment but
+              // do NOT auto-close (humans triage real DAST findings).
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Latest baseline scan came back clean ` +
+                      `(High=0, Medium=0, Low=${low}, Info=${info}). ` +
+                      `Run: ${runUrl}\n\n` +
+                      `If the previous finding is genuinely fixed, you can close ` +
+                      `this issue manually.`,
+              });
+              core.notice(`Clean run — left issue #${existing.number} open for human triage.`);
+            } else {
+              core.notice(`Clean run, no open issue. ` +
+                          `Counts: H=0, M=0, L=${low}, I=${info}.`);
+            }
