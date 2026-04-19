@@ -40,14 +40,15 @@ export default defineConfig({
       thresholds: {
         // Ratchet plan: after every wave that adds ≥20 tests we lift these
         // floors toward the real measurement, so regressions are caught
-        // the next PR. Current numbers after Wave 1 (logger + redactor +
-        // ALS context): 72.82% stmts/lines, 76.98% branches, 86.12% functions.
-        // Next ratchet targets in Wave 2 (webhook dedup / cron guard).
+        // the next PR. Real measurement at Wave Hardening III: 81.59 %
+        // stmts/lines, 81.15 % branches, 89.52 % functions. We ratchet to
+        // 80/80/89/80 — leaves a thin 1-2 pt margin for legitimate
+        // refactors but blocks any drop below the current floor.
         // Do NOT lower — if a PR regresses, add the missing test instead.
-        statements: 72,
-        branches: 75,
-        functions: 86,
-        lines: 72,
+        statements: 80,
+        branches: 80,
+        functions: 89,
+        lines: 80,
       },
     },
   },
