@@ -22,6 +22,15 @@ os locais de origem.
   `omni-runner-portal`, `project-running`.
 - **Projeto vinculado a este repo**: `b2b-med-platform`
   (`.vercel/project.json`).
+- **⚠ Topologia importante**: existem **dois projetos Vercel** servindo
+  o mesmo branch `main`:
+  - `clinipharma` → domínio `clinipharma.com.br` (clientes reais)
+  - `b2b-med-platform` → `b2b-med-platform.vercel.app` + branch `staging`
+    (usa Supabase de staging em Preview)
+
+  Sempre que adicionar/mudar uma env em **um** deles, replicar no outro
+  ou justificar a divergência. Detalhes em
+  [`docs/infra/vercel-projects-topology.md`](docs/infra/vercel-projects-topology.md).
 
 #### Por que `VERCEL_TOKEN` env var não basta sozinho
 
