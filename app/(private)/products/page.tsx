@@ -176,7 +176,7 @@ export default async function ProductsPage({ searchParams }: Props) {
                     <TableCell>
                       <Link
                         href={`/products/${p.id}`}
-                        className="text-gray-400 hover:text-[hsl(196,91%,36%)]"
+                        className="text-gray-400 hover:text-[hsl(196,91%,33%)]"
                       >
                         <ExternalLink className="h-4 w-4" />
                       </Link>

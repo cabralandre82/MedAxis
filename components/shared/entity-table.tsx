@@ -106,7 +106,7 @@ export function EntityTable({ data, columns, detailPath }: EntityTableProps) {
                   <TableCell>
                     <Link
                       href={`${detailPath}/${String(row.id)}`}
-                      className="text-gray-400 transition-colors hover:text-[hsl(196,91%,36%)]"
+                      className="text-gray-400 transition-colors hover:text-[hsl(196,91%,33%)]"
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Link>

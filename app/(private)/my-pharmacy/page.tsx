@@ -270,7 +270,7 @@ export default async function MyPharmacyPage() {
                     <div>
                       <Link
                         href={`/products/${product.id}/edit`}
-                        className="text-sm font-medium text-gray-900 hover:text-[hsl(196,91%,36%)]"
+                        className="text-sm font-medium text-gray-900 hover:text-[hsl(196,91%,33%)]"
                       >
                         {product.name}
                       </Link>

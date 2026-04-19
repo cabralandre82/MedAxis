@@ -130,7 +130,7 @@ export default async function RegistrationDetailPage({
                     href={doc.public_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-[hsl(196,91%,36%)] hover:underline"
+                    className="flex items-center gap-1 text-xs text-[hsl(196,91%,33%)] hover:underline"
                   >
                     Abrir <ExternalLink className="h-3 w-3" />
                   </a>

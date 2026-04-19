@@ -150,7 +150,7 @@ export function CatalogFilters({
             onClick={() => updateFilter({ pharmacy: undefined })}
             className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
               !currentPharmacy
-                ? 'border-[hsl(196,91%,36%)] bg-[hsl(196,91%,36%)] text-white'
+                ? 'border-[hsl(196,91%,33%)] bg-[hsl(196,91%,33%)] text-white'
                 : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
             }`}
           >
@@ -164,7 +164,7 @@ export function CatalogFilters({
               }
               className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
                 currentPharmacy === ph.id
-                  ? 'border-[hsl(196,91%,36%)] bg-[hsl(196,91%,36%)] text-white'
+                  ? 'border-[hsl(196,91%,33%)] bg-[hsl(196,91%,33%)] text-white'
                   : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
               }`}
             >

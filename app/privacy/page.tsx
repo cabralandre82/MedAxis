@@ -539,7 +539,7 @@ export default function PrivacyPage() {
         </P>
       </Section>
 
-      <div className="mt-8 border-t pt-6 text-xs text-slate-400">
+      <div className="mt-8 border-t pt-6 text-xs text-slate-600">
         <p>
           Clinipharma — Política de Privacidade v1.2 · Vigência original: 08/04/2026 · Última
           atualização: 17/04/2026 (M-06: ampliação da seção de pacientes não-usuários).

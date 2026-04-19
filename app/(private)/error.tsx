@@ -50,7 +50,7 @@ export default function PrivateError({
           </button>
           <Link
             href="/dashboard"
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[hsl(196,91%,36%)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[hsl(196,91%,33%)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
             <Home className="h-4 w-4" />
             Ir ao dashboard

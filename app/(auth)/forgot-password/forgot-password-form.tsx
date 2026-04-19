@@ -56,7 +56,7 @@ export function ForgotPasswordForm() {
         <p className="text-sm text-gray-600">
           Email de recuperação enviado. Verifique sua caixa de entrada.
         </p>
-        <Link href="/login" className="text-sm text-[hsl(196,91%,36%)] hover:underline">
+        <Link href="/login" className="text-sm text-[hsl(196,91%,33%)] hover:underline">
           Voltar ao login
         </Link>
       </div>

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { Label } from '@/components/ui/label'
 import type { CouponRow } from '@/services/coupons'
 import { SearchableSelect, type SelectOption } from './searchable-select'
 
@@ -271,9 +272,9 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
           <form onSubmit={handleCreate} className="grid gap-4 sm:grid-cols-2">
             {/* Produto */}
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-700">
+              <Label className="mb-1.5 block text-xs text-gray-700">
                 Produto <span className="text-red-500">*</span>
-              </label>
+              </Label>
               <SearchableSelect
                 options={products}
                 value={form.product_id}
@@ -284,9 +285,9 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
 
             {/* Destinatário — Clínica ou Médico */}
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-gray-700">
+              <Label className="block text-xs text-gray-700">
                 Destinatário <span className="text-red-500">*</span>
-              </label>
+              </Label>
               <div className="flex overflow-hidden rounded-lg border border-gray-300">
                 {(['clinic', 'doctor'] as RecipientType[]).map((t) => (
                   <button
@@ -323,9 +324,9 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
 
             {/* Tipo de desconto */}
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-700">
+              <Label className="mb-1.5 block text-xs text-gray-700">
                 Tipo de desconto <span className="text-red-500">*</span>
-              </label>
+              </Label>
               <div className="flex overflow-hidden rounded-lg border border-gray-300">
                 {(['PERCENT', 'FIXED'] as const).map((t) => (
                   <button
@@ -376,9 +377,9 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
             {/* Teto — só para PERCENT */}
             {form.discount_type === 'PERCENT' && (
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-gray-700">
+                <Label className="mb-1.5 block text-xs text-gray-700">
                   Teto máximo de desconto em R$ <span className="text-gray-400">(opcional)</span>
-                </label>
+                </Label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">
                     R$

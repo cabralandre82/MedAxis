@@ -29,7 +29,7 @@ export default function GlobalError({
             )}
             <button
               onClick={reset}
-              className="w-full rounded-lg bg-[hsl(196,91%,36%)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+              className="w-full rounded-lg bg-[hsl(196,91%,33%)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
             >
               Tentar novamente
             </button>

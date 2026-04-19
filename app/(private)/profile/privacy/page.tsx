@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Download, Trash2, Shield, Info } from 'lucide-react'
 import { BackButton } from '@/components/ui/back-button'
@@ -115,8 +116,11 @@ export default function PrivacyPage() {
           ) : (
             <>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Motivo (opcional)</label>
+                <Label htmlFor="deletion-reason" className="text-sm">
+                  Motivo (opcional)
+                </Label>
                 <Textarea
+                  id="deletion-reason"
                   placeholder="Informe o motivo da solicitação..."
                   value={deletionReason}
                   onChange={(e) => setDeletionReason(e.target.value)}

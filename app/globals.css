@@ -16,13 +16,13 @@
   --secondary-foreground: 215 25% 20%;
   --muted: 210 20% 96%;
   --muted-foreground: 215 15% 50%;
-  --accent: 196 91% 36%;
+  --accent: 196 91% 33%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --border: 214 20% 88%;
   --input: 214 20% 88%;
-  --ring: 196 91% 36%;
+  --ring: 196 91% 33%;
   --radius: 0.5rem;
   --sidebar-width: 256px;
   --sidebar-width-collapsed: 64px;

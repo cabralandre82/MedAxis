@@ -164,7 +164,6 @@ function main() {
   const manifest = buildManifest(secrets, tierAges)
   mkdirSync(dirname(TARGET), { recursive: true })
   writeFileSync(TARGET, JSON.stringify(manifest, null, 2) + '\n', 'utf8')
-  // eslint-disable-next-line no-console
   console.log(
     `wrote ${TARGET}\n  secrets=${secrets.length}  tiers=${JSON.stringify(manifest.summary.by_tier)}`,
   )

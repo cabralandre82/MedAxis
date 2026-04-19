@@ -204,7 +204,7 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base font-semibold">Pedidos ativos</CardTitle>
-            <Link href="/orders" className="text-sm text-[hsl(196,91%,36%)] hover:underline">
+            <Link href="/orders" className="text-sm text-[hsl(196,91%,33%)] hover:underline">
               Ver todos
             </Link>
           </CardHeader>
@@ -220,7 +220,7 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
                       <div className="min-w-0">
                         <Link
                           href={`/orders/${order.id}`}
-                          className="text-sm font-medium text-gray-900 hover:text-[hsl(196,91%,36%)]"
+                          className="text-sm font-medium text-gray-900 hover:text-[hsl(196,91%,33%)]"
                         >
                           {order.code}
                         </Link>
@@ -245,7 +245,7 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base font-semibold">Repasses recentes</CardTitle>
-            <Link href="/transfers" className="text-sm text-[hsl(196,91%,36%)] hover:underline">
+            <Link href="/transfers" className="text-sm text-[hsl(196,91%,33%)] hover:underline">
               Ver todos
             </Link>
           </CardHeader>

@@ -155,7 +155,7 @@ export async function AdminDashboard({ user }: AdminDashboardProps) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-base font-semibold">Pedidos recentes</CardTitle>
-          <Link href="/orders" className="text-sm text-[hsl(196,91%,36%)] hover:underline">
+          <Link href="/orders" className="text-sm text-[hsl(196,91%,33%)] hover:underline">
             Ver todos
           </Link>
         </CardHeader>

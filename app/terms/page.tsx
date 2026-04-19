@@ -438,7 +438,7 @@ export default function TermsPage() {
         />
       </Section>
 
-      <div className="mt-8 border-t pt-6 text-xs text-slate-400">
+      <div className="mt-8 border-t pt-6 text-xs text-slate-600">
         <p>
           Clinipharma — Termos de Uso v1.1 · Vigência original: 08/04/2026 · Última atualização:
           17/04/2026.

@@ -90,7 +90,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
                   onClick={() => setSelectedImage(img)}
                   className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
                     selectedImage?.id === img.id
-                      ? 'border-[hsl(196,91%,36%)]'
+                      ? 'border-[hsl(196,91%,33%)]'
                       : 'border-gray-200 hover:border-gray-400'
                   }`}
                 >

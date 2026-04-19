@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-[hsl(213,75%,24%)] via-[hsl(210,60%,30%)] to-[hsl(196,91%,36%)] p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-[hsl(213,75%,24%)] via-[hsl(210,60%,30%)] to-[hsl(196,91%,33%)] p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="mb-2 inline-flex items-center gap-2">

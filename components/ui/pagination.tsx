@@ -41,7 +41,7 @@ export function Pagination({ total, pageSize, currentPage }: PaginationProps) {
   }
 
   const btnBase = 'flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors'
-  const btnActive = 'bg-[hsl(196,91%,36%)] text-white font-semibold'
+  const btnActive = 'bg-[hsl(196,91%,33%)] text-white font-semibold'
   const btnInactive = 'border border-gray-200 text-gray-600 hover:bg-gray-50'
   const btnDisabled = 'text-gray-300 cursor-not-allowed border border-gray-100'
 

@@ -18,7 +18,7 @@ export default function RegistroPage() {
 
       <p className="text-center text-sm text-gray-500">
         Já tem cadastro?{' '}
-        <Link href="/login" className="font-medium text-[hsl(196,91%,36%)] hover:underline">
+        <Link href="/login" className="font-medium text-[hsl(196,91%,33%)] hover:underline">
           Entrar
         </Link>
       </p>

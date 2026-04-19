@@ -17,7 +17,7 @@ import { formatCurrency } from '@/lib/utils'
 
 // ── Colors ────────────────────────────────────────────────────────────────────
 const BRAND = 'hsl(213,75%,24%)'
-const BRAND2 = 'hsl(196,91%,36%)'
+const BRAND2 = 'hsl(196,91%,33%)'
 const STATUS_COLORS = [
   '#1e3a5f',
   '#0891b2',

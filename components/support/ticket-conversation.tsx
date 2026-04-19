@@ -7,6 +7,7 @@ import { Send, Lock, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -368,7 +369,7 @@ export function TicketConversation({
             </p>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Status</label>
+                <Label className="mb-1 block text-xs text-slate-600">Status</Label>
                 <Select
                   value={ticket.status}
                   onValueChange={(v) => v && handleStatus(v)}
@@ -388,7 +389,7 @@ export function TicketConversation({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Prioridade</label>
+                <Label className="mb-1 block text-xs text-slate-600">Prioridade</Label>
                 <Select
                   value={ticket.priority}
                   onValueChange={(v) => v && handlePriority(v)}

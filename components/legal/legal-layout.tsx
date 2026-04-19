@@ -50,17 +50,17 @@ export function LegalLayout({
           {children}
         </div>
 
-        {/* Footer nav */}
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
-          <Link href="/login" className="flex items-center gap-1 hover:text-slate-600">
-            <ArrowLeft className="h-3 w-3" />
+        {/* Footer nav — slate-600 (4.5:1+ on slate-50/white) for WCAG 2.1 AA */}
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600">
+          <Link href="/login" className="flex items-center gap-1 hover:text-slate-900">
+            <ArrowLeft className="h-3 w-3" aria-hidden="true" />
             Voltar para o login
           </Link>
           <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-slate-600">
+            <Link href="/terms" className="hover:text-slate-900">
               Termos de Uso
             </Link>
-            <Link href="/privacy" className="hover:text-slate-600">
+            <Link href="/privacy" className="hover:text-slate-900">
               Política de Privacidade
             </Link>
           </div>

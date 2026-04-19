@@ -50,7 +50,7 @@ export function RegistrationStatusBanner({ status }: RegistrationStatusBannerPro
         {c.cta && (
           <Link
             href={c.cta.href}
-            className="mt-2 inline-block text-sm font-medium text-[hsl(196,91%,36%)] hover:underline"
+            className="mt-2 inline-block text-sm font-medium text-[hsl(196,91%,33%)] hover:underline"
           >
             {c.cta.label} →
           </Link>

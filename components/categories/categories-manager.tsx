@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Plus, Pencil, Check, X, Power, PowerOff, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
   createCategory,
@@ -160,8 +161,11 @@ export function CategoriesManager({ categories: initial }: CategoriesManagerProp
           <p className="mb-3 text-sm font-semibold text-blue-800">Nova categoria</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Nome *</label>
+              <Label htmlFor="new-category-name" className="mb-1 block text-xs text-slate-600">
+                Nome *
+              </Label>
               <Input
+                id="new-category-name"
                 autoFocus
                 placeholder="Ex: Hormônios, Vitaminas, Analgésicos..."
                 value={newName}
@@ -175,10 +179,11 @@ export function CategoriesManager({ categories: initial }: CategoriesManagerProp
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">
+              <Label htmlFor="new-category-order" className="mb-1 block text-xs text-slate-600">
                 Ordem de exibição
-              </label>
+              </Label>
               <Input
+                id="new-category-order"
                 type="number"
                 min="0"
                 placeholder="0"
@@ -187,10 +192,14 @@ export function CategoriesManager({ categories: initial }: CategoriesManagerProp
               />
             </div>
             <div className="sm:col-span-3">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
+              <Label
+                htmlFor="new-category-description"
+                className="mb-1 block text-xs text-slate-600"
+              >
                 Descrição (opcional)
-              </label>
+              </Label>
               <Input
+                id="new-category-description"
                 placeholder="Breve descrição para uso interno..."
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}

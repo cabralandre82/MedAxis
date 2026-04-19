@@ -261,7 +261,7 @@ export default async function RegistrationsPage({ searchParams }: PageProps) {
                           {email && (
                             <a
                               href={`mailto:${email}?subject=Seu cadastro na Clinipharma&body=Olá ${name}, notamos que você iniciou um cadastro na Clinipharma mas não concluiu o envio. Podemos ajudá-lo?`}
-                              className="flex items-center gap-1 text-xs font-medium text-[hsl(196,91%,36%)] hover:underline"
+                              className="flex items-center gap-1 text-xs font-medium text-[hsl(196,91%,33%)] hover:underline"
                             >
                               <Mail className="h-3 w-3" />
                               Contatar
@@ -345,7 +345,7 @@ export default async function RegistrationsPage({ searchParams }: PageProps) {
                         <td className="px-4 py-3">
                           <Link
                             href={`/registrations/${req.id}`}
-                            className="text-xs font-medium text-[hsl(196,91%,36%)] hover:underline"
+                            className="text-xs font-medium text-[hsl(196,91%,33%)] hover:underline"
                           >
                             Analisar →
                           </Link>

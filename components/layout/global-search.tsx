@@ -188,7 +188,7 @@ export function GlobalSearch() {
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Buscar… ⌘K"
-          className="h-9 w-full rounded-lg border border-gray-200 bg-white pr-8 pl-8 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[hsl(196,91%,36%)] focus:outline-none"
+          className="h-9 w-full rounded-lg border border-gray-200 bg-white pr-8 pl-8 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[hsl(196,91%,33%)] focus:outline-none"
         />
         {(query || loading) && (
           <button

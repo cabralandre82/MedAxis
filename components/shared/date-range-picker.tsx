@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Calendar, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 
 export interface DateRange {
   from: string // YYYY-MM-DD
@@ -122,7 +123,15 @@ export function DateRangePicker({ defaultPreset = 'month' }: DateRangePickerProp
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          {/* Click-outside backdrop. Hidden from AT — focus management is
+              handled by the trigger button above. */}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setOpen(false)}
+          />
           <div className="absolute top-full right-0 z-20 mt-1.5 w-72 rounded-xl border border-gray-200 bg-white shadow-lg">
             <div className="p-2">
               {PRESETS.filter((p) => p.key !== 'custom').map((preset) => (
@@ -151,8 +160,11 @@ export function DateRangePicker({ defaultPreset = 'month' }: DateRangePickerProp
                 </p>
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <label className="text-xs text-gray-400">De</label>
+                    <Label htmlFor="date-range-from" className="text-xs text-gray-600">
+                      De
+                    </Label>
                     <input
+                      id="date-range-from"
                       type="date"
                       value={customFrom}
                       max={customTo}
@@ -161,8 +173,11 @@ export function DateRangePicker({ defaultPreset = 'month' }: DateRangePickerProp
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="text-xs text-gray-400">Até</label>
+                    <Label htmlFor="date-range-to" className="text-xs text-gray-600">
+                      Até
+                    </Label>
                     <input
+                      id="date-range-to"
                       type="date"
                       value={customTo}
                       min={customFrom}

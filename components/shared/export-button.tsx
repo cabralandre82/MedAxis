@@ -58,7 +58,15 @@ export function ExportButton({ type, label = 'Exportar', extraParams = '' }: Exp
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          {/* Click-outside backdrop. Hidden from AT — focus management is
+              handled by the trigger button above. */}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setOpen(false)}
+          />
           <div className="absolute top-9 right-0 z-20 min-w-[160px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
             <button
               onClick={() => download('csv')}
