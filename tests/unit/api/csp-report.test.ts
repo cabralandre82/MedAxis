@@ -14,7 +14,7 @@ describe('POST /api/csp-report — parser', () => {
   })
 
   it('parses a legacy report-uri payload', async () => {
-    const { parseReports } = await import('@/app/api/csp-report/route')
+    const { parseReports } = await import('@/lib/security/csp-report')
     const body = JSON.stringify({
       'csp-report': {
         'document-uri': 'https://app.test/dashboard',
@@ -34,7 +34,7 @@ describe('POST /api/csp-report — parser', () => {
   })
 
   it('parses a Reporting API array payload', async () => {
-    const { parseReports } = await import('@/app/api/csp-report/route')
+    const { parseReports } = await import('@/lib/security/csp-report')
     const body = JSON.stringify([
       {
         type: 'csp-violation',
@@ -60,7 +60,7 @@ describe('POST /api/csp-report — parser', () => {
   })
 
   it('drops entries with the wrong type in a Reporting API array', async () => {
-    const { parseReports } = await import('@/app/api/csp-report/route')
+    const { parseReports } = await import('@/lib/security/csp-report')
     const body = JSON.stringify([
       { type: 'network-error', body: {} },
       {
@@ -74,7 +74,7 @@ describe('POST /api/csp-report — parser', () => {
   })
 
   it('returns empty list and bumps invalid counter on JSON parse error', async () => {
-    const { parseReports } = await import('@/app/api/csp-report/route')
+    const { parseReports } = await import('@/lib/security/csp-report')
     const { snapshotMetrics } = await import('@/lib/metrics')
     expect(parseReports('not-json')).toEqual([])
     const snap = snapshotMetrics()
@@ -85,12 +85,12 @@ describe('POST /api/csp-report — parser', () => {
   })
 
   it('returns empty list on unknown shape', async () => {
-    const { parseReports } = await import('@/app/api/csp-report/route')
+    const { parseReports } = await import('@/lib/security/csp-report')
     expect(parseReports(JSON.stringify({ foo: 'bar' }))).toEqual([])
   })
 
   it('truncates oversize script-sample to 256 chars', async () => {
-    const { parseReports } = await import('@/app/api/csp-report/route')
+    const { parseReports } = await import('@/lib/security/csp-report')
     const huge = 'x'.repeat(5000)
     const body = JSON.stringify({
       'csp-report': {
