@@ -204,10 +204,15 @@ jobs:
           PGUSER: postgres
           PGDATABASE: drift_check
         run: |
+          # Same exclude-set as the production dump in Layer 2 — the two
+          # files must be derived from comparable inputs to be diffable.
           pg_dump --schema-only --no-owner --no-privileges \
             --exclude-schema=auth --exclude-schema=storage --exclude-schema=realtime \
-            --exclude-schema=pgbouncer --exclude-schema=graphql \
+            --exclude-schema=pgbouncer --exclude-schema=graphql --exclude-schema=graphql_public \
             --exclude-schema=extensions --exclude-schema=vault \
+            --exclude-schema=net --exclude-schema=cron --exclude-schema=supabase_functions \
+            --exclude-schema=_realtime --exclude-schema=_analytics --exclude-schema=pgsodium \
+            --exclude-schema=pgsodium_masks --exclude-schema=supabase_migrations \
             > schema-from-migrations.sql
           wc -l schema-from-migrations.sql
 
@@ -235,19 +240,32 @@ jobs:
           name: schema-from-migrations
           path: ./
 
-      - name: Install postgres client
+      - name: Install postgres client 18
+        # Supabase prod is on PostgreSQL 18 as of 2026-04 (see also
+        # restore-drill.yml). pg_dump major must be >= server major.
         run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
+          sudo apt-get install -y -qq postgresql-client-18
+          /usr/lib/postgresql/18/bin/pg_dump --version
 
       - name: Dump production schema
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          pg_dump --schema-only --no-owner --no-privileges \
+          # Exclude every Supabase-managed schema. We compare ONLY the
+          # schemas this repo owns (public + supabase_migrations is
+          # excluded by virtue of being an internal supabase tracking
+          # table that isn't part of `001_initial_schema.sql`).
+          /usr/lib/postgresql/18/bin/pg_dump \
+            --schema-only --no-owner --no-privileges \
             --exclude-schema=auth --exclude-schema=storage --exclude-schema=realtime \
-            --exclude-schema=pgbouncer --exclude-schema=graphql \
+            --exclude-schema=pgbouncer --exclude-schema=graphql --exclude-schema=graphql_public \
             --exclude-schema=extensions --exclude-schema=vault \
+            --exclude-schema=net --exclude-schema=cron --exclude-schema=supabase_functions \
+            --exclude-schema=_realtime --exclude-schema=_analytics --exclude-schema=pgsodium \
+            --exclude-schema=pgsodium_masks --exclude-schema=supabase_migrations \
             "$DATABASE_URL" \
             > schema-from-production.sql
           wc -l schema-from-production.sql
