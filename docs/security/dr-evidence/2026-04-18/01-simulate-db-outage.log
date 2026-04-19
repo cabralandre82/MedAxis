@@ -1,0 +1,19 @@
+🟡 TABLETOP MODE — destructive steps will be logged, not executed.
+   To run a real drill, set TABLETOP=0 DRILL_ENV=staging and provide credentials.
+📂 Evidence dir: /home/usuario/b2b-med-platform/docs/security/dr-evidence/2026-04-18
+[2026-04-18T20:27:18-03:00] ===== Cenário 1: DB outage simulation =====
+[2026-04-18T20:27:18-03:00] Step 1: rename SUPABASE_SERVICE_ROLE_KEY → SUPABASE_SERVICE_ROLE_KEY_BACKUP on Vercel staging
+[2026-04-18T20:27:18-03:00] 🛠️  TABLETOP — would run: vercel env rm SUPABASE_SERVICE_ROLE_KEY staging
+[2026-04-18T20:27:18-03:00] 🕒 TABLETOP — would await human action: Press Enter when env var was renamed and redeploy completed... 
+⏱️  Timer started at 2026-04-18T20:27:19-03:00
+[2026-04-18T20:27:19-03:00] Step 2: polling /api/health for database.ok=false (max 5min)
+⏱️  01-detect-db-outage: 0m0s (0s total)
+[2026-04-18T20:27:19-03:00] ✅ Detected DB outage on poll #1
+[2026-04-18T20:27:19-03:00] Step 3: restore SUPABASE_SERVICE_ROLE_KEY on Vercel
+[2026-04-18T20:27:19-03:00] 🛠️  TABLETOP — would run: vercel env add SUPABASE_SERVICE_ROLE_KEY staging
+[2026-04-18T20:27:19-03:00] 🕒 TABLETOP — would await human action: Press Enter when env var restored and redeploy started... 
+⏱️  Timer started at 2026-04-18T20:27:20-03:00
+[2026-04-18T20:27:20-03:00] Step 4: polling /api/health for database.ok=true (max 10min)
+⏱️  01-recover-db-outage: 0m0s (0s total)
+[2026-04-18T20:27:20-03:00] ✅ DB recovered on poll #1
+[2026-04-18T20:27:20-03:00] ===== Cenário 1: COMPLETE =====

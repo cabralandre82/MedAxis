@@ -1,0 +1,7 @@
+TABLETOP — synthetic pre-restore counts
+ t           | count
+-------------+-------
+ orders      |  1438
+ audit_log   | 28931
+ users       |   217
+ order_items |  4392

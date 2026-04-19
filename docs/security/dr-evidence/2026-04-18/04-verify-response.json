@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "chain_break": true,
+  "first_invalid_seq": 12345,
+  "detected_at": "TABLETOP",
+  "alert_sent": true
+}

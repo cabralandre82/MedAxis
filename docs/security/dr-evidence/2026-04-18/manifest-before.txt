@@ -1,0 +1,8 @@
+TABLETOP — synthetic manifest snapshot
+secrets:
+  ENCRYPTION_KEY:
+    last_rotated_at: 2026-04-04T00:00:00Z
+    next_rotation_at: 2026-04-18T00:00:00Z
+    classification: critical
+    chain_seq: 42
+    chain_hash: sha256:beef...cafe

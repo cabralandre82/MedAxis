@@ -1,0 +1,21 @@
+🟡 TABLETOP MODE — destructive steps will be logged, not executed.
+   To run a real drill, set TABLETOP=0 DRILL_ENV=staging and provide credentials.
+📂 Evidence dir: /home/usuario/b2b-med-platform/docs/security/dr-evidence/2026-04-18
+[2026-04-18T20:27:20-03:00] ===== Cenário 3: Backup restore drill =====
+[2026-04-18T20:27:20-03:00] Step 1: capture pre-state — counts of key tables
+[2026-04-18T20:27:20-03:00]   (run the SQL above against staging; save output as pre-counts.txt)
+[2026-04-18T20:27:20-03:00] 🕒 TABLETOP — would await human action: Press Enter when pre-counts.txt is saved... 
+⏱️  Timer started at 2026-04-18T20:27:21-03:00
+[2026-04-18T20:27:21-03:00] Step 2: MANUAL — perform PITR via Supabase dashboard
+[2026-04-18T20:27:21-03:00]   Target time: 2026-04-18T23:22:21+00:00
+[2026-04-18T20:27:21-03:00]   Console: https://supabase.com/dashboard/project/<staging-project-id>/database/backups
+[2026-04-18T20:27:21-03:00] 🕒 TABLETOP — would await human action: Press Enter when restore starts... 
+[2026-04-18T20:27:22-03:00] Step 3: polling /api/health for database.ok=true
+⏱️  03-restore-recovery: 0m1s (1s total)
+[2026-04-18T20:27:22-03:00] ✅ DB healthy after restore (poll #1)
+[2026-04-18T20:27:22-03:00] Step 4: capture post-counts — compare with pre-counts.txt for RPO
+[2026-04-18T20:27:22-03:00] 🕒 TABLETOP — would await human action: Press Enter when post-counts.txt is saved... 
+[2026-04-18T20:27:23-03:00] Step 5: hash chain verification
+[2026-04-18T20:27:23-03:00] ✅ Audit chain integrity OK (synthetic, 2-row gap documented)
+[2026-04-18T20:27:23-03:00] ===== Cenário 3: COMPLETE =====
+[2026-04-18T20:27:23-03:00] Compare pre-counts.txt vs post-counts.txt to compute RPO.

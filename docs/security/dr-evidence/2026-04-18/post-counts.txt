@@ -1,0 +1,7 @@
+TABLETOP — synthetic post-restore counts (PITR target: T-5min)
+ t           | count
+-------------+-------
+ orders      |  1437   (−1 vs pre, RPO ≈ 4 min)
+ audit_log   | 28929   (−2 vs pre)
+ users       |   217   (=)
+ order_items |  4391   (−1 vs pre)

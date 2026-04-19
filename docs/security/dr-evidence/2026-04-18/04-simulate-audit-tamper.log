@@ -1,0 +1,23 @@
+🟡 TABLETOP MODE — destructive steps will be logged, not executed.
+   To run a real drill, set TABLETOP=0 DRILL_ENV=staging and provide credentials.
+📂 Evidence dir: /home/usuario/b2b-med-platform/docs/security/dr-evidence/2026-04-18
+[2026-04-18T20:27:23-03:00] ===== Cenário 4: Audit chain tamper detection =====
+[2026-04-18T20:27:23-03:00] Step 1: get current audit_log max(seq)
+[2026-04-18T20:27:23-03:00]   (execute the SQL above and pick a row id to tamper)
+[2026-04-18T20:27:24-03:00] 🕒 TABLETOP — would await human action: Press Enter when ready... 
+⏱️  Timer started at 2026-04-18T20:27:25-03:00
+[2026-04-18T20:27:25-03:00] Step 2: MANUAL — tamper the row
+[2026-04-18T20:27:25-03:00]   Example SQL (REPLACE 12345 with your chosen seq):
+[2026-04-18T20:27:25-03:00]     UPDATE audit_log SET action='TAMPERED' WHERE seq=12345;
+[2026-04-18T20:27:25-03:00] 🛠️  TABLETOP — would run: psql staging -c UPDATE audit_log SET action='TAMPERED' WHERE seq=12345
+[2026-04-18T20:27:25-03:00] 🕒 TABLETOP — would await human action: Press Enter when tamper is applied... 
+[2026-04-18T20:27:26-03:00] Step 3: trigger verification cron
+[2026-04-18T20:27:26-03:00]   /api/cron/verify-audit-chain → HTTP 200 (TABLETOP synthetic)
+⏱️  04-tamper-detection: 0m1s (1s total)
+[2026-04-18T20:27:26-03:00] ✅ Tamper DETECTED — alerting fired
+[2026-04-18T20:27:26-03:00] Step 4: MANUAL — restore the row
+[2026-04-18T20:27:26-03:00]   UPDATE audit_log SET action='<original>' WHERE seq=12345;
+[2026-04-18T20:27:26-03:00] 🛠️  TABLETOP — would run: psql staging -c UPDATE audit_log SET action='<original>' WHERE seq=12345
+[2026-04-18T20:27:26-03:00] 🕒 TABLETOP — would await human action: Press Enter when restored... 
+[2026-04-18T20:27:27-03:00] Step 5: re-verify
+[2026-04-18T20:27:27-03:00] ===== Cenário 4: COMPLETE =====

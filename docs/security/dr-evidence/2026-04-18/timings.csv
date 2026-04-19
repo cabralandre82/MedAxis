@@ -1,0 +1,9 @@
+2026-04-18T20:27:19-03:00|01-detect-db-outage|0s
+2026-04-18T20:27:20-03:00|01-recover-db-outage|0s
+2026-04-18T20:27:20-03:00|02-secret-leak-recovery|0s
+2026-04-18T20:27:22-03:00|03-restore-recovery|1s
+2026-04-18T20:27:26-03:00|04-tamper-detection|1s
+2026-04-18T20:27:28-03:00|05-confirm-external|1s
+2026-04-18T20:27:29-03:00|05-fallback-enable|1s
+2026-04-18T20:27:30-03:00|05-comms-sent|1s
+2026-04-18T20:27:31-03:00|05-post-recovery-validation|0s

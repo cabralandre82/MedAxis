@@ -1,0 +1,6 @@
+TABLETOP — synthetic dry-run output
+[secrets:rotate] target=ENCRYPTION_KEY
+[secrets:rotate] generating new value (32 bytes from /dev/urandom)
+[secrets:rotate] would update Vercel env (project=clinipharma-staging)
+[secrets:rotate] would append manifest entry seq=43, parent_hash=sha256:beef...cafe
+[secrets:rotate] DRY-RUN: no side effects

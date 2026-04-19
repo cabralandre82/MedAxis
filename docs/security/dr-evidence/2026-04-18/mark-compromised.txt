@@ -1,0 +1,1 @@
+TABLETOP — would mark ENCRYPTION_KEY as compromised in manifest

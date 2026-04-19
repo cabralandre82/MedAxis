@@ -1,0 +1,87 @@
+[2026-04-18T20:27:18-03:00] ===== Cenário 1: DB outage simulation =====
+[2026-04-18T20:27:18-03:00] 🌐 TABLETOP — would curl: GET /api/health (baseline)
+[2026-04-18T20:27:18-03:00] Step 1: rename SUPABASE_SERVICE_ROLE_KEY → SUPABASE_SERVICE_ROLE_KEY_BACKUP on Vercel staging
+[2026-04-18T20:27:18-03:00] 🛠️  TABLETOP — would run: vercel env rm SUPABASE_SERVICE_ROLE_KEY staging
+[2026-04-18T20:27:18-03:00] 🕒 TABLETOP — would await human action: Press Enter when env var was renamed and redeploy completed... 
+[2026-04-18T20:27:19-03:00] Step 2: polling /api/health for database.ok=false (max 5min)
+[2026-04-18T20:27:19-03:00] ✅ Detected DB outage on poll #1
+[2026-04-18T20:27:19-03:00] 🌐 TABLETOP — would curl: GET /api/health (during outage)
+[2026-04-18T20:27:19-03:00] Step 3: restore SUPABASE_SERVICE_ROLE_KEY on Vercel
+[2026-04-18T20:27:19-03:00] 🛠️  TABLETOP — would run: vercel env add SUPABASE_SERVICE_ROLE_KEY staging
+[2026-04-18T20:27:19-03:00] 🕒 TABLETOP — would await human action: Press Enter when env var restored and redeploy started... 
+[2026-04-18T20:27:20-03:00] Step 4: polling /api/health for database.ok=true (max 10min)
+[2026-04-18T20:27:20-03:00] ✅ DB recovered on poll #1
+[2026-04-18T20:27:20-03:00] 🌐 TABLETOP — would curl: GET /api/health (after recovery)
+[2026-04-18T20:27:20-03:00] ===== Cenário 1: COMPLETE =====
+[2026-04-18T20:27:20-03:00] ===== Cenário 2: Secret leak simulation =====
+[2026-04-18T20:27:20-03:00] Step 1: capturing manifest state BEFORE rotation
+[2026-04-18T20:27:20-03:00] Step 2: marking ENCRYPTION_KEY as compromised
+[2026-04-18T20:27:20-03:00] 🛠️  TABLETOP — would run: npm run --silent secrets:mark-compromised -- ENCRYPTION_KEY
+[2026-04-18T20:27:20-03:00] Step 3: triggering rotation (dry-run)
+[2026-04-18T20:27:20-03:00]   (dry-run output saved; for real rotation in drill, remove --dry-run)
+[2026-04-18T20:27:20-03:00] Step 4: verifying hash chain integrity
+[2026-04-18T20:27:20-03:00] ✅ Hash chain integrity OK (synthetic)
+[2026-04-18T20:27:20-03:00] Step 5: smoke test
+[2026-04-18T20:27:20-03:00]   /api/health → HTTP 200 (TABLETOP synthetic)
+[2026-04-18T20:27:20-03:00]   /api/health/deep → HTTP 200 (TABLETOP synthetic)
+[2026-04-18T20:27:20-03:00] ===== Cenário 2: COMPLETE =====
+[2026-04-18T20:27:20-03:00] ===== Cenário 3: Backup restore drill =====
+[2026-04-18T20:27:20-03:00] Step 1: capture pre-state — counts of key tables
+[2026-04-18T20:27:20-03:00]   (run the SQL above against staging; save output as pre-counts.txt)
+[2026-04-18T20:27:20-03:00] 🕒 TABLETOP — would await human action: Press Enter when pre-counts.txt is saved... 
+[2026-04-18T20:27:21-03:00] Step 2: MANUAL — perform PITR via Supabase dashboard
+[2026-04-18T20:27:21-03:00]   Target time: 2026-04-18T23:22:21+00:00
+[2026-04-18T20:27:21-03:00]   Console: https://supabase.com/dashboard/project/<staging-project-id>/database/backups
+[2026-04-18T20:27:21-03:00] 🕒 TABLETOP — would await human action: Press Enter when restore starts... 
+[2026-04-18T20:27:22-03:00] Step 3: polling /api/health for database.ok=true
+[2026-04-18T20:27:22-03:00] ✅ DB healthy after restore (poll #1)
+[2026-04-18T20:27:22-03:00] Step 4: capture post-counts — compare with pre-counts.txt for RPO
+[2026-04-18T20:27:22-03:00] 🕒 TABLETOP — would await human action: Press Enter when post-counts.txt is saved... 
+[2026-04-18T20:27:23-03:00] Step 5: hash chain verification
+[2026-04-18T20:27:23-03:00] ✅ Audit chain integrity OK (synthetic, 2-row gap documented)
+[2026-04-18T20:27:23-03:00] ===== Cenário 3: COMPLETE =====
+[2026-04-18T20:27:23-03:00] Compare pre-counts.txt vs post-counts.txt to compute RPO.
+[2026-04-18T20:27:23-03:00] ===== Cenário 4: Audit chain tamper detection =====
+[2026-04-18T20:27:23-03:00] Step 1: get current audit_log max(seq)
+[2026-04-18T20:27:23-03:00]   (execute the SQL above and pick a row id to tamper)
+[2026-04-18T20:27:24-03:00] 🕒 TABLETOP — would await human action: Press Enter when ready... 
+[2026-04-18T20:27:25-03:00] Step 2: MANUAL — tamper the row
+[2026-04-18T20:27:25-03:00]   Example SQL (REPLACE 12345 with your chosen seq):
+[2026-04-18T20:27:25-03:00]     UPDATE audit_log SET action='TAMPERED' WHERE seq=12345;
+[2026-04-18T20:27:25-03:00] 🛠️  TABLETOP — would run: psql staging -c UPDATE audit_log SET action='TAMPERED' WHERE seq=12345
+[2026-04-18T20:27:25-03:00] 🕒 TABLETOP — would await human action: Press Enter when tamper is applied... 
+[2026-04-18T20:27:26-03:00] Step 3: trigger verification cron
+[2026-04-18T20:27:26-03:00]   /api/cron/verify-audit-chain → HTTP 200 (TABLETOP synthetic)
+[2026-04-18T20:27:26-03:00] ✅ Tamper DETECTED — alerting fired
+[2026-04-18T20:27:26-03:00] Step 4: MANUAL — restore the row
+[2026-04-18T20:27:26-03:00]   UPDATE audit_log SET action='<original>' WHERE seq=12345;
+[2026-04-18T20:27:26-03:00] 🛠️  TABLETOP — would run: psql staging -c UPDATE audit_log SET action='<original>' WHERE seq=12345
+[2026-04-18T20:27:26-03:00] 🕒 TABLETOP — would await human action: Press Enter when restored... 
+[2026-04-18T20:27:27-03:00] Step 5: re-verify
+[2026-04-18T20:27:27-03:00] ===== Cenário 4: COMPLETE =====
+[2026-04-18T20:27:27-03:00] ===== Cenário 5: Region failure drill =====
+[2026-04-18T20:27:27-03:00] Step 1: confirm scenario via external status pages
+[2026-04-18T20:27:27-03:00]   → status.vercel-status.com
+[2026-04-18T20:27:27-03:00]   → status.supabase.com
+[2026-04-18T20:27:27-03:00]   → status.cloudflare.com
+[2026-04-18T20:27:27-03:00] 🕒 TABLETOP — would await human action: Press Enter when external status confirmed... 
+[2026-04-18T20:27:28-03:00] Step 2: enable Cloudflare Workers fallback page
+[2026-04-18T20:27:28-03:00]   (manual — log into Cloudflare dashboard, enable 'maintenance' worker)
+[2026-04-18T20:27:28-03:00] 🛠️  TABLETOP — would run: wrangler deploy maintenance-worker --env production
+[2026-04-18T20:27:28-03:00] 🕒 TABLETOP — would await human action: Press Enter when fallback live... 
+[2026-04-18T20:27:29-03:00] Step 3: comms
+[2026-04-18T20:27:29-03:00]   - update /status (status.clinipharma.com.br) with 'major outage'
+[2026-04-18T20:27:29-03:00]   - send email to all partner ops contacts (template: docs/templates/incident-comms.md)
+[2026-04-18T20:27:29-03:00]   - post to internal Slack #incidents channel
+[2026-04-18T20:27:29-03:00] 🕒 TABLETOP — would await human action: Press Enter when comms sent... 
+[2026-04-18T20:27:30-03:00] Step 4: monitor recovery
+[2026-04-18T20:27:30-03:00]   - poll vendor status pages every 5 min
+[2026-04-18T20:27:30-03:00]   - check /api/health every 30s once vendor is green
+[2026-04-18T20:27:30-03:00] 🕒 TABLETOP — would await human action: Press Enter when service recovered... 
+[2026-04-18T20:27:31-03:00] Step 5: post-recovery validation
+[2026-04-18T20:27:31-03:00]   /api/health → HTTP 200 (TABLETOP synthetic)
+[2026-04-18T20:27:31-03:00]   /api/health/deep → HTTP 200 (TABLETOP synthetic)
+[2026-04-18T20:27:31-03:00]   - verify cron jobs resumed (Inngest dashboard)
+[2026-04-18T20:27:31-03:00]   - verify queued notifications drained
+[2026-04-18T20:27:31-03:00]   - check error rate in Sentry returned to baseline
+[2026-04-18T20:27:31-03:00] ===== Cenário 5: COMPLETE =====
