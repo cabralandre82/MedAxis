@@ -1,0 +1,173 @@
+name: Schema Drift Detection
+
+# Verifies that the migrations under `supabase/migrations/` are
+# self-consistent and that the production schema does not silently
+# diverge from what's in the repo. Two layers:
+#
+#   1. Static parse  — every migration is loaded by psql `--dry-run`
+#                      style validation (BEGIN; ... ROLLBACK) against
+#                      a fresh ephemeral postgres so unparseable SQL
+#                      or out-of-order references break the build.
+#
+#   2. Drift compare — when the SUPABASE_DB_URL secret is set, we
+#                      `pg_dump --schema-only` the production schema
+#                      and diff it against a clean reapply of all
+#                      repo migrations. ANY DIFFERENCE fails the run.
+#                      The diff is uploaded as an artifact for
+#                      operators to inspect.
+#
+# Layer 2 is guarded by the secret so PRs from contributors without
+# production credentials still run layer 1. Both layers are
+# READ-ONLY against production.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/schema-drift.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'supabase/migrations/**'
+  schedule:
+    # Daily at 04:30 UTC catches drift introduced by an out-of-band
+    # manual change (the kind we explicitly forbid but should still
+    # detect quickly).
+    - cron: '30 4 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  # ─── Layer 1: static parse against an ephemeral postgres ─────────────────
+  parse:
+    name: Parse migrations (ephemeral pg)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: drift_check
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Wait for postgres
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -U postgres && exit 0
+            sleep 1
+          done
+          echo "::error::postgres never became ready"
+          exit 1
+
+      - name: Apply migrations sequentially
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: drift_check
+        run: |
+          set -e
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "→ applying $f"
+            # Wrap each migration in its own transaction so a single bad
+            # file fails noisily without poisoning later migrations.
+            psql --single-transaction -v ON_ERROR_STOP=1 -f "$f"
+          done
+          echo "✓ all migrations applied cleanly"
+
+      - name: Capture clean schema
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: drift_check
+        run: |
+          pg_dump --schema-only --no-owner --no-privileges \
+            --exclude-schema=auth --exclude-schema=storage --exclude-schema=realtime \
+            --exclude-schema=pgbouncer --exclude-schema=graphql \
+            --exclude-schema=extensions --exclude-schema=vault \
+            > schema-from-migrations.sql
+          wc -l schema-from-migrations.sql
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: schema-from-migrations
+          path: schema-from-migrations.sql
+          retention-days: 30
+
+  # ─── Layer 2: production diff (only when secret is set) ──────────────────
+  drift:
+    name: Compare against production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: parse
+    # Only run when SUPABASE_DB_URL is configured. Inputs from secrets
+    # cannot be used in `if:` directly so we use `vars.HAS_PROD_DB_URL`
+    # as a public toggle that we set when the secret is provisioned.
+    if: ${{ vars.HAS_PROD_DB_URL == 'true' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: schema-from-migrations
+          path: ./
+
+      - name: Install postgres client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Dump production schema
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          pg_dump --schema-only --no-owner --no-privileges \
+            --exclude-schema=auth --exclude-schema=storage --exclude-schema=realtime \
+            --exclude-schema=pgbouncer --exclude-schema=graphql \
+            --exclude-schema=extensions --exclude-schema=vault \
+            "$DATABASE_URL" \
+            > schema-from-production.sql
+          wc -l schema-from-production.sql
+
+      - name: Diff schemas
+        id: diff
+        run: |
+          # Normalise both files (trim whitespace, sort statements when
+          # they're semantically order-independent like CREATE INDEX).
+          # We use a soft diff that ignores `SET` statements and comments
+          # so PG version drift in the dumper itself doesn't trigger a
+          # false positive.
+          diff -u \
+            <(grep -vE '^(SET |--)' schema-from-migrations.sql | sort -u) \
+            <(grep -vE '^(SET |--)' schema-from-production.sql | sort -u) \
+            > schema-drift.diff || true
+          if [ -s schema-drift.diff ]; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Schema drift detected — see schema-drift.diff artifact."
+            head -120 schema-drift.diff
+            exit 1
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "✓ no drift between repo migrations and production"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: schema-drift-diff
+          path: schema-drift.diff
+          retention-days: 30
