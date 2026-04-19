@@ -99,6 +99,10 @@ jobs:
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
           E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
+          # Wave Hardening III — produção zerou critical/serious do axe.
+          # Mantém o smoke a11y como guard rail bloqueante: qualquer
+          # regressão WCAG 2.1 AA derruba o pipeline.
+          STRICT_A11Y: '1'
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7
