@@ -1,0 +1,13 @@
+Contact: mailto:security@clinipharma.com.br
+Contact: mailto:dpo@clinipharma.com.br
+Expires: 2027-04-17T00:00:00.000Z
+Preferred-Languages: pt-BR, en
+Canonical: https://clinipharma.com.br/.well-known/security.txt
+Policy: https://clinipharma.com.br/trust
+Acknowledgments: https://clinipharma.com.br/trust#hall-of-fame
+Hiring: https://clinipharma.com.br/careers
+
+# Disclosure policy:
+# We accept good-faith security research reports.
+# Please give us a reasonable timeframe to respond and remediate before public disclosure.
+# Out of scope: physical security, social engineering of staff, third-party SaaS we use.
