@@ -28,6 +28,8 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 const CRON_JOB_SLA_MS: Record<string, number> = {
+  // High-frequency jobs (Wave Hardening III)
+  'synthetic-probe': 15 * 60 * 1000, // every 5 min, allow 3× the period
   // Hourly jobs
   'rls-verifier': 2 * 60 * 60 * 1000,
   'lock-sweeper': 2 * 60 * 60 * 1000,
