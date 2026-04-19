@@ -301,11 +301,19 @@ jobs:
           # Then sort -u so semantically order-independent statements
           # (CREATE INDEX, ALTER PUBLICATION ADD TABLE, etc.) don't
           # produce false positives.
+          # Strip leading & trailing whitespace and collapse interior runs of
+          # whitespace BEFORE sorting. pg_dump preserves the source layout of
+          # function bodies verbatim, so a function whose body lives in the
+          # repo with 4-space indent and was deployed years ago via Supabase
+          # SQL editor with 5-space indent will diff on every line. Stripping
+          # whitespace makes the diff token-based, which is what we want for
+          # a structural drift gate.
           NORMALIZE='grep -vE "^(SET |--|\\\\restrict|\\\\unrestrict)" \
             | grep -vE "(pg_graphql|supabase_vault|supabase_realtime_messages_publication|issue_pg_cron_access|issue_pg_graphql_access|issue_pg_net_access|issue_graphql_placeholder|pgrst_ddl_watch|pgrst_drop_watch|set_graphql_placeholder|grant_pg_cron_access|grant_pg_graphql_access|grant_pg_net_access)" \
-            | grep -vE "^(COMMENT ON EXTENSION|CREATE EXTENSION IF NOT EXISTS) (pg_stat_statements)" \
+            | grep -vE "^(COMMENT ON EXTENSION|CREATE EXTENSION IF NOT EXISTS) (pg_stat_statements|btree_gin|btree_gist|pg_trgm)" \
             | grep -vE "^[[:space:]]*WHEN TAG IN \(.(CREATE|DROP) EXTENSION." \
             | grep -vE "^[[:space:]]*WHEN TAG IN \(.CREATE FUNCTION." \
+            | sed -E "s/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]+/ /g" \
             | sort -u'
           eval "$NORMALIZE" < schema-from-migrations.sql > /tmp/mig.norm
           eval "$NORMALIZE" < schema-from-production.sql > /tmp/prod.norm
