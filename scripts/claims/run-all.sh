@@ -29,6 +29,7 @@ VERIFIERS=(
   "check-cron-scheduled.mjs"
   "check-alert-coverage.mjs"
   "check-audit-chain-integrity.mjs"
+  "check-migration-ordering-integrity.mjs"
 )
 
 EXIT_CODE=0

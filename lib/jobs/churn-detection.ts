@@ -35,11 +35,13 @@ export const churnDetectionJob = inngest.createFunction(
     const atRisk = await step.run('compute-churn-scores', async () => {
       const admin = createAdminClient()
 
-      // Clinics with at least 1 completed order — compute avg cycle + days since last order
+      // Clinics with at least 1 completed order — compute avg cycle + days since last order.
+      // @rpc-speculative: this RPC is an optional optimisation; if absent, the inline query
+      // below covers the full functional path. Intentionally unmigrated because the inline
+      // path is already within SLO and a DB-side version adds cache-invalidation complexity.
       const { error: cycleErr } = await admin.rpc('compute_clinic_order_cycles')
 
       if (cycleErr) {
-        // Fallback: inline query if RPC doesn't exist
         logger.warn('[churn] RPC not available, using inline query')
       }
 

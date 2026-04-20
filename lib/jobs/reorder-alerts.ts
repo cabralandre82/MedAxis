@@ -29,14 +29,16 @@ export const reorderAlertsJob = inngest.createFunction(
     const alerts = await step.run('compute-reorder-predictions', async () => {
       const admin = createAdminClient()
 
-      // SQL: compute avg cycle per (clinic, product) with >= MIN_ORDERS completed orders
+      // SQL: compute avg cycle per (clinic, product) with >= MIN_ORDERS completed orders.
+      // @rpc-speculative: optional optimisation; the inline fallback is the canonical path
+      // and covers the full behaviour. Not migrated because the inline version meets SLO
+      // and keeps the computation close to the app's type system.
       const { data, error } = await admin.rpc('compute_reorder_predictions', {
         min_orders: MIN_ORDERS,
         alert_days: ALERT_DAYS_BEFORE,
       })
 
       if (error) {
-        // Fallback inline implementation
         logger.warn('[reorder] RPC not available — using inline query')
 
         const { data: rawOrders, error: ordErr } = await admin

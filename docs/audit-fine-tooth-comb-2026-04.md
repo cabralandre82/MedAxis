@@ -209,10 +209,10 @@ Convenção de migrations: arquivos `101+` foram introduzidos por esta auditoria
 
 **Entregáveis:**
 
-- `108_create_order_atomic.sql` (já especificada)
-- `supabase/migrations/109_apply_coupon_atomic.sql` (RPC com `FOR UPDATE`)
-- `supabase/migrations/110_confirm_payment_atomic.sql` (RPC com `FOR UPDATE`)
-- `lock_version` em `106_schema_hardening.sql`
+- `create_order_atomic` RPC — entregue em `supabase/migrations/049_atomic_rpcs.sql` (proposta original: `108_create_order_atomic.sql`)
+- `apply_coupon_atomic` RPC com `FOR UPDATE` — entregue em `supabase/migrations/049_atomic_rpcs.sql` (proposta original: `109_apply_coupon_atomic.sql`)
+- `confirm_payment_atomic` RPC com `FOR UPDATE` — entregue em `supabase/migrations/049_atomic_rpcs.sql` (proposta original: `110_confirm_payment_atomic.sql`)
+- Colunas `*_cents bigint` — entregues em `supabase/migrations/050_money_cents.sql` (proposta original: `106_schema_hardening.sql`)
 - Webhooks com `webhook_events(idempotency_key UNIQUE)` — bloqueio dedupe
 
 ### Lente 3 — CFO: Money integrity (10 sub-itens)

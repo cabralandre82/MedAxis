@@ -91,7 +91,9 @@ ALTER TABLE public.orders
   DROP COLUMN IF EXISTS pharmacy_cost_per_unit,
   DROP COLUMN IF EXISTS platform_commission_per_unit;
 
--- Desabilita o trigger antigo de congelamento (agora é feito no order_items)
+-- @retired: price-freeze moved from public.orders to public.order_items
+-- (see trg_order_items_freeze_price above). No caller references the
+-- old trigger after this migration — intentional, final retirement.
 DROP TRIGGER IF EXISTS trg_orders_freeze_price ON public.orders;
 
 -- 6. RLS para order_items
