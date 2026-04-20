@@ -88,6 +88,9 @@ jobs:
           path: scripts/claims/.results/
           retention-days: 90
           if-no-files-found: warn
+          # Directory is dot-prefixed (.results/) to align with .stryker-tmp convention.
+          # upload-artifact@v7 skips hidden files by default — explicitly opt in.
+          include-hidden-files: true
 
       - name: Fail job if any claim failed
         if: always() && steps.aggregate.outputs.failed != '0'
