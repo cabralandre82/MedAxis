@@ -67,7 +67,7 @@
     },
     {
       "path": "/api/cron/backup-freshness",
-      "schedule": "0 9 * * *"
+      "schedule": "10 9 * * *"
     },
     {
       "path": "/api/cron/rls-canary",

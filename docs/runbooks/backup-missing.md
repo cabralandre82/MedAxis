@@ -2,7 +2,7 @@
 
 **Severity:** P2 (warning) escalating to **P1** when `backup.freshness_enforce = ON`.
 **Owner on-call:** Platform / SRE.
-**Alert source:** `/api/cron/backup-freshness` (daily 09:00 UTC) +
+**Alert source:** `/api/cron/backup-freshness` (daily 09:10 UTC) +
 `backup_freshness_breach_total` / `backup_chain_break_total`
 metrics.
 
