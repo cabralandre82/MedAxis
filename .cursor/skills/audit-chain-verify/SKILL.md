@@ -46,11 +46,12 @@ select * from public.verify_audit_chain(
 );
 ```
 
-Expected columns:
+Expected columns (per migration 046 — `RETURNS TABLE`):
 
-- `ok` (boolean) — false means broken
-- `first_broken_seq` / `first_broken_id` — where the break starts
-- `rows_scanned`, `rows_ok`, `rows_failed`
+- `scanned_rows` (bigint) — how many rows the recompute covered
+- `inconsistent_count` (bigint) — non-zero means broken
+- `first_broken_seq` / `first_broken_id` — anchor of the break
+- `verified_from` / `verified_to` — window bounds the RPC actually used
 
 Also capture:
 
@@ -92,32 +93,43 @@ from target t;
 
 ## Step 4 — classify the break
 
-| Pattern                                                                  | Meaning                                                                |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `stored_hash ≠ recomputed_hash` AND `stored_prev = expected_prev`        | Row content was altered (UPDATE bypassed trigger, or DBA intervention) |
-| `stored_prev ≠ expected_prev` AND `stored_hash = recomputed_hash`        | Previous row deleted (DELETE bypass) OR row inserted out of sequence   |
-| Both differ                                                              | Multi-step attack (alter + remove)                                     |
-| Row has `entity_type = 'AUDIT_CHAIN_PURGE'` in `audit_chain_checkpoints` | **Legitimate purge** — not tampering                                   |
+| Pattern                                                                     | Meaning                                                                |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `stored_hash ≠ recomputed_hash` AND `stored_prev = expected_prev`           | Row content was altered (UPDATE bypassed trigger, or DBA intervention) |
+| `stored_prev ≠ expected_prev` AND `stored_hash = recomputed_hash`           | Previous row deleted (DELETE bypass) OR row inserted out of sequence   |
+| Both differ                                                                 | Multi-step attack (alter + remove)                                     |
+| A row exists in `audit_chain_checkpoints` with `new_genesis_seq = <BROKEN>` | **Legitimate chain-rotation event** — not tampering (see Step 5)       |
 
 ## Step 5 — distinguish legitimate purge vs tampering
 
 Check if a checkpoint explains the break:
 
 ```sql
-select *
+select id, reason, cutoff_before, purged_count,
+       new_genesis_seq, encode(new_genesis_hash, 'hex') as new_genesis_hash,
+       encode(last_hash_before, 'hex')                 as last_hash_before,
+       notes, created_at
   from public.audit_chain_checkpoints
  order by created_at desc
  limit 10;
 ```
 
-If there's a recent checkpoint covering `<BROKEN_SEQ>` with
-`reason ILIKE '%retention%'` or `'%legal_hold_expiry%'`, the purge
-was authorized. In that case:
+Checkpoint reasons (migration 046 CHECK constraint, the canonical set):
 
-- Verify the checkpoint itself is signed (`signer_key_id` + `signature`)
-- Verify the purge was initiated by `enforce-retention` cron (not manual)
-- If both check out: not tampering. File a low-severity follow-up to
-  confirm retention policy was correct.
+- `'retention_purge'` — written by `audit_purge_retention()` during `enforce-retention` cron
+- `'migration_backfill'` — written once by migration 046 for rows that pre-existed the hash chain
+- `'manual'` — written by an incident-recovery migration after DPO sign-off (Step 8)
+
+If a recent checkpoint's `new_genesis_seq = <BROKEN_SEQ>` and its
+`reason` is one of the three above, the break is explained. Verify:
+
+- The `reason` matches the operational event (retention cron ran that day → `'retention_purge'`; no migration in flight → not `'migration_backfill'`).
+- The `new_genesis_hash` equals the `row_hash` of the row at `<BROKEN_SEQ>` (sanity check that the checkpoint wasn't forged).
+- For `'retention_purge'`: `public.cron_runs` has a matching `enforce-retention` entry within ~1 hour of `created_at`.
+
+If all line up: not tampering. File a low-severity follow-up if the
+cron window reports the event as `failed` (the verifier should learn
+the checkpoint on the next run — see §7).
 
 If NO checkpoint explains the break → **real tampering**. Continue.
 
@@ -178,20 +190,61 @@ rg -t ts "audit_logs" lib/ app/ --files-with-matches
 
 ## Step 8 — chain epoch reset (only with legal sign-off)
 
-After RCA is complete AND compliance has approved:
+After RCA is complete AND compliance has approved. There is **no
+general-purpose RPC** for this — every epoch reset must ship as a
+reviewable migration so the action itself lands in audit_logs via
+code review. Template (see `docs/runbooks/audit-chain-tampered.md`
+§6 for the canonical walkthrough):
 
 ```sql
--- New checkpoint bracketing the tampered range
-select public.create_audit_chain_checkpoint(
-  p_from_seq => <FIRST_BROKEN_SEQ>,
-  p_to_seq   => <LAST_BROKEN_SEQ>,
-  p_reason   => 'incident_tampering_resolution_<ISSUE_ID>',
-  p_signer   => '<admin-uuid>'
+-- supabase/migrations/NNN_audit_restore_seq_<FIRST_BROKEN_SEQ>.sql
+-- Paired with incident issue <ISSUE_ID>. DPO approval: <link>.
+
+BEGIN;
+
+-- One-shot permission for the DELETE/UPDATE triggers on audit_logs
+-- inside THIS transaction only (matches audit_purge_retention).
+SELECT set_config('clinipharma.audit_allow_delete', 'on', true);
+
+-- Option A: row was altered in-place, original value is recoverable.
+-- Reconstruct row_hash from the preserved canonical payload, preserving
+-- the prev_hash linkage so the chain stays continuous:
+--   UPDATE public.audit_logs
+--      SET ...original columns...
+--    WHERE id = '<BROKEN_ID>';
+
+-- Option B: row(s) were removed and cannot be recovered.
+-- Insert a checkpoint marking a NEW genesis at the first surviving seq
+-- after the break, so verify_audit_chain accepts the discontinuity:
+INSERT INTO public.audit_chain_checkpoints
+  (reason, cutoff_before, purged_count,
+   last_hash_before, new_genesis_seq, new_genesis_hash, notes)
+SELECT
+  'manual',
+  NULL,
+  0,
+  (SELECT row_hash FROM public.audit_logs WHERE seq = <FIRST_BROKEN_SEQ> - 1),
+  <FIRST_BROKEN_SEQ>,
+  (SELECT row_hash FROM public.audit_logs WHERE seq = <FIRST_BROKEN_SEQ>),
+  'Incident <ISSUE_ID>: DPO-approved chain epoch reset after tampering (see post-mortem <link>).';
+
+COMMIT;
+```
+
+After the migration is applied, re-run:
+
+```sql
+SELECT * FROM public.verify_audit_chain(
+  '-infinity'::timestamptz,
+  'infinity'::timestamptz,
+  1000000
 );
 ```
 
-The checkpoint establishes a new integrity anchor. Rows before are
-legally separate from rows after.
+`inconsistent_count` should return to `0`. The checkpoint establishes
+a new integrity anchor; rows before are legally separate from rows
+after, and the checkpoint's `notes` field preserves the forensic
+link to the post-mortem.
 
 ## Anti-patterns
 

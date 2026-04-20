@@ -28,6 +28,7 @@ VERIFIERS=(
   "check-dsar-sla.mjs"
   "check-cron-scheduled.mjs"
   "check-alert-coverage.mjs"
+  "check-audit-chain-integrity.mjs"
 )
 
 EXIT_CODE=0
