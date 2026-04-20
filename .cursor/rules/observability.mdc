@@ -1,0 +1,86 @@
+---
+description: Observability — structured logging, metrics, synthetic monitoring
+globs: lib/logger.ts,lib/metrics.ts,lib/observability/**,app/api/health/**,app/api/status/**,.github/workflows/external-probe.yml,.github/workflows/zap-baseline.yml
+alwaysApply: false
+---
+
+# Observability — rules
+
+Reference: `docs/observability/slos.md`,
+`docs/observability/synthetic-monitoring.md`.
+
+## Logging
+
+- **Always `lib/logger.ts`** — never `console.*` in production code.
+  Console calls ship to stdout but skip our redactor (which strips
+  CPFs, emails, tokens, CSP nonces).
+- **Log levels**:
+  - `logger.error` — something broke, page the on-call (Sentry).
+  - `logger.warn` — degraded, investigate within a day.
+  - `logger.info` — routine state change worth audit (new order, role change).
+  - `logger.debug` — off in prod by default.
+- **Structured fields**, not sprintf: `logger.info('order_created', { orderId, pharmacyId })`.
+  The first arg is the event name (snake_case, greppable).
+- **Never log PII**. The redactor catches most cases but don't rely on it.
+  Pass `userId` (UUID), not `email`; `pharmacyId`, not `pharmacyName`.
+
+## Metrics
+
+- `lib/metrics.ts` emits Prometheus-style counters/histograms.
+- Counter naming: `<domain>_<entity>_<event>_total` (e.g.
+  `auth_login_attempts_total`, `rate_limit_violations_total`).
+- Histograms: `<domain>_<operation>_duration_ms` with explicit buckets.
+- New metric → add a panel to the Grafana dashboard (or at least
+  document in `docs/observability/metrics.md`). Orphan metrics are
+  lies waiting to happen.
+
+## Health probes
+
+- `/api/health/live` — process is alive. Returns 200 even if DB is
+  down. Cheap.
+- `/api/health/ready` — dependencies reachable (DB + Redis). Expensive;
+  synthetic probes hit this.
+- **Never** add business logic to these routes — they're infra-only
+  and changing them breaks the L1+L2 synthetic probes.
+
+## Synthetic monitoring (3 layers)
+
+Never disable any of these without a paired incident resolution doc:
+
+| Layer | What | Where | Cadence |
+| --- | --- | --- | --- |
+| L1 | In-cluster probe | `app/api/cron/synthetic-probe/route.ts` | 5 min (vercel cron) |
+| L2 | External availability | `.github/workflows/external-probe.yml` | 5 min |
+| L3 | DAST (ZAP baseline) | `.github/workflows/zap-baseline.yml` | Weekly Mon |
+
+If you add a new public route that matters for availability, update
+the L1/L2 target lists. If you change security headers, expect L3 to
+potentially surface findings — triage per `docs/security/dynamic-scanning.md`.
+
+## Sentry
+
+- `sentry.*.config.ts` controls init. DSN is injected via env.
+- Source maps upload on prod build if `SENTRY_AUTH_TOKEN` is set (CI).
+- **Never send PII to Sentry**. `beforeSend` hook redacts; if you add
+  custom context, wrap user IDs in UUIDs not emails.
+
+## Anti-patterns
+
+```ts
+// ❌ console.log in prod path
+console.log(`order ${orderId} paid by ${userEmail}`)
+
+// ✅ Structured, PII-safe
+logger.info('order_paid', { orderId, userId })
+
+// ❌ Business logic in /api/health
+export async function GET() {
+  const pending = await db.orders.count({ status: 'pending' })
+  return Response.json({ ok: pending < 1000 })  // No.
+}
+
+// ✅ Health is infra-only
+export async function GET() {
+  return Response.json({ ok: true, ts: Date.now() })
+}
+```

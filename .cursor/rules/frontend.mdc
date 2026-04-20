@@ -1,0 +1,92 @@
+---
+description: Frontend patterns — a11y strict, CSP nonce, Server vs Client Components
+globs: app/**,components/**,lib/ui/**
+alwaysApply: false
+---
+
+# Frontend — rules
+
+## Server vs Client Components
+
+- **Default to Server Components**. A Client Component exists only
+  when it needs: browser APIs, state, effects, event handlers, or
+  context.
+- `'use client'` at the top of the file. Never mid-file.
+- Server Component → Client Component is allowed. Client → Server is
+  not (Next enforces this).
+- Don't `use client` a layout unless absolutely necessary (blows the
+  entire subtree out of RSC).
+
+## A11y — strict WCAG 2.1 AA
+
+- CI runs Playwright a11y on every public page. **0 violations
+  critical/serious** is the gate. Not "try to improve" — it's the bar.
+- Every interactive element has a reachable name:
+  - Form inputs have `<label htmlFor>` or `aria-label`.
+  - Icon-only buttons have `aria-label` + visible `<span class="sr-only">`.
+  - Links go somewhere meaningful; no `<a onClick>` placeholders.
+- Color contrast: AA (4.5:1 for text, 3:1 for large). Tailwind palette
+  in `tailwind.config.ts` has been tuned — use the design tokens, not
+  ad-hoc hex.
+- Keyboard trap test: every modal supports Esc, Tab cycles stay inside,
+  focus returns to the trigger on close.
+- `aria-live` for async status. Don't over-announce — only user-initiated
+  async.
+
+## CSP & nonce
+
+- No inline `<script>`. If you need init code, use a module import.
+- Inline `<style>` in JSX (`style={{...}}`) is OK — covered by our
+  `style-src-attr 'unsafe-inline'` (documented exception).
+- Never `dangerouslySetInnerHTML` unless the content is either
+  constant at build time OR sanitized via DOMPurify.
+- Third-party scripts (Sentry, analytics) must ship with a nonce or
+  be loaded via `next/script` (which handles the nonce).
+
+## Forms
+
+- Always use a schema validator (Zod) + React Hook Form. Never
+  hand-roll `onSubmit` handling for anything with > 2 fields.
+- Server Actions handle submission (`'use server'`). Client-side
+  validation is for UX; server-side validation is the truth.
+- Display field-level errors with proper `aria-describedby` pointing
+  to the error element, and `aria-invalid={true}` on the input.
+
+## Icons
+
+- Use `lucide-react`. Consistent 24×24 grid, 1.5px stroke.
+- Never use emoji in UI text without fallback (our codebase avoids
+  emojis in production UI per user directive).
+
+## Loading & error states
+
+- Every route has `loading.tsx` (streaming) and `error.tsx`. Don't
+  leave RSC streams that land as a blank screen.
+- Errors in Client Components use an ErrorBoundary. Server errors
+  bubble to the nearest `error.tsx`.
+
+## Anti-patterns
+
+```tsx
+// ❌ Icon-only button without label
+<button onClick={del}><Trash /></button>
+
+// ✅ Accessible
+<button onClick={del} aria-label="Excluir item">
+  <Trash aria-hidden="true" />
+</button>
+
+// ❌ Server-only API called in a client component
+'use client'
+import { supabaseServer } from '@/lib/supabase/server'  // breaks at runtime
+
+// ✅ Client uses its own client OR a server action
+'use client'
+import { createBrowserClient } from '@/lib/supabase/browser'
+
+// ❌ Inline script
+<script>{`window.DATA = ${JSON.stringify(data)}`}</script>
+
+// ✅ Pass as prop / use next/script
+<Script src="/init.js" strategy="afterInteractive" />
+```

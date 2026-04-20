@@ -1,0 +1,92 @@
+---
+description: Testing strategy — pyramid, mutation, coverage, flakiness
+globs: tests/**,vitest.config.ts,vitest.stryker.config.ts,stryker.config.mjs,playwright.config.ts
+alwaysApply: false
+---
+
+# Testing — pyramid in force
+
+See `docs/testing/strategy.md` for the full policy. Rules below are
+the subset that affect day-to-day code.
+
+## Pyramid (tiers, from cheap to expensive)
+
+| Tier | Tool | Files | Cadence |
+| --- | --- | --- | --- |
+| Unit | Vitest + jsdom | `tests/unit/**` | Every commit |
+| Integration | Vitest + supertest | `tests/integration/**` | Every commit |
+| E2E + a11y | Playwright | `tests/e2e/**` | Every PR |
+| Load | k6 | `tests/load/**` | Weekly + manual |
+| Mutation | Stryker + Vitest | Security surface only | PRs touching that surface + weekly |
+
+## Coverage
+
+- Global floor: **80% statements, 80% branches**. Lines below the
+  floor fail CI (`vitest.config.ts`).
+- **Critical surface** (auth, crypto, payment, PHI handling) targets
+  95%+ and is additionally mutation-tested.
+
+## Mutation testing
+
+- Scope is deliberately narrow: `lib/crypto.ts`, `lib/security/**`.
+  Do NOT expand without measuring — each file multiplies wall-clock by N.
+- Break threshold: **84%**. If you drop below, either add tests or
+  add the equivalent-mutant to the documented catalog in
+  `docs/testing/mutation-testing.md` with rationale.
+- `vitest.stryker.config.ts` restricts the test bundle for perf
+  (~100 tests vs 1800). Do NOT widen without measurement.
+
+## E2E
+
+- Every public page must have an a11y smoke test
+  (`tests/e2e/smoke-a11y.test.ts`). The bar is WCAG 2.1 AA strict
+  (0 violations critical/serious). New pages that fail the bar do
+  NOT ship — fix the a11y issue, not the test.
+- E2E tests use real Supabase (not mocked). If a test sets data,
+  it MUST clean up in `afterEach` or use a unique-per-run namespace.
+
+## Anti-flakiness
+
+- Never `sleep()` — use `expect(…).toBeVisible()` + Playwright's auto-wait.
+- Avoid `describe.skip` / `it.only` left in commits (lint blocks this).
+- Timers: Vitest `vi.useFakeTimers()` + `vi.setSystemTime()`. Never
+  stub `Date.now` by hand.
+
+## Test data
+
+- Fixtures in `tests/__fixtures__/`. Factory pattern over hard-coded
+  objects for anything with > 3 fields.
+- PII in tests uses `pii-fixtures.ts` (fake CPFs that pass format but
+  are in the "test block" range — see the comment in that file).
+
+## When to write which test
+
+| You changed | Write |
+| --- | --- |
+| A pure function in `lib/` | Unit |
+| A Supabase query helper | Integration |
+| A new API route | Unit (logic) + integration (RLS) |
+| A new page | E2E happy path + a11y smoke |
+| A cron | Unit (pure logic) + "smoke" test that mounts the handler |
+| A security primitive | Unit + **mutation delta** (expect +X kills) |
+
+## Anti-patterns
+
+```ts
+// ❌ Testing through the UI for pure logic
+test('validates CPF', async ({ page }) => { ... }) // 20s for something 10ms
+
+// ✅ Unit test
+test('validateCpf rejects repeated digits', () => {
+  expect(validateCpf('11111111111')).toBe(false)
+})
+
+// ❌ Flaky async
+await page.click('button')
+await page.waitForTimeout(500)
+expect(await page.textContent('.status')).toBe('saved')
+
+// ✅ Auto-wait
+await page.click('button')
+await expect(page.locator('.status')).toHaveText('saved')
+```

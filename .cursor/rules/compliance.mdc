@@ -1,0 +1,101 @@
+---
+description: LGPD / ANPD / healthcare compliance — audit chain, DSAR, retention, breach response
+alwaysApply: true
+---
+
+# Compliance — always applies
+
+Clinipharma handles Brazilian health data under LGPD + ANPD
+regulation, plus professional-council constraints (CFM for doctors,
+CFF for pharmacists). The rules below are LEGAL obligations, not
+nice-to-haves. Breaking any of them creates regulatory exposure.
+
+## Audit chain — append-only
+
+- `audit_logs` table (migration 046) is hash-chained:
+  `row_hash = sha256(prev_hash || canonical_row_json)`.
+- NEVER `UPDATE` or `DELETE` from this table. The nightly cron
+  `verify-audit-chain` (03:45 UTC) checks the chain end-to-end and
+  fires an ANPD-relevant incident on breakage.
+- To correct bad data, APPEND a compensating event. Don't edit history.
+- Tampering runbook: `docs/runbooks/audit-chain-tampered.md`.
+
+## DSAR — 15-day SLA
+
+- Data Subject Access Requests (`direitos do titular`) have a legal
+  15-day SLA from receipt (LGPD Art. 19).
+- Tracking table + cron: migration 051 + `expire-doc-deadlines`.
+- Never close a DSAR manually without evidence in `dsar_fulfillments`
+  (what was delivered, when, to whom, via what channel).
+- Supported requests: access, portability, correction, deletion,
+  anonymization. Deletion vetoes: active legal hold, tax obligation
+  (5y), audit obligation (specific cases).
+
+## Retention
+
+- Policy source: `lib/retention/policies.ts`. Each entry has a
+  `legalBasis` field — a free-text citation to LGPD article, ANPD
+  resolution, or contractual obligation.
+- Automatic purge via monthly cron `enforce-retention`.
+- `legal_holds` overrides retention. NEVER bypass legal_holds in
+  code paths — the check must happen inside the RLS context.
+
+## Breach response — 72-hour clock
+
+- Runbook: `docs/runbooks/data-breach-72h.md`.
+- Clock starts at the moment a REASONABLE operator would have
+  realized PII was exposed. Document the moment you learned in the
+  runbook, not the moment you confirmed.
+- ANPD notification template: `docs/templates/anpd-incident-notice.md`.
+- Affected subjects notified **in plain Portuguese** (not legalese).
+
+## Consent
+
+- Collected on signup + at every significant use-case change.
+- Versioned (`consent_versions` table). A subject can have multiple
+  active consents (one per purpose).
+- Consent withdrawal is not a deletion — it's a purpose-specific
+  processing stop. Retention rules still apply.
+
+## Subprocessors
+
+- Every third party that processes PII MUST appear in
+  `docs/compliance/subprocessors.md` with:
+  - Purpose of processing
+  - Data categories
+  - Location of processing
+  - DPA link or status
+- New subprocessor → add before integration. Integration without DPA
+  is a breach waiting to happen.
+
+## What to do when unsure
+
+- **Default to the stricter interpretation** of LGPD. Undersharing is
+  recoverable; oversharing may not be.
+- **Cite the legal basis** in code comments when you implement a data
+  flow: `// LGPD Art. 7, VI — legítimo interesse (inventory sync)`.
+- **Read `docs/legal/REVIEW-2026-04-17-senior-counsel.md`** before
+  touching consent flows, retention, DSAR, or breach response.
+
+## Anti-patterns
+
+```ts
+// ❌ Direct delete of historical data
+await supabase.from('audit_logs').delete().lt('created_at', cutoff)
+
+// ✅ Never delete audit logs — that's the whole point
+// If audit logs must be truncated, it requires legal approval
+// and creates a fresh hash-chain epoch.
+
+// ❌ DSAR marked "fulfilled" without evidence
+await db.dsar.update(id, { status: 'fulfilled' })
+
+// ✅ Fulfillment record required
+await db.dsar_fulfillments.insert({
+  dsar_id: id,
+  delivered_at: new Date(),
+  channel: 'email',
+  payload_hash: hashOf(zipBytes),
+  legal_basis: 'LGPD Art. 19',
+})
+```

@@ -1,0 +1,79 @@
+---
+description: Database conventions — RLS, migrations, money-cents, retention
+globs: supabase/migrations/**,lib/supabase/**,lib/retention/**,lib/money.ts,types/database.ts
+alwaysApply: false
+---
+
+# Database — hard rules
+
+## Migrations
+
+- **Append-only**. Never edit a merged migration. Create
+  `supabase/migrations/NNN_short_name.sql` where NNN is the next
+  integer (currently 057+).
+- Every migration must be idempotent-ish: use `if not exists`,
+  `create or replace`, `drop … if exists` where applicable. The CI
+  job `schema-drift` runs them from a fresh Postgres and fails if
+  anything errors.
+- Migrations that change data must be **reversible** or ship with a
+  dry-run script first. Money + PII migrations require explicit
+  approval (not auto-merge).
+
+## Row-Level Security (RLS)
+
+- **Every new table** gets `alter table … enable row level security`
+  + at least one policy for each op the table allows. The safety net
+  in migration 057 will refuse the migration if you forget.
+- Canary table `rls_canary` (migration 055) proves RLS is active on
+  each deploy — if canary tests fail, investigate before ignoring.
+- RLS policy naming: `<verb>_<role>_<condition>` (e.g.
+  `select_pharmacy_own_orders`). Keep it scannable in the matrix.
+- Document each policy in `docs/rls-matrix.md`. Drift there triggers
+  code review.
+
+## Money
+
+- All monetary fields are `bigint` (cents). Never `numeric`, never
+  `real`, never `float`.
+- In TypeScript: `number` in cents, typed as `CentsAmount` brand
+  (see `lib/money.ts`). Display conversion happens at the boundary.
+- `SELECT`s that aggregate money run `sum(amount_cents)::bigint`
+  explicitly to avoid silent overflow.
+
+## Retention
+
+- Retention policy lives in `lib/retention/policies.ts`, not in SQL.
+  The cron `enforce-retention` (monthly 02:00 day 1) reads it and
+  issues `DELETE`s inside RLS context.
+- New policy additions must have a legal basis cited in the comment
+  (LGPD Art. N, or contractual reason). Counsel review (`docs/legal/`)
+  is the source of truth.
+- `legal_holds` vetoes retention for specific rows — check `is_held_*`
+  before any deletion.
+
+## Atomic RPCs
+
+- State transitions that span > 1 table go through `create_*` / 
+  `advance_*` SQL functions (migration 049). Never do multi-statement
+  transactions from the application layer.
+
+## Anti-patterns
+
+```sql
+-- ❌ Table without RLS
+create table orders (id uuid primary key, pharmacy_id uuid);
+
+-- ✅ Table with RLS from the start
+create table orders (id uuid primary key, pharmacy_id uuid);
+alter table orders enable row level security;
+create policy select_pharmacy_own_orders on orders for select
+  using (pharmacy_id = (select pharmacy_id from users where id = auth.uid()));
+```
+
+```ts
+// ❌ Money as number of reais
+const price = 12.50  // precision time-bomb
+
+// ✅ Money as cents
+const price: CentsAmount = 1250  // explicit
+```

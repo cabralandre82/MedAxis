@@ -1,8 +1,155 @@
-# AGENTS.md — credenciais e convenções para agentes
+# AGENTS.md — guia canônico para agentes de IA
 
-Este arquivo é lido por agentes (Cursor, etc.) **antes** de iniciar
-qualquer tarefa. Documenta onde credenciais persistentes vivem e
-quais comandos não pedem confirmação humana.
+Lido automaticamente por qualquer agente (Cursor, Codex CLI, Claude
+Code, Devin, etc.) **antes** de iniciar qualquer tarefa. Não edite
+sem ler toda a seção "Invariantes" — várias linhas aqui foram
+desenhadas para impedir classes inteiras de bug/regressão.
+
+> Operação solo. Um humano. Muitos agentes. O humano é **aprovador**,
+> não executor. Cada agente que entra aqui está substituindo um
+> stand-up, um code review, ou uma escala de on-call. Leia esse
+> arquivo inteiro uma vez, salve o modelo mental, e só volte se
+> `docs/execution-log.md` indicar mudança estrutural.
+
+---
+
+## 0. O que é esta plataforma
+
+- **Nome**: Clinipharma (domínio `clinipharma.com.br`)
+- **Produto**: Marketplace B2B farmácia ↔ clínica (Brasil). Clínicas
+  enviam prescrições digitais; farmácias precificam, aceitam, separam,
+  faturam; pacientes retiram.
+- **Dados sensíveis**: CPF, CRM/CRF, prescrições, endereços, dados de
+  pagamento. Sujeito a LGPD + ANPD + CFM + ANVISA.
+- **Stack**:
+  - Next.js 15 (App Router, Server Components) + React 19
+  - Supabase Postgres (RLS estrito) + Supabase Storage + Supabase Auth
+  - Vercel Edge runtime + Vercel cron
+  - Upstash Redis (rate-limit distribuído + cron lock)
+  - Sentry (erros + traces) + logger estruturado + Prometheus-style metrics
+  - Resend (transactional email) + Asaas (pagamento PIX/cartão)
+  - Inngest (durable jobs)
+  - Testes: Vitest (unit) + Playwright (E2E + a11y) + k6 (load) + Stryker (mutation)
+- **Escala atual**: bootstrap, 1 operador, onboarding de primeiras
+  clínicas/farmácias. Arquitetura é dimensionada para 100× esse
+  volume sem re-fundação.
+
+## 1. Invariantes — agente NUNCA pode violar
+
+Se um pedido do usuário implicar em violar qualquer coisa abaixo,
+**pare e pergunte** antes de executar.
+
+### Segurança
+
+1. **RLS é obrigatório em toda nova tabela**. O safety-net da
+   migration 057 força `enable row level security` em qualquer
+   tabela nova; pelo menos uma policy `select`/`insert`/`update`/
+   `delete` deve existir. Ver `supabase/migrations/057_rls_auto_enable_safety_net.sql`.
+2. **Nunca persista PII em claro**. Use `encrypt()` / `decrypt()` de
+   `lib/crypto.ts` (AES-256-GCM + key rotation tier). A chave vive
+   em `ENCRYPTION_KEY` (64 hex). Se o campo for pesquisável, indexe
+   o hash HMAC, não o valor.
+3. **Nunca desabilite CSP em produção**. A CSP é gerada por
+   `lib/security/csp.ts` com nonce por request; `CSP_REPORT_ONLY=true`
+   existe só para debug em preview, nunca em `main`.
+4. **Nunca adicione `'unsafe-inline'` a `script-src`** — usar nonce.
+   `style-src-attr 'unsafe-inline'` é exceção documentada (React inline style prop).
+5. **Audit chain é append-only**. Nunca `DELETE` ou `UPDATE` em
+   `audit_logs` — o cron `verify-audit-chain` detecta e abre incidente.
+6. **CSRF via Origin + double-submit cookie** (`lib/security/csrf.ts`).
+   Cookie `__Host-csrf` é intencionalmente não-HttpOnly. Não "conserte".
+
+### Dados
+
+7. **Dinheiro é `int` em centavos**. Nunca `float`/`decimal` em código
+   aplicação. Ver `supabase/migrations/050_money_cents.sql` e `lib/money.ts`.
+8. **Migrations são append-only** em `supabase/migrations/NNN_*.sql`.
+   Nunca edite uma migration já mergeada — crie uma nova. Schema drift
+   Layer 2 detecta divergência.
+9. **Retenção é automatizada**. Nunca crie política manual de purge;
+   estenda `lib/retention/policies.ts` + cron `enforce-retention`.
+
+### Compliance (LGPD)
+
+10. **DSAR tem SLA legal de 15 dias**. Automação em
+    `migrations/051_dsar_sla.sql` + cron `expire-doc-deadlines`.
+11. **Legal hold vence RLS**. Se `legal_holds` aponta para uma linha,
+    policies de retenção ignoram aquela linha (`migrations/054_legal_holds.sql`).
+12. **Incidentes de dados pessoais** disparam notificação ANPD em
+    72h. Runbook: `docs/runbooks/data-breach-72h.md`.
+
+### CI / deploy
+
+13. **Nunca `git push --force` em `main`**.
+14. **Nunca `npm audit fix --force`** — quebra pins.
+15. **Todo PR que toca `lib/crypto.ts` ou `lib/security/**`dispara
+mutation-test**. Threshold: 84% mínimo. Ver`stryker.config.mjs`.
+
+---
+
+## 2. Onde as coisas vivem (topologia)
+
+| Quer saber…                                    | Leia                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------- |
+| Postura de segurança completa                  | `docs/security/threat-model.md` + `docs/security/dynamic-scanning.md` |
+| Modelo de operação humano vs agente            | `docs/SOLO_OPERATOR.md`                                               |
+| Como responder a um alerta                     | `docs/runbooks/README.md` → runbook específico                        |
+| Estratégia de testes (pirâmide + mutation)     | `docs/testing/strategy.md` + `docs/testing/mutation-testing.md`       |
+| Matriz RLS por tabela                          | `docs/rls-matrix.md`                                                  |
+| SLOs e burn-rate                               | `docs/observability/slos.md` + `docs/observability/burn-rate.md`      |
+| 3 camadas de synthetic monitoring              | `docs/observability/synthetic-monitoring.md`                          |
+| Evidência de DR drill (restore + audit-tamper) | `docs/security/dr-evidence/YYYY-MM-DD/`                               |
+| Decisões arquiteturais (ADRs)                  | `docs/decisions/`                                                     |
+| Log de mudanças estruturais                    | `docs/execution-log.md`                                               |
+| Topologia de projetos Vercel                   | `docs/infra/vercel-projects-topology.md`                              |
+| Inventário de secrets                          | `docs/security/secrets-manifest.json`                                 |
+| Review de senior counsel (legal)               | `docs/legal/REVIEW-2026-04-17-senior-counsel.md`                      |
+
+## 3. Comandos canônicos
+
+```bash
+# Ciclo local rápido (sempre antes de push)
+npx tsc --noEmit && npx vitest run && npm run build
+
+# Lint + format (lint-staged roda no pre-commit também)
+npx eslint . && npx prettier --check .
+
+# Testes focados
+npx vitest run tests/unit/lib/crypto.test.ts
+npx playwright test tests/e2e/a11y-public-pages.test.ts
+
+# Mutation (só security surface, ~4 min)
+npm run test:mutation
+
+# CI — monitorar último run de um workflow
+gh run list --workflow=ci.yml --limit=3
+gh run watch <run-id> --exit-status
+
+# Disparar workflows manuais
+gh workflow run zap-baseline.yml --ref main
+gh workflow run external-probe.yml --ref main
+gh workflow run schema-drift.yml --ref main
+
+# Supabase — rodar migrations localmente (requer docker)
+npx supabase db reset
+
+# Vercel — log em tempo real do prod
+vercel logs --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
+```
+
+## 4. Antes de executar — leia nesta ordem
+
+Para qualquer tarefa não-trivial, priorize leitura nesta sequência:
+
+1. Este arquivo (AGENTS.md) — invariantes
+2. `docs/SOLO_OPERATOR.md` — quem faz o quê
+3. `.cursor/rules/*.mdc` — convenções por domínio (auto-carregadas)
+4. Runbook específico se a tarefa espelha um incident pattern
+5. ADR relevante em `docs/decisions/` se tocar arquitetura
+
+Quando em dúvida entre "fazer do jeito antigo" vs "jeito novo": faça
+do jeito antigo e abra issue. Solo-ops não tem orçamento para refactor
+paralelo sem plano escrito.
 
 ---
 

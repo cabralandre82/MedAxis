@@ -1,0 +1,167 @@
+name: Cost Guard (weekly review)
+
+# ────────────────────────────────────────────────────────────────────────────
+# Honest cost-guard for solo operators.
+#
+# Problem it solves:
+#   Running agents + generous free tiers + good monitoring means bills
+#   can explode quietly. Vercel, Supabase, Upstash, Sentry and OpenAI/
+#   Anthropic all meter by usage; any of them can 10× between two weeks
+#   with no warning other than the invoice.
+#
+# What it does NOW:
+#   1. Every Monday 11:00 UTC (08:00 BRT), open or update a tracking
+#      issue with a cost-review checklist. The operator fills in the
+#      bills from each vendor dashboard during the weekly 30-min ritual
+#      (see docs/SOLO_OPERATOR.md §2).
+#   2. If a previous issue is still open on Monday → comment "still
+#      pending" instead of opening a new one. Dedup by label.
+#
+# What it does LATER (when tokens available):
+#   Each vendor has a management API — when their tokens are provisioned
+#   as GitHub secrets (see docs/operations/cost-guard.md), uncomment
+#   the relevant `fetch-*` jobs below. They'll fill the checklist
+#   automatically and open the issue only when a threshold is breached.
+#
+# Why not skip this and wait for the automated version?
+#   Because the weekly ritual NEEDS a forcing function. A half-automated
+#   reminder that opens an issue you cannot ignore is worth more than a
+#   fully-automated alert that never trips because no one set the threshold.
+# ────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # Monday 11:00 UTC = 08:00 BRT, i.e. first thing Monday morning.
+    - cron: '0 11 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cost-guard-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  open-weekly-review:
+    name: Open / update weekly cost-review issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check previous issue state and open / append
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const LABEL = 'cost-review';
+            const TITLE_PREFIX = 'Cost review — week of';
+            const today = new Date();
+            const iso = today.toISOString().split('T')[0];
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: LABEL,
+              per_page: 5,
+            });
+
+            // If a previous cost-review issue is still open from last
+            // week, don't create noise — just remind.
+            const existing = open.data.find(i => i.title.startsWith(TITLE_PREFIX));
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: [
+                  `**Weekly reminder** — previous cost review from `,
+                  `\`${existing.title}\` is still open.`,
+                  ``,
+                  `If it's done, close it. If not, block 30 min today and fill it in.`,
+                  ``,
+                  `_Triggered by ${runUrl}_`,
+                ].join('\n'),
+              });
+              core.notice(`Previous issue #${existing.number} still open — reminded.`);
+              return;
+            }
+
+            const body = [
+              `## Cost review — week of ${iso}`,
+              ``,
+              `Fill this in during the weekly 30-min ritual (see`,
+              `[docs/SOLO_OPERATOR.md](../blob/main/docs/SOLO_OPERATOR.md) §2).`,
+              `Close when done. If the workflow opens a new issue next`,
+              `Monday and this one is still open, you missed the ritual —`,
+              `that's the signal.`,
+              ``,
+              `### Vendor bills (month-to-date)`,
+              ``,
+              `| Vendor | MTD | vs. budget | Notes |`,
+              `|---|---|---|---|`,
+              `| Vercel (compute + bandwidth) | $ | | |`,
+              `| Supabase (db + storage + auth MAU) | $ | | |`,
+              `| Upstash Redis (requests + storage) | $ | | |`,
+              `| Sentry (events + quota) | $ | | |`,
+              `| Resend (transactional email) | $ | | |`,
+              `| Asaas (payment processor fees) | R$ | | |`,
+              `| OpenAI / Anthropic (AI tokens) | $ | | |`,
+              `| Cloudflare / domain / DNS | $ | | |`,
+              `| **Total** | | | |`,
+              ``,
+              `### Baseline`,
+              ``,
+              `Compare to [\`docs/operations/budget.md\`](../blob/main/docs/operations/budget.md)`,
+              `(if it doesn't exist yet, create it with the numbers from this issue).`,
+              ``,
+              `### Red flags to check`,
+              ``,
+              `- [ ] Any vendor above 1.5× the previous week's number?`,
+              `- [ ] Any vendor approaching its free-tier ceiling?`,
+              `- [ ] Sentry events spiking? (Sometimes a loop; investigate.)`,
+              `- [ ] Upstash requests spiking? (Usually means a cron misbehaving.)`,
+              `- [ ] Supabase DB size growing > 500 MB/week? (Retention policy check.)`,
+              `- [ ] Any surprise line item?`,
+              ``,
+              `### Action items after filling`,
+              ``,
+              `- [ ] Updated \`docs/operations/budget.md\` with this week's numbers.`,
+              `- [ ] Filed separate issues for any anomaly above.`,
+              `- [ ] Closed this issue.`,
+              ``,
+              `_Triggered by ${runUrl}. This workflow opens a fresh issue`,
+              `every Monday; it reminds (instead of duplicating) if the`,
+              `previous one is still open._`,
+            ].join('\n');
+
+            const created = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${TITLE_PREFIX} ${iso}`,
+              body,
+              labels: [LABEL, 'operations'],
+            });
+            core.notice(`Opened cost-review issue #${created.data.number}`);
+
+  # ──── FUTURE JOBS (uncomment when tokens are provisioned) ────────────────
+  #
+  # fetch-vercel-usage:
+  #   if: env.VERCEL_API_TOKEN != ''
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Fetch Vercel usage
+  #       env:
+  #         VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+  #         VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+  #       run: |
+  #         # https://vercel.com/docs/rest-api/endpoints#get-team-usage
+  #         curl -s -H "Authorization: Bearer $VERCEL_API_TOKEN" \
+  #           "https://api.vercel.com/v1/usage/team/$VERCEL_TEAM_ID" | jq .
+  #
+  # fetch-supabase-usage: ...
+  # fetch-upstash-usage: ...
+  # fetch-sentry-events: ...

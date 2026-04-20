@@ -1,0 +1,81 @@
+---
+description: Security invariants — auth, crypto, CSRF, CSP, headers
+globs: lib/crypto.ts,lib/security/**,lib/auth/**,app/api/**,middleware.ts,next.config.ts
+alwaysApply: false
+---
+
+# Security primitives — non-negotiable patterns
+
+These rules are enforced by mutation testing (`stryker.config.mjs`,
+threshold 84%). Any PR that weakens a primitive will surface in
+`.github/workflows/mutation-test.yml`.
+
+## Crypto
+
+- **PII encryption** uses `encrypt()` / `decrypt()` from `lib/crypto.ts`.
+  - AES-256-GCM, 12-byte IV, 16-byte auth tag.
+  - Key is 64 hex chars in `ENCRYPTION_KEY`. Reject anything else.
+  - Searchable fields index the HMAC (`lib/security/hmac.ts`), not the ciphertext.
+- **Never log the plaintext** inside the `decrypt` catch block — only
+  metadata (op, keyId, hasTag). Stryker tests enforce this.
+
+## HMAC & constant-time
+
+- Use `constantTimeEqual()` from `lib/security/hmac.ts` for any
+  comparison that touches user-controlled secrets (webhook sig, CSRF,
+  reset tokens). Never `===`.
+- Hex validation strips a `sha256=` prefix **only at the start** —
+  never substring match.
+
+## CSRF
+
+- `__Host-csrf` cookie is **intentionally** non-HttpOnly (JS reads it
+  for double-submit). Do NOT "fix" this — it carries no auth material.
+- `verifyDoubleSubmit()` must treat missing-cookie and missing-header
+  symmetrically; otherwise attackers can distinguish states.
+- Mutation-state protection only runs when `enforceDoubleSubmit=true`.
+
+## CSP
+
+- CSP is emitted per-request by `middleware.ts` using a fresh nonce.
+  Do NOT also set it in `next.config.ts` headers (duplicate → brittle).
+- `script-src` must use `'nonce-…' 'strict-dynamic'`. Never add
+  `'unsafe-inline'`. The `https: http:` fallback is for pre-
+  `strict-dynamic` browsers only; modern browsers ignore it.
+- Every CSP change requires running `gh workflow run zap-baseline.yml`
+  to confirm headers still arrive at the edge.
+
+## Open-redirect defense
+
+- Every `?next=…` / `redirect_to=…` param MUST go through
+  `safeNextPath()` from `lib/security/safe-redirect.ts`.
+- Reject paths > 1024 chars (boundary: exactly 1024 passes).
+- Strip control chars + require same-origin coercion.
+
+## Rate limiting
+
+- All mutating endpoints must go through the Upstash Redis limiter
+  (`lib/rate-limit.ts`). Fallback in-memory exists but logs a warning
+  — never accept the warning as permanent state.
+
+## Anti-patterns to reject on review
+
+```ts
+// ❌ Direct comparison of signatures
+if (signature === expected) { ... }
+
+// ✅ Constant-time
+if (constantTimeEqual(signature, expected)) { ... }
+
+// ❌ Logging decrypted value
+try { return decrypt(cipher) } catch (e) { logger.error('decrypt', { cipher, e }) }
+
+// ✅ Log metadata only
+try { return decrypt(cipher) } catch (e) { logger.error('decrypt failed', { op: 'decrypt', hasTag: !!cipher.tag }) }
+
+// ❌ Trusting next param
+router.push(searchParams.get('next'))
+
+// ✅ Coerce to safe path
+router.push(safeNextPath(searchParams.get('next')))
+```
