@@ -177,8 +177,8 @@ profile.
 ### 2. Reject with legal hold code
 
 Use when the subject asked for ERASURE but financial records (10y
-retention under CTN Art. 195) or prescriptions (Anvisa RDC 22/2014)
-prevent us:
+retention under CTN Art. 195) or prescriptions (Anvisa RDC 67/2007,
+5y — aligned with retention policy RP-06) prevent us:
 
 ```sql
 select public.dsar_transition(
@@ -187,7 +187,7 @@ select public.dsar_transition(
   jsonb_build_object(
     'actor_user_id', '<admin-uuid>',
     'actor_role', 'SUPER_ADMIN',
-    'reject_code', 'NFSE_10Y',        -- or 'RDC_22_2014' for prescriptions
+    'reject_code', 'NFSE_10Y',        -- or 'RDC_67_2007' for prescriptions
     'metadata', jsonb_build_object('reason', 'Obrigação legal de retenção fiscal')
   )
 );
@@ -195,11 +195,11 @@ select public.dsar_transition(
 
 Reject codes in use:
 
-| Code          | Legal hold                                            |
-| ------------- | ----------------------------------------------------- |
-| `NFSE_10Y`    | CTN Art. 195 — fiscal records 10-year retention       |
-| `RDC_22_2014` | Anvisa RDC 22/2014 — prescriptions (5-year retention) |
-| `ART_37_LGPD` | LGPD Art. 37 — manifest consent records               |
+| Code          | Legal hold                                                   |
+| ------------- | ------------------------------------------------------------ |
+| `NFSE_10Y`    | CTN Art. 195 — fiscal records 10-year retention              |
+| `RDC_67_2007` | Anvisa RDC 67/2007 — prescriptions (5-year retention, RP-06) |
+| `ART_37_LGPD` | LGPD Art. 37 — manifest consent records                      |
 
 ### 3. Emergency kill-switch (flag ON → P1 silenced)
 

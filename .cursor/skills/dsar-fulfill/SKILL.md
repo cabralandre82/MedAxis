@@ -1,6 +1,6 @@
 ---
 name: dsar-fulfill
-description: Processes a LGPD Data Subject Access Request (DSAR) from RECEIVED to FULFILLED or REJECTED within the 15-day legal SLA. Use when the user says "processar DSAR", "responder solicitação LGPD", "cliente pediu exclusão / exportação de dados", "DSAR vencendo", or when the `dsar-sla-check` cron alerts. Covers EXPORT, ERASURE, CORRECTION, PORTABILITY, and ANONYMIZATION requests with legal-hold checks.
+description: Processes a LGPD Data Subject Access Request (DSAR) from RECEIVED to FULFILLED or REJECTED within the 15-day legal SLA. Use when the user says "processar DSAR", "responder solicitação LGPD", "cliente pediu exclusão / exportação de dados", "DSAR vencendo", or when the `dsar-sla-check` cron alerts. Covers the three kinds the DB enum allows — `EXPORT`, `ERASURE`, `RECTIFICATION` — with legal-hold checks and notes on portability/partial-erasure variants.
 ---
 
 # DSAR fulfillment — LGPD Art. 19 (15-day SLA)
@@ -58,23 +58,29 @@ select seq, to_status, actor_user_id, actor_role, created_at, metadata_json
 
 ERASURE requests MUST reject if any of these apply. Never silently skip.
 
-| Reject code   | Applies when                                                        |
-| ------------- | ------------------------------------------------------------------- |
-| `NFSE_10Y`    | Subject has fiscal records < 10 years old (CTN Art. 195)            |
-| `RDC_22_2014` | Subject has prescription records < 5 years old (Anvisa RDC 22/2014) |
-| `ART_37_LGPD` | Active consent-manifest records (LGPD Art. 37)                      |
-| `LEGAL_HOLD`  | Row in `legal_holds` table pointing to subject                      |
+| Reject code   | Applies when                                                                                    |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| `NFSE_10Y`    | Subject has fiscal records < 10 years old (CTN Art. 195)                                        |
+| `RDC_67_2007` | Subject uploaded/appears in prescription records < 5 years old (Anvisa RDC 67/2007 — see RP-06) |
+| `ART_37_LGPD` | Active consent-manifest records (LGPD Art. 37)                                                  |
+| `LEGAL_HOLD`  | Row in `legal_holds` table pointing to subject                                                  |
 
 Check:
 
 ```sql
--- NFSE retention
+-- NFSE retention (CTN Art. 195 — 10 years)
 select count(*) from public.nfse_records where subject_id = '<uuid>'
   and issued_at > now() - interval '10 years';
 
--- Prescription retention
-select count(*) from public.prescriptions where patient_id = '<uuid>'
-  and created_at > now() - interval '5 years';
+-- Prescription retention (RDC 67/2007 — 5 years). The platform
+-- tracks prescriptions via order_item_prescriptions, linked to the
+-- subject through orders.created_by_user_id (clinic user) or
+-- uploaded_by_user_id. Check both angles — either blocks erasure.
+select count(*)
+  from public.order_item_prescriptions oip
+  join public.orders o on o.id = oip.order_id
+ where (o.created_by_user_id = '<uuid>' or oip.uploaded_by_user_id = '<uuid>')
+   and oip.created_at > now() - interval '5 years';
 
 -- Active legal holds
 select reason, authority, expires_at from public.legal_holds
@@ -129,7 +135,10 @@ this RPC — direct `UPDATE` on `dsar_requests` breaks the chain.
 ### ERASURE — tombstone the profile
 
 ```bash
-# Calls public.dsar_anonymize_subject() + tombstones related tables
+# Sets profiles.anonymized_at, replaces PII with hashed placeholders,
+# and transitions the DSAR atomically. All anonymisation SQL lives
+# inside the route handler (see app/api/admin/lgpd/anonymize/
+# [userId]/route.ts) — there is no separate RPC.
 curl -X POST "https://clinipharma.com.br/api/admin/lgpd/anonymize/<subject-uuid>" \
   -H "Authorization: Bearer <admin-service-token>"
 ```
@@ -137,29 +146,61 @@ curl -X POST "https://clinipharma.com.br/api/admin/lgpd/anonymize/<subject-uuid>
 The endpoint:
 
 - Replaces PII fields with hashed placeholders
-- Sets `users.deleted_at = now()`
+- Sets `profiles.anonymized_at = now()` (migration 051 columns)
 - Keeps `audit_logs` intact (append-only) — LGPD Art. 16 allows this
 - Transitions DSAR to FULFILLED atomically
 
-### CORRECTION — update specific fields
+### RECTIFICATION — correct specific fields
+
+There is no dedicated RPC for this; the admin edits the subject's
+fields directly (audit-logged at the column level by migration 046),
+then transitions the DSAR with a `delivery_hash` summarising the
+change:
 
 ```sql
--- Only fields the subject identified as incorrect, via audit-logged update
-select public.user_correct_field(
-  '<subject-uuid>'::uuid,
-  '<field-name>',        -- e.g. 'full_name'
-  '<new-value>',
-  '<request-id>'::uuid
+-- 1) Admin applies the correction (e.g. via the admin UI or a
+--    one-off UPDATE guarded by audit_logs triggers).
+update public.profiles
+   set full_name = 'Nome Corrigido', updated_at = now()
+ where id = '<subject-uuid>';
+
+-- 2) Compute a deterministic delivery_hash over the corrected
+--    fields so the audit row is reproducible.
+--    Example: echo -n 'full_name=Nome Corrigido' | sha256sum
+--    → <hash>
+
+-- 3) Close the DSAR.
+select public.dsar_transition(
+  '<request-id>'::uuid,
+  'FULFILLED',
+  jsonb_build_object(
+    'actor_user_id', '<admin-uuid>',
+    'actor_role', 'SUPER_ADMIN',
+    'delivery_hash', '<sha256-of-corrected-fields>',
+    'delivery_ref', 'rectification:<subject-uuid>',
+    'metadata', jsonb_build_object(
+      'fields_corrected', jsonb_build_array('full_name')
+    )
+  )
 );
 ```
 
-### PORTABILITY — structured machine-readable export
+### EXPORT variants
 
-Same as EXPORT but the bundle contains JSON (not just human-readable PDFs). The `/api/lgpd/export?format=portability` flag enables it.
+The migration enum has a single `EXPORT` kind. Two operational
+shapes exist on top of it:
 
-### ANONYMIZATION — partial erasure retaining aggregates
-
-Rarely used. If requested, route to DPO for manual review — do NOT auto-execute.
+- **Portability (LGPD Art. 18 V):** same `EXPORT` kind, but call the
+  endpoint with `?format=portability` so the bundle contains
+  structured JSON instead of human-readable PDFs. Record the
+  selected format in the `metadata.format` field of the FULFILLED
+  transition so the choice is auditable.
+- **Partial anonymisation (aggregates retained):** an ERASURE variant
+  that is **not** wired as a self-serve path. Route to DPO for
+  manual review; do NOT transition through the RECEIVED→PROCESSING→
+  FULFILLED graph automatically. If the DPO decides to proceed, the
+  subject still gets an `ERASURE` DSAR row and the partial nature is
+  captured in `metadata`.
 
 ## Step 5 — record fulfillment evidence
 

@@ -25,6 +25,7 @@ VERIFIERS=(
   "check-rls-policy-coverage.mjs"
   "check-env-documented.mjs"
   "check-retention-policies.mjs"
+  "check-dsar-sla.mjs"
 )
 
 EXIT_CODE=0

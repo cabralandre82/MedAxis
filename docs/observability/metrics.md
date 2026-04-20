@@ -141,16 +141,16 @@ Não-exemplos (proibidos):
 
 ### 3.8 DSAR (LGPD art. 18)
 
-| Métrica                       | Tipo      | Labels       | Descrição                                                       | Dashboard      |
-| ----------------------------- | --------- | ------------ | --------------------------------------------------------------- | -------------- |
-| `dsar_opened_total`           | counter   | `kind`       | Solicitações abertas (acesso/correção/eliminação/portabilidade) | money-and-dsar |
-| `dsar_duplicate_open_total`   | counter   | `kind`       | Tentativas de duplicata bloqueadas                              | money-and-dsar |
-| `dsar_transition_total`       | counter   | `from`, `to` | Transições de estado da máquina DSAR                            | money-and-dsar |
-| `dsar_transition_error_total` | counter   | `from`, `to` | Transições recusadas por validação                              | money-and-dsar |
-| `dsar_transition_duration_ms` | histogram | `to`         | Latência da transição                                           | money-and-dsar |
-| `dsar_sla_breach_total`       | counter   | `kind`       | DSAR que estourou o SLA de 15 dias                              | money-and-dsar |
-| `dsar_sla_warning_total`      | counter   | `kind`       | DSAR a 48h do SLA (P2)                                          | money-and-dsar |
-| `dsar_expired_total`          | counter   | `kind`       | DSAR auto-expirados após o SLA                                  | money-and-dsar |
+| Métrica                       | Tipo      | Labels         | Descrição                                                                                             | Dashboard      |
+| ----------------------------- | --------- | -------------- | ----------------------------------------------------------------------------------------------------- | -------------- |
+| `dsar_opened_total`           | counter   | `kind`         | Solicitações abertas (`EXPORT` / `ERASURE` / `RECTIFICATION`)                                         | money-and-dsar |
+| `dsar_duplicate_open_total`   | counter   | `kind`         | Tentativas de duplicata bloqueadas                                                                    | money-and-dsar |
+| `dsar_transition_total`       | counter   | `to`           | Transições de estado da máquina DSAR (rotuladas pelo estado de destino)                               | money-and-dsar |
+| `dsar_transition_error_total` | counter   | `reason`, `to` | Transições recusadas pelo RPC `dsar_transition()` (ex.: `invalid_transition`, `reject_code_required`) | money-and-dsar |
+| `dsar_transition_duration_ms` | histogram | (sem labels)   | Latência do RPC `dsar_transition()`                                                                   | money-and-dsar |
+| `dsar_sla_breach_total`       | counter   | `kind`         | DSAR que estourou o SLA de 15 dias                                                                    | money-and-dsar |
+| `dsar_sla_warning_total`      | counter   | `kind`         | DSAR dentro da janela `DSAR_SLA_WARNING_DAYS` (default 3d) antes do SLA                               | money-and-dsar |
+| `dsar_expired_total`          | counter   | `via`          | DSAR auto-expirados pelo cron (`via="cron"`) após 30d de graça                                        | money-and-dsar |
 
 ### 3.9 Backups e recuperação
 
