@@ -90,6 +90,7 @@ surpresa.
 2. **Issues** (5 min):
    - Todas as issues com label `security` triadas ou fechadas?
    - Nada com > 14d em `needs-triage`?
+   - Issue de claims-audit semanal (label `claims-audit`, abre terça 06 UTC): triar warnings, fechar ao resolver. Ver [`docs/operations/claims-audit.md`](./operations/claims-audit.md).
 
 3. **Custos** (10 min):
    - Vercel bill running este mês
@@ -141,25 +142,26 @@ Ritual de saúde do produto, não operação.
 
 Cada linha substitui trabalho humano que senão seria recorrente.
 
-| Loop                       | Workflow                    | Cadência              | Gate                       | SLA de resposta                                    |
-| -------------------------- | --------------------------- | --------------------- | -------------------------- | -------------------------------------------------- |
-| L1 In-cluster probe        | `/api/cron/synthetic-probe` | 5 min                 | 3 falhas consecutivas      | < 10 min (page via Sentry)                         |
-| L2 External probe          | `external-probe.yml`        | 5 min                 | 2 falhas consecutivas      | < 10 min (issue + optional email)                  |
-| L3 DAST                    | `zap-baseline.yml`          | Semanal Mon 07:00 UTC | Medium+ finding            | 24h                                                |
-| Mutation test              | `mutation-test.yml`         | PRs + semanal         | < 84%                      | mesmo ciclo do PR                                  |
-| Schema drift               | `schema-drift.yml`          | Cada PR + cron        | divergência                | 24h                                                |
-| Audit chain verify         | `verify-audit-chain` cron   | Diário 03:45 UTC      | broken hash                | imediato (P1)                                      |
-| DR restore drill           | `restore-drill.yml`         | Mensal                | falha de restore           | 72h triagem                                        |
-| Retention purge            | `enforce-retention` cron    | Mensal dia 1 02:00    | erro no purge              | 24h                                                |
-| DSAR SLA                   | `expire-doc-deadlines` cron | Diário 06:00          | DSAR > 10d sem fulfillment | 48h                                                |
-| Stale orders               | `stale-orders` cron         | Diário 08:00          | ordens paradas > X         | 7d                                                 |
-| Churn detection            | `churn-check` cron          | Diário 07:30          | farmácia inativa > N dias  | 7d                                                 |
-| Coupon expiry              | `coupon-expiry-alerts` cron | Diário 09:00          | expiração próxima          | informativo                                        |
-| Reorder alerts             | `reorder-alerts` cron       | Diário 07:00          | estoque baixo              | informativo                                        |
-| Cost guard                 | `cost-guard.yml`            | Semanal               | threshold                  | 48h (ver [cost-guard](./operations/cost-guard.md)) |
-| Secret rotation reminder   | (manual por enquanto)       | 90d                   | vencida > 0d               | 7d                                                 |
-| Dependabot                 | GitHub nativo               | Diário                | critical/high              | 72h                                                |
-| CodeQL + Trivy + npm audit | `security-scan.yml`         | Push + semanal        | new CVE                    | 7d                                                 |
+| Loop                       | Workflow                    | Cadência              | Gate                       | SLA de resposta                                       |
+| -------------------------- | --------------------------- | --------------------- | -------------------------- | ----------------------------------------------------- |
+| L1 In-cluster probe        | `/api/cron/synthetic-probe` | 5 min                 | 3 falhas consecutivas      | < 10 min (page via Sentry)                            |
+| L2 External probe          | `external-probe.yml`        | 5 min                 | 2 falhas consecutivas      | < 10 min (issue + optional email)                     |
+| L3 DAST                    | `zap-baseline.yml`          | Semanal Mon 07:00 UTC | Medium+ finding            | 24h                                                   |
+| Mutation test              | `mutation-test.yml`         | PRs + semanal         | < 84%                      | mesmo ciclo do PR                                     |
+| Schema drift               | `schema-drift.yml`          | Cada PR + cron        | divergência                | 24h                                                   |
+| Audit chain verify         | `verify-audit-chain` cron   | Diário 03:45 UTC      | broken hash                | imediato (P1)                                         |
+| DR restore drill           | `restore-drill.yml`         | Mensal                | falha de restore           | 72h triagem                                           |
+| Retention purge            | `enforce-retention` cron    | Mensal dia 1 02:00    | erro no purge              | 24h                                                   |
+| DSAR SLA                   | `expire-doc-deadlines` cron | Diário 06:00          | DSAR > 10d sem fulfillment | 48h                                                   |
+| Stale orders               | `stale-orders` cron         | Diário 08:00          | ordens paradas > X         | 7d                                                    |
+| Churn detection            | `churn-check` cron          | Diário 07:30          | farmácia inativa > N dias  | 7d                                                    |
+| Coupon expiry              | `coupon-expiry-alerts` cron | Diário 09:00          | expiração próxima          | informativo                                           |
+| Reorder alerts             | `reorder-alerts` cron       | Diário 07:00          | estoque baixo              | informativo                                           |
+| Cost guard                 | `cost-guard.yml`            | Semanal               | threshold                  | 48h (ver [cost-guard](./operations/cost-guard.md))    |
+| Claims audit               | `claims-audit.yml`          | Semanal (ter 06 UTC)  | `fail` ≥ 1 OU warnings > 0 | 7d (ver [claims-audit](./operations/claims-audit.md)) |
+| Secret rotation reminder   | (manual por enquanto)       | 90d                   | vencida > 0d               | 7d                                                    |
+| Dependabot                 | GitHub nativo               | Diário                | critical/high              | 72h                                                   |
+| CodeQL + Trivy + npm audit | `security-scan.yml`         | Push + semanal        | new CVE                    | 7d                                                    |
 
 **Princípio**: cada loop tem:
 

@@ -46,3 +46,7 @@ stryker.log
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claims audit local results (artifacts uploaded in CI)
+scripts/claims/.results/
+

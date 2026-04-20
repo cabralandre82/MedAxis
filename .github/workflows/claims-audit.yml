@@ -1,0 +1,187 @@
+name: Claims Audit (evidence loop)
+
+on:
+  schedule:
+    # Tuesday 06:00 UTC = 03:00 BRT. Runs AFTER mutation-test (Mon 06:00) and
+    # zap-baseline (Mon 07:00) so a fresh week of operational results is available.
+    - cron: '0 6 * * 2'
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - '.cursor/skills/**'
+      - '.cursor/rules/**'
+      - 'docs/runbooks/**'
+      - 'docs/SOLO_OPERATOR.md'
+      - 'AGENTS.md'
+      - 'scripts/claims/**'
+      - 'vercel.json'
+      - 'supabase/migrations/**'
+      - '.github/workflows/claims-audit.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: claims-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Verify platform claims
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      total_failed: ${{ steps.aggregate.outputs.failed }}
+      total_warnings: ${{ steps.aggregate.outputs.warnings }}
+      total_passed: ${{ steps.aggregate.outputs.passed }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Run claim verifiers
+        id: run
+        continue-on-error: true
+        run: ./scripts/claims/run-all.sh
+
+      - name: Aggregate results
+        id: aggregate
+        if: always()
+        run: |
+          node <<'NODE' > /tmp/agg.json
+          const fs = require('fs');
+          const dir = 'scripts/claims/.results';
+          const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.json')) : [];
+          const totals = { passed: 0, failed: 0, warnings: 0 };
+          const byCheck = [];
+          for (const f of files) {
+            const j = JSON.parse(fs.readFileSync(`${dir}/${f}`, 'utf8'));
+            totals.passed += j.passed || 0;
+            totals.failed += j.failed || 0;
+            totals.warnings += j.warnings || 0;
+            byCheck.push({ name: j.name, passed: j.passed, failed: j.failed, warnings: j.warnings });
+          }
+          console.log(JSON.stringify({ ...totals, byCheck }, null, 2));
+          NODE
+          cat /tmp/agg.json
+          echo "failed=$(node -e 'console.log(require("/tmp/agg.json").failed)')"  >> "$GITHUB_OUTPUT"
+          echo "warnings=$(node -e 'console.log(require("/tmp/agg.json").warnings)')" >> "$GITHUB_OUTPUT"
+          echo "passed=$(node -e 'console.log(require("/tmp/agg.json").passed)')"  >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Step Summary
+        if: always()
+        run: |
+          if [[ -f scripts/claims/.results/summary.md ]]; then
+            cat scripts/claims/.results/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Claims audit produced no summary" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: claims-audit-report
+          path: scripts/claims/.results/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Fail job if any claim failed
+        if: always() && steps.aggregate.outputs.failed != '0'
+        run: |
+          echo "::error::claims audit found ${{ steps.aggregate.outputs.failed }} failing claim(s)"
+          exit 1
+
+  alerting:
+    name: Open or update tracking issue
+    runs-on: ubuntu-latest
+    needs: audit
+    if: always() && github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download audit artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: claims-audit-report
+          path: .results/
+
+      - name: Open or append weekly tracking issue
+        uses: actions/github-script@v9
+        env:
+          FAILED: ${{ needs.audit.outputs.total_failed }}
+          WARNINGS: ${{ needs.audit.outputs.total_warnings }}
+          PASSED: ${{ needs.audit.outputs.total_passed }}
+        with:
+          script: |
+            const fs = require('fs');
+            const failed = parseInt(process.env.FAILED || '0', 10);
+            const warnings = parseInt(process.env.WARNINGS || '0', 10);
+            const passed = parseInt(process.env.PASSED || '0', 10);
+
+            // If everything is clean AND no warnings, skip issue creation.
+            if (failed === 0 && warnings === 0) {
+              core.info('Claims audit fully clean — no issue opened.');
+              return;
+            }
+
+            const summary = fs.existsSync('.results/summary.md')
+              ? fs.readFileSync('.results/summary.md', 'utf8')
+              : '(summary missing)';
+
+            const now = new Date();
+            const isoDate = now.toISOString().slice(0, 10);
+            const title = `Claims audit — week of ${isoDate}`;
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'claims-audit',
+              per_page: 10,
+            });
+
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              `**Audit run:** ${runUrl}`,
+              ``,
+              `- ✅ Passed:   **${passed}**`,
+              `- ❌ Failed:   **${failed}**`,
+              `- ⚠️ Warnings: **${warnings}**`,
+              ``,
+              summary,
+              ``,
+              `---`,
+              ``,
+              `Triage weekly during the Tuesday ritual (see \`docs/SOLO_OPERATOR.md\`).`,
+              `Context: \`docs/operations/claims-audit.md\`.`,
+            ].join('\n');
+
+            // Dedupe: if there's already a claims-audit issue opened this week, append; else open.
+            const existing = open.find(i =>
+              /^Claims audit — week of/.test(i.title) &&
+              (now.getTime() - new Date(i.created_at).getTime()) < 7 * 24 * 60 * 60 * 1000
+            );
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `### Re-run @ ${now.toISOString()}\n\n${body}`,
+              });
+              core.info(`Appended comment to existing issue #${existing.number}`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['claims-audit', 'operations', 'solo-operator'],
+              });
+              core.info(`Opened tracking issue #${created.number}`);
+            }

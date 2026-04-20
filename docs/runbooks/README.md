@@ -33,7 +33,7 @@
 | `cron-double-run.md`           | Cron `skipped_locked` repetido ou lock órfão                                | `cron_runs` + `cron_locks`               |
 | `webhook-replay.md`            | `webhook_events.status=failed` acumulando ou sender-loop                    | Sentry + `webhook_events`                |
 | `email-deliverability-low.md`  | Taxa de bounce > 5% em 24h                                                  | Resend dashboard                         |
-| `connection-pool-exhausted.md` | Supabase pool > 80% por >5 min                                              | `/api/cron/db-pool-health`               |
+| `connection-pool-exhausted.md` | Supabase pool > 80% por >5 min                                              | Supabase Dashboard + `/api/health/ready` |
 | `rbac-permission-denied.md`    | Spike de `permission denied` após ativação de `rbac.fine_grained`           | `server_logs` + painel flags             |
 | `csrf-block-surge.md`          | Spike de `csrf_blocked` em `/api/**` após Wave 5                            | `server_logs` + 403 rate                 |
 | `health-check-failing.md`      | `/api/health/ready` ou `/deep` retornando `degraded` por >5 min             | UptimeRobot + Sentry                     |
