@@ -171,25 +171,21 @@
 
 ---
 
-### 📱 3. Zenvia — SMS + WhatsApp (provider unificado)
+### 📱 3. Zenvia — SMS (WhatsApp intencionalmente desligado no lançamento)
 
-**Status:** código implementado (`lib/zenvia.ts`) — aguardando aprovação da conta Zenvia  
-**Por que Zenvia:** provider brasileiro, SMS e WhatsApp num único token REST, sem infraestrutura própria (sem Docker), sem complexidade de QR code. BSP oficial do Meta.
+**Status:** onboarding Zenvia concluído (email do time CS em 2026-04-18). Falta só configurar o token e o sender ID no Vercel.  
+**Escopo de lançamento:** **SMS apenas**. WhatsApp fica gated pelo kill-switch `WHATSAPP_ENABLED=false` — `lib/zenvia.ts::sendWhatsApp()` é no-op silencioso em todos os paths (pedido/pagamento/registro). Para ligar depois: verificar CNPJ no Meta Business Manager, registrar número dedicado, flipar `WHATSAPP_ENABLED=true`, preencher `ZENVIA_WHATSAPP_FROM`. Zero mudança de código.
 
-> ⚠️ **Tempo de aprovação:** o cadastro da conta Zenvia é imediato e o **sandbox** funciona no mesmo dia. Para produção: SMS tende a ser aprovado em 1–2 dias úteis. WhatsApp Business requer verificação de conta Meta (CNPJ + razão social) e pode levar **5–10 dias úteis**. Inicie o processo o quanto antes.
+**O que fazer (SMS-only):**
 
-**O que fazer:**
-
-1. Criar conta em [app.zenvia.com](https://app.zenvia.com) (sandbox disponível imediatamente)
-2. Ir em **Developers → Tokens & Webhooks → Criar novo** → copiar o token gerado
-3. **SMS sender:** em **Canais → SMS** → obter o sender ID aprovado (alfanumérico "Clinipharma" ou número curto)
-4. **WhatsApp:** em **Canais → WhatsApp Business** → registrar número dedicado (requer verificação de conta Business)
-   - Até aprovação, usar a **keyword** do Sandbox em `app.zenvia.com/home/sandbox`
-5. No Vercel → atualizar os 3 placeholders com os valores reais:
-   - `ZENVIA_API_TOKEN` (id: `WCWL1B4O5e9guOOZ`) → token criado no passo 2
-   - `ZENVIA_SMS_FROM` (id: `fYrN1vRC0mPF93Ne`) → sender ID SMS do passo 3
-   - `ZENVIA_WHATSAPP_FROM` (id: `qN5b0EH8Y0bouNYp`) → número WhatsApp Business ou keyword sandbox
-6. Também atualizar `.env.local` com os mesmos valores para desenvolvimento local
+1. [app.zenvia.com](https://app.zenvia.com) → **Developers → Tokens & Webhooks** → copiar token.
+2. **Canais → SMS** → conferir sender ID aprovado (alfanumérico `Clinipharma` ou numérico).
+3. Vercel → atualizar 2 placeholders:
+   - `ZENVIA_API_TOKEN` (id: `WCWL1B4O5e9guOOZ`) → token do passo 1
+   - `ZENVIA_SMS_FROM` (id: `fYrN1vRC0mPF93Ne`) → sender ID do passo 2
+4. Garantir `WHATSAPP_ENABLED=false` no Vercel (default do `.env.example`).
+5. Espelhar no `.env.local` para dev local.
+6. Smoke test: confirmar um pedido de teste e verificar em Zenvia → Monitoria se o SMS sai com status `delivered`.
 
 ---
 

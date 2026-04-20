@@ -4,13 +4,16 @@
  * Docs: https://zenvia.github.io/zenvia-openapi-spec/v2/
  * Auth: X-API-TOKEN header (token created at app.zenvia.com → Developers → Tokens & Webhooks)
  *
- * SETUP STEPS:
+ * SETUP STEPS (SMS — required):
  * 1. Create a Zenvia account at https://app.zenvia.com
- * 2. Go to Developers → Tokens & Webhooks → Create new token
- * 3. Set ZENVIA_API_TOKEN in env vars
- * 4. For SMS: set ZENVIA_SMS_FROM to your sender number/code (e.g. "CliPharma" or numeric)
- * 5. For WhatsApp: set ZENVIA_WHATSAPP_FROM to your registered WhatsApp Business number
- *    (e.g. "5511999999999"). In sandbox, use the sandbox keyword from the Zenvia panel.
+ * 2. Developers → Tokens & Webhooks → Create new token → ZENVIA_API_TOKEN
+ * 3. Canais → SMS → approved sender ID → ZENVIA_SMS_FROM (e.g. "Clinipharma")
+ *
+ * WhatsApp is OFF-by-design for the initial launch — `WHATSAPP_ENABLED` is
+ * read as the kill-switch so `sendWhatsApp()` is a no-op on every order /
+ * payment / registration path without emitting warn log noise. To enable
+ * later: set `WHATSAPP_ENABLED=true` AND `ZENVIA_WHATSAPP_FROM` (E.164, no
+ * leading '+') AND verify the business number in Meta Business Manager.
  */
 
 import { withCircuitBreaker, CircuitOpenError } from '@/lib/circuit-breaker'
@@ -107,6 +110,13 @@ export async function sendSms(to: string, text: string): Promise<void> {
 export async function sendWhatsApp(phone: string, text: string): Promise<void> {
   if (!phone?.trim()) return
 
+  // Kill-switch: WhatsApp is intentionally disabled at launch. Silent
+  // skip (no warn log) so the production log isn't noisy on every
+  // order/payment/registration. Flip WHATSAPP_ENABLED=true only when
+  // Meta Business verification is complete AND ZENVIA_WHATSAPP_FROM
+  // is set to the verified business number.
+  if (process.env.WHATSAPP_ENABLED !== 'true') return
+
   const digits = phone.replace(/\D/g, '')
   if (digits.length < 10) {
     logger.warn('Invalid phone number, skipping', { module: 'zenvia', channel: 'whatsapp' })
@@ -115,6 +125,7 @@ export async function sendWhatsApp(phone: string, text: string): Promise<void> {
 
   const from = process.env.ZENVIA_WHATSAPP_FROM
   if (!from) {
+    // WHATSAPP_ENABLED=true but FROM missing → real config bug, warn loud.
     logger.warn('ZENVIA_WHATSAPP_FROM not configured', { module: 'zenvia', channel: 'whatsapp' })
     return
   }

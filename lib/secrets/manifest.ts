@@ -125,7 +125,8 @@ export const SECRET_MANIFEST: readonly SecretDescriptor[] = [
     name: 'ZENVIA_API_TOKEN',
     tier: 'B',
     provider: 'zenvia-portal',
-    description: 'SMS / WhatsApp gateway. Rotation in Zenvia developer portal + Vercel env.',
+    description:
+      'SMS gateway (WhatsApp gated by WHATSAPP_ENABLED — off at launch). Rotation in Zenvia developer portal + Vercel env.',
   },
   {
     name: 'INNGEST_EVENT_KEY',
