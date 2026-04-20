@@ -22,6 +22,7 @@ VERIFIERS=(
   "check-invariants.sh"
   "check-metric-emission.mjs"
   "check-skill-trigger-overlap.mjs"
+  "check-rls-policy-coverage.mjs"
 )
 
 EXIT_CODE=0
