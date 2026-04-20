@@ -23,6 +23,7 @@ VERIFIERS=(
   "check-metric-emission.mjs"
   "check-skill-trigger-overlap.mjs"
   "check-rls-policy-coverage.mjs"
+  "check-env-documented.mjs"
 )
 
 EXIT_CODE=0

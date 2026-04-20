@@ -24,7 +24,6 @@
 - [x] `NEXT_PUBLIC_SUPABASE_URL` configurada
 - [x] `NEXT_PUBLIC_SUPABASE_ANON_KEY` configurada
 - [x] `SUPABASE_SERVICE_ROLE_KEY` configurada
-- [x] `NEXT_PUBLIC_APP_NAME` = Clinipharma
 - [x] `NEXT_PUBLIC_APP_URL` = `https://clinipharma.com.br`
 - [x] `RESEND_API_KEY` configurada
 - [x] `EMAIL_FROM` = `Clinipharma <noreply@clinipharma.com.br>`

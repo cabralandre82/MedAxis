@@ -23,7 +23,6 @@ Configure em **Vercel → Settings → Environment Variables**:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | (anon key do Supabase)                         |
 | `SUPABASE_SERVICE_ROLE_KEY`     | (service role key — nunca exposta no frontend) |
 | `NEXT_PUBLIC_APP_URL`           | `https://clinipharma-three.vercel.app`         |
-| `NEXT_PUBLIC_APP_NAME`          | `Clinipharma`                                  |
 
 ---
 
