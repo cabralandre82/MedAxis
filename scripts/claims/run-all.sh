@@ -27,6 +27,7 @@ VERIFIERS=(
   "check-retention-policies.mjs"
   "check-dsar-sla.mjs"
   "check-cron-scheduled.mjs"
+  "check-alert-coverage.mjs"
 )
 
 EXIT_CODE=0

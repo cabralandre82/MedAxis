@@ -299,28 +299,101 @@ contrato dos painéis.
 
 As regras de alerta vivem em
 [`monitoring/prometheus/alerts.yml`](../../monitoring/prometheus/alerts.yml)
-e são alinhadas a SLOs internos:
+e são alinhadas a SLOs internos. Toda entrada dessa tabela é
+verificada por [`scripts/claims/check-alert-coverage.mjs`](../../scripts/claims/check-alert-coverage.mjs),
+que falha o CI se um alerta for renomeado sem atualizar a doc, se
+um runbook citado não existir, ou se uma métrica "must-page"
+(sufixo `_chain_break_total`, `_violations_total`, `_drift_total`,
+`_breach_total`, `_tampered_total`) não tiver cobertura por regra.
 
-| Alerta                           | Severidade | Trigger                                              | Runbook                                  |
-| -------------------------------- | ---------- | ---------------------------------------------------- | ---------------------------------------- |
-| `RateLimitHighDenyRate`          | warning    | `> 5%` deny rate em 1 bucket por 15 min              | `docs/runbooks/rate-limit-abuse.md`      |
-| `RateLimitSuspiciousIpsCritical` | critical   | `> 50` IPs em 15 min OU `> 5` buckets por IP         | `docs/runbooks/rate-limit-abuse.md`      |
-| `RateLimitSuspiciousIpsWarning`  | warning    | `>= 10` IPs em 15 min                                | `docs/runbooks/rate-limit-abuse.md`      |
-| `MetricsScrapeFailing`           | warning    | `metrics_scrape_total{outcome="ok"}` zero por 10 min | `docs/runbooks/metrics-scrape-down.md`   |
-| `BackupStale`                    | critical   | `backup_age_seconds > 25 * 3600`                     | `docs/runbooks/backup-missing.md`        |
-| `RestoreDrillStale`              | warning    | `restore_drill_age_seconds > 180 * 86400`            | `docs/runbooks/dr-drill-2026-04.md`      |
-| `CircuitBreakerOpen`             | warning    | `circuit_breaker_state == 2` por 5 min               | `docs/runbooks/circuit-breaker.md`       |
-| `CronJobFailing`                 | warning    | `> 2` falhas consecutivas do mesmo `job` em 30 min   | `docs/runbooks/cron-failures.md`         |
-| `RlsCanaryViolation`             | critical   | `increase(rls_canary_violations_total[15m]) > 0`     | `docs/runbooks/rls-incident.md`          |
-| `SecretRotationOverdue`          | warning    | `secret_rotation_overdue_count > 0` por 24 h         | `docs/runbooks/secret-rotation.md`       |
-| `LegalHoldStuckPurge`            | warning    | `> 0` linhas bloqueadas por > 30 d                   | `docs/runbooks/legal-hold-procedures.md` |
-| `DsarSlaBreach`                  | critical   | `increase(dsar_sla_breach_total[1h]) > 0`            | DPO procedure                            |
-| `MoneyDrift`                     | critical   | `increase(money_drift_total[1h]) > 0`                | `docs/runbooks/money-reconcile.md`       |
+### 6.1 Rate limit e abuso
 
-> Algumas runbooks listadas (`metrics-scrape-down.md`,
-> `cron-failures.md`, `circuit-breaker.md`) ainda estão em backlog.
-> Os alertas são emitidos mesmo assim — o fallback é a runbook
-> genérica `docs/runbooks/incident-response.md`.
+| Alerta                           | Severidade | Trigger                                               | Runbook                             |
+| -------------------------------- | ---------- | ----------------------------------------------------- | ----------------------------------- |
+| `RateLimitHighDenyRate`          | warning    | `> 5%` deny rate em 1 bucket por 15 min               | `docs/runbooks/rate-limit-abuse.md` |
+| `RateLimitSuspiciousIpsCritical` | critical   | `> 50` IPs em 15 min OU `> 5` buckets por IP          | `docs/runbooks/rate-limit-abuse.md` |
+| `RateLimitSuspiciousIpsWarning`  | warning    | `>= 10` IPs em 15 min                                 | `docs/runbooks/rate-limit-abuse.md` |
+| `RateLimitCheckSlow`             | warning    | p95 de `rate_limit_check_duration_ms` > 200ms por 10m | `docs/runbooks/rate-limit-abuse.md` |
+
+### 6.2 Observability e pipeline de métricas
+
+| Alerta                      | Severidade | Trigger                                              | Runbook                              |
+| --------------------------- | ---------- | ---------------------------------------------------- | ------------------------------------ |
+| `MetricsScrapeFailing`      | warning    | `metrics_scrape_total{outcome="ok"}` zero por 10 min | `docs/runbooks/secret-rotation.md`   |
+| `MetricsScrapeUnauthorized` | warning    | `> 5` tentativas `outcome="unauthorized"` em 10 min  | `docs/runbooks/secret-compromise.md` |
+
+### 6.3 HTTP e disponibilidade
+
+| Alerta               | Severidade | Trigger                                               | Runbook                              |
+| -------------------- | ---------- | ----------------------------------------------------- | ------------------------------------ |
+| `HttpHighErrorRate`  | critical   | `> 5%` de 5xx por rota por 10 min                     | `docs/runbooks/incident-response.md` |
+| `HttpLatencyP95High` | warning    | p95 de `http_request_duration_ms` > 1500ms por 15 min | `docs/runbooks/slow-requests.md`     |
+| `CircuitBreakerOpen` | warning    | `circuit_breaker_state == 2` por 5 min                | `docs/runbooks/circuit-breaker.md`   |
+
+### 6.4 Cron e jobs
+
+| Alerta           | Severidade | Trigger                                          | Runbook                             |
+| ---------------- | ---------- | ------------------------------------------------ | ----------------------------------- |
+| `CronJobFailing` | warning    | `>= 2` falhas consecutivas em 30 min sem sucesso | `docs/runbooks/cron-job-failing.md` |
+| `CronJobMissing` | warning    | nenhuma execução de `job` em 24 h                | `docs/runbooks/cron-job-failing.md` |
+
+### 6.5 Backups e DR
+
+| Alerta                  | Severidade | Trigger                                           | Runbook                             |
+| ----------------------- | ---------- | ------------------------------------------------- | ----------------------------------- |
+| `BackupStale`           | critical   | `backup_age_seconds > 25 * 3600`                  | `docs/runbooks/backup-missing.md`   |
+| `BackupFreshnessBreach` | warning    | `increase(backup_freshness_breach_total[1h]) > 0` | `docs/runbooks/backup-missing.md`   |
+| `BackupChainBreak`      | critical   | `increase(backup_chain_break_total[1h]) > 0`      | `docs/runbooks/backup-missing.md`   |
+| `RestoreDrillStale`     | warning    | `restore_drill_age_seconds > 180 * 86400`         | `docs/runbooks/dr-drill-2026-04.md` |
+
+### 6.6 Audit chain
+
+| Alerta                  | Severidade | Trigger                                           | Runbook                                 |
+| ----------------------- | ---------- | ------------------------------------------------- | --------------------------------------- |
+| `AuditChainTampered`    | critical   | `increase(audit_chain_break_total[15m]) > 0`      | `docs/runbooks/audit-chain-tampered.md` |
+| `AuditChainVerifyStale` | warning    | `time() - audit_chain_last_verify_ts > 26 * 3600` | `docs/runbooks/audit-chain-tampered.md` |
+
+### 6.7 Content Security Policy
+
+| Alerta                   | Severidade | Trigger                                                                         | Runbook                |
+| ------------------------ | ---------- | ------------------------------------------------------------------------------- | ---------------------- |
+| `CspViolationSpike`      | warning    | `> 50` violações enforce-mode em 1 directive em 15 min                          | `docs/security/csp.md` |
+| `CspInlineScriptBlocked` | critical   | qualquer inline script bloqueado em enforce-mode (canary de XSS real) em 10 min | `docs/security/csp.md` |
+| `CspReportInvalidFlood`  | warning    | `> 200` payloads inválidos em `csp_report_invalid_total` em 10 min              | `docs/security/csp.md` |
+
+### 6.8 RLS canary
+
+| Alerta               | Severidade | Trigger                                          | Runbook                          |
+| -------------------- | ---------- | ------------------------------------------------ | -------------------------------- |
+| `RlsCanaryViolation` | critical   | `increase(rls_canary_violations_total[15m]) > 0` | `docs/runbooks/rls-violation.md` |
+| `RlsCanaryStale`     | warning    | `rls_canary_age_seconds > 26 * 3600`             | `docs/runbooks/rls-violation.md` |
+
+### 6.9 Secret rotation
+
+| Alerta                  | Severidade | Trigger                                            | Runbook                            |
+| ----------------------- | ---------- | -------------------------------------------------- | ---------------------------------- |
+| `SecretRotationOverdue` | warning    | `secret_rotation_overdue_count > 0` por 24 h       | `docs/runbooks/secret-rotation.md` |
+| `SecretRotationFailure` | critical   | `increase(secret_rotation_failures_total[1h]) > 0` | `docs/runbooks/secret-rotation.md` |
+
+### 6.10 Legal hold e DSAR
+
+| Alerta                | Severidade | Trigger                                                                | Runbook                                |
+| --------------------- | ---------- | ---------------------------------------------------------------------- | -------------------------------------- |
+| `LegalHoldStuckPurge` | warning    | `> 0` linhas bloqueadas em `legal_hold_blocked_purge_total` por > 30 d | `docs/runbooks/legal-hold-received.md` |
+| `DsarSlaBreach`       | critical   | `increase(dsar_sla_breach_total[1h]) > 0`                              | `docs/runbooks/dsar-sla-missed.md`     |
+| `DsarSlaWarning`      | warning    | `increase(dsar_sla_warning_total[15m]) > 0`                            | `docs/runbooks/dsar-sla-missed.md`     |
+
+### 6.11 Conciliação financeira
+
+| Alerta                | Severidade | Trigger                                                 | Runbook                        |
+| --------------------- | ---------- | ------------------------------------------------------- | ------------------------------ |
+| `MoneyDrift`          | critical   | `increase(money_drift_total[1h]) > 0`                   | `docs/runbooks/money-drift.md` |
+| `MoneyReconcileStale` | warning    | `time() - money_reconcile_last_run_ts > 3600` por 5 min | `docs/runbooks/money-drift.md` |
+
+> **Invariante:** toda linha acima tem um `- alert:` correspondente
+> em `monitoring/prometheus/alerts.yml` com o mesmo nome, severidade
+> igual ou mais alta, e o runbook citado existe no repositório.
+> `scripts/claims/check-alert-coverage.mjs` verifica isso a cada push.
 
 ---
 

@@ -218,7 +218,7 @@ groups:
           description: |
             Two or more consecutive runs of `{{ $labels.job }}` failed
             in the last 30 minutes with no successful runs in between.
-          runbook: docs/runbooks/cron-failures.md
+          runbook: docs/runbooks/cron-job-failing.md
 
       - alert: CronJobMissing
         expr: |
@@ -232,7 +232,7 @@ groups:
           service: clinipharma
         annotations:
           summary: 'Cron job {{ $labels.job }} did not run in the last 24h'
-          runbook: docs/runbooks/cron-failures.md
+          runbook: docs/runbooks/cron-job-failing.md
 
   # ───────────────────────────────────────────────────────────────
   # 5. Backups & DR
@@ -412,7 +412,7 @@ groups:
           description: |
             One or more tables returned data that should not have been
             visible to the canary tenant. Treat as SEV-1.
-          runbook: docs/runbooks/rls-incident.md
+          runbook: docs/runbooks/rls-violation.md
 
       - alert: RlsCanaryStale
         expr: rls_canary_age_seconds > 26 * 3600
@@ -423,7 +423,7 @@ groups:
           service: clinipharma
         annotations:
           summary: 'RLS canary did not run in the last 26 hours'
-          runbook: docs/runbooks/rls-incident.md
+          runbook: docs/runbooks/rls-violation.md
 
   # ───────────────────────────────────────────────────────────────
   # 7. Secret rotation (Wave Hardening II #4)
@@ -472,7 +472,7 @@ groups:
             A legal hold has been suspending normal retention for at
             least 30 days. DPO should re-confirm the hold is still
             warranted.
-          runbook: docs/runbooks/legal-hold-procedures.md
+          runbook: docs/runbooks/legal-hold-received.md
 
   # ───────────────────────────────────────────────────────────────
   # 9. DSAR (LGPD art. 18)
@@ -493,7 +493,7 @@ groups:
             A data-subject access request exceeded the 15-day legal
             deadline (LGPD art. 19, II). This is a regulatory
             exposure — the DPO must act today.
-          runbook: docs/runbooks/incident-response.md
+          runbook: docs/runbooks/dsar-sla-missed.md
 
       - alert: DsarSlaWarning
         expr: increase(dsar_sla_warning_total[15m]) > 0
@@ -504,7 +504,7 @@ groups:
           service: clinipharma
         annotations:
           summary: 'DSAR approaching SLA (48h remaining)'
-          runbook: docs/runbooks/incident-response.md
+          runbook: docs/runbooks/dsar-sla-missed.md
 
   # ───────────────────────────────────────────────────────────────
   # 10. Money reconciliation
@@ -525,7 +525,7 @@ groups:
             Cron money-reconcile detected a discrepancy. Check the
             `entity` label for the affected payment / commission /
             transfer chain and refer to the runbook.
-          runbook: docs/runbooks/money-reconcile.md
+          runbook: docs/runbooks/money-drift.md
 
       - alert: MoneyReconcileStale
         expr: time() - money_reconcile_last_run_ts > 3600
@@ -536,4 +536,4 @@ groups:
           service: clinipharma
         annotations:
           summary: 'Money reconciliation has not run in the last hour'
-          runbook: docs/runbooks/money-reconcile.md
+          runbook: docs/runbooks/money-drift.md
