@@ -67,6 +67,9 @@
 | `secret-rotation.md`      | [`secret-rotate`](../../.cursor/skills/secret-rotate/SKILL.md)               | Rotação programada 90d / 180d                              |
 | `rls-violation.md`        | [`rls-violation-triage`](../../.cursor/skills/rls-violation-triage/SKILL.md) | Canário RLS violation                                      |
 | `backup-missing.md`       | [`backup-verify`](../../.cursor/skills/backup-verify/SKILL.md)               | Freshness / restore drill / chain break                    |
+| `money-drift.md`          | [`money-drift`](../../.cursor/skills/money-drift/SKILL.md)                   | `money_drift_view` não-vazio; cents ≠ numeric              |
+| `health-check-failing.md` | [`health-check-triage`](../../.cursor/skills/health-check-triage/SKILL.md)   | `/api/health/*` degraded; ponto de entrada para sub-skills |
+| `rate-limit-abuse.md`     | [`rate-limit-abuse`](../../.cursor/skills/rate-limit-abuse/SKILL.md)         | Spike de HTTP 429; credential stuffing; form spam          |
 
 Os skills são lidos automaticamente pelo agente quando o trigger da
 descrição bate com a solicitação do operador (`"processar DSAR"`,

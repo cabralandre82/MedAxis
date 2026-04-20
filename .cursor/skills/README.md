@@ -56,6 +56,19 @@ the runbook wins and the skill must be updated.
 | ------------------------------------------- | --------------------------------------------------------- | --------------------------------- |
 | [`backup-verify`](./backup-verify/SKILL.md) | Backup freshness alert; restore drill failed; chain break | `docs/runbooks/backup-missing.md` |
 
+### Financial integrity
+
+| Skill                                   | Trigger                                       | Runbook                        |
+| --------------------------------------- | --------------------------------------------- | ------------------------------ |
+| [`money-drift`](./money-drift/SKILL.md) | `money_drift_view` non-empty; cents ≠ numeric | `docs/runbooks/money-drift.md` |
+
+### Infrastructure / availability
+
+| Skill                                                   | Trigger                                                                | Runbook                                 |
+| ------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------- |
+| [`health-check-triage`](./health-check-triage/SKILL.md) | `/api/health/*` degraded; UptimeRobot 503; routing entry to sub-skills | `docs/runbooks/health-check-failing.md` |
+| [`rate-limit-abuse`](./rate-limit-abuse/SKILL.md)       | HTTP 429 spike; credential stuffing; form spam DoS                     | `docs/runbooks/rate-limit-abuse.md`     |
+
 ---
 
 ## Runbooks without a dedicated skill (yet)
@@ -72,10 +85,7 @@ skill — they just require the agent to read them linearly.
 | `csrf-block-surge.md`       | Investigation, not fixed procedure             |
 | `dr-drill-2026-04.md`       | Historical one-off drill (already executed)    |
 | `fire-drill-2026-Q2.md`     | Scheduled drill — skillify if recurring        |
-| `health-check-failing.md`   | Too broad (many root causes)                   |
-| `money-drift.md`            | Reconciliation — could be skillified next      |
 | `observability-gap.md`      | Investigation guide                            |
-| `rate-limit-abuse.md`       | Investigation + lib/alerts tuning              |
 | `rbac-permission-denied.md` | Debugging                                      |
 | `vercel-cron-quota.md`      | Infra issue — skillify if it recurs            |
 | `webhook-replay.md`         | Debugging                                      |
