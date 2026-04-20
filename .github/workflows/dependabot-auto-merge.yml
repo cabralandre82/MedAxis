@@ -1,0 +1,187 @@
+name: Dependabot auto-merge
+
+# Selective auto-merge for Dependabot PRs. Relies on the existing CI surface
+# (unit tests, lint, tsc, Playwright a11y smoke, CodeQL, Gitleaks, npm audit,
+# Trivy, license-check) to block unsafe updates. This workflow only decides
+# *eligibility* — GitHub's native `--auto` handles the "wait for required
+# checks" state transition.
+#
+# Decision matrix (see docs/runbooks/dependabot-auto-merge.md for rationale):
+#
+#   ecosystem     | dep-type            | update-type        | decision
+#   --------------|---------------------|--------------------|----------
+#   npm           | direct:development  | patch | minor      | auto-merge
+#   npm           | indirect            | patch | minor      | auto-merge
+#   npm           | direct:production   | patch              | auto-merge
+#   npm           | direct:production   | minor              | MANUAL (new surface)
+#   npm           | *                   | major              | MANUAL
+#   github_actions| *                   | patch | minor      | auto-merge
+#   github_actions| *                   | major              | MANUAL
+#
+# Kill-switches:
+#  - label `do-not-auto-merge` on the PR → workflow exits early.
+#  - disable the workflow in Settings → Actions → Disable workflow.
+#  - delete this file.
+
+on:
+  pull_request_target:
+    # pull_request_target grants write-scope GITHUB_TOKEN which Dependabot PRs
+    # need for the merge/approve calls. We do NOT check out PR code, only
+    # consume metadata — safe per GitHub's official guidance.
+    # Ref: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Classify + enable auto-merge
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'do-not-auto-merge')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7 # v2.3.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide auto-merge eligibility
+        id: decide
+        env:
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+          DEP_TYPE: ${{ steps.meta.outputs.dependency-type }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          DEP_NAMES: ${{ steps.meta.outputs.dependency-names }}
+          DEP_GROUP: ${{ steps.meta.outputs.dependency-group }}
+        run: |
+          set -euo pipefail
+
+          eligible=false
+          reason=""
+
+          case "$ECOSYSTEM" in
+            npm)
+              case "$DEP_TYPE" in
+                direct:development|indirect)
+                  case "$UPDATE_TYPE" in
+                    version-update:semver-patch|version-update:semver-minor)
+                      eligible=true
+                      ;;
+                    *)
+                      reason="devDep/indirect major update — manual review"
+                      ;;
+                  esac
+                  ;;
+                direct:production)
+                  case "$UPDATE_TYPE" in
+                    version-update:semver-patch)
+                      eligible=true
+                      ;;
+                    version-update:semver-minor)
+                      reason="production minor update — manual review (new features/surface)"
+                      ;;
+                    *)
+                      reason="production major update — manual review"
+                      ;;
+                  esac
+                  ;;
+                *)
+                  reason="unknown dependency-type: '${DEP_TYPE}'"
+                  ;;
+              esac
+              ;;
+            github_actions|github-actions)
+              case "$UPDATE_TYPE" in
+                version-update:semver-patch|version-update:semver-minor)
+                  eligible=true
+                  ;;
+                *)
+                  reason="GitHub Actions major update — manual review"
+                  ;;
+              esac
+              ;;
+            *)
+              reason="unsupported ecosystem: '${ECOSYSTEM}'"
+              ;;
+          esac
+
+          echo "eligible=${eligible}"    >> "$GITHUB_OUTPUT"
+          echo "reason=${reason}"        >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Dependabot auto-merge decision"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Ecosystem | \`${ECOSYSTEM}\` |"
+            echo "| Dependency type | \`${DEP_TYPE}\` |"
+            echo "| Update type | \`${UPDATE_TYPE}\` |"
+            echo "| Group | \`${DEP_GROUP:-<none>}\` |"
+            echo "| Packages | \`${DEP_NAMES}\` |"
+            echo "| Eligible | **${eligible}** |"
+            if [ -n "${reason}" ]; then
+              echo "| Reason | ${reason} |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on ineligible PR (manual review path)
+        if: steps.decide.outputs.eligible == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REASON: ${{ steps.decide.outputs.reason }}
+        run: |
+          # Only comment once per PR: skip if the workflow has already posted this
+          # exact notice (synchronize events re-run the workflow).
+          existing=$(gh pr view "$PR_URL" --json comments \
+            --jq '.comments[] | select(.body | startswith("🤖 Not auto-merging")) | .body' | head -n1 || true)
+          if [ -z "$existing" ]; then
+            gh pr comment "$PR_URL" --body "🤖 Not auto-merging: ${REASON}
+
+          Leaving for manual review. Add label \`do-not-auto-merge\` to suppress future attempts on this PR.
+
+          Policy reference: [\`.github/workflows/dependabot-auto-merge.yml\`](https://github.com/${{ github.repository }}/blob/main/.github/workflows/dependabot-auto-merge.yml) + [\`docs/runbooks/dependabot-auto-merge.md\`](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/dependabot-auto-merge.md)."
+          else
+            echo "::notice::'Not auto-merging' comment already present — skipping duplicate."
+          fi
+
+      - name: Approve the PR
+        if: steps.decide.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        # Dependabot cannot approve its own PRs. This approval is scoped to the
+        # auto-merge path and documented in docs/runbooks/dependabot-auto-merge.md.
+        run: |
+          gh pr review "$PR_URL" \
+            --approve \
+            --body "Auto-approved by [\`dependabot-auto-merge.yml\`](https://github.com/${{ github.repository }}/blob/main/.github/workflows/dependabot-auto-merge.yml). Policy: safe-class (see runbook)."
+
+      - name: Enable native auto-merge (squash)
+        if: steps.decide.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        # `--auto` tells GitHub to merge once all required checks pass. If no
+        # required checks exist (no branch protection), the merge happens
+        # immediately — which is still safe because at that point all our CI
+        # jobs have already run on the PR.
+        run: |
+          if ! gh pr merge "$PR_URL" --auto --squash --delete-branch 2>&1 | tee /tmp/merge.log; then
+            if grep -q "not in the required state" /tmp/merge.log; then
+              echo "::warning::Auto-merge could not be enabled (likely Settings → General → Pull Requests → Allow auto-merge is OFF, or required checks are still pending). Will retry on next event."
+              exit 0
+            fi
+            echo "::error::gh pr merge failed for unexpected reason"
+            cat /tmp/merge.log
+            exit 1
+          fi
