@@ -263,7 +263,38 @@ Toda alteração em `lib/secrets/manifest.ts` exige:
 
 ---
 
-## 9. Referências
+## 9. Kill-switches & feature flags
+
+Os dois flags abaixo governam o comportamento do cron `/api/cron/rotate-secrets`. Ambos default OFF (`enabled = false`) para permitir rampa gradual.
+
+| `feature_flags.key`            | State default | Efeito quando ON                                                                                                                                      | Efeito quando OFF                                                          |
+| ------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `'secrets.rotation_enforce'`   | OFF           | Cron `rotate-secrets` **pagina P1** para cada secret vencido (TTL estourado) — força ação imediata.                                                   | Cron só emite warning em log + envia e-mail para `security@`.              |
+| `'secrets.auto_rotate_tier_a'` | OFF           | Cron **auto-rotaciona** Tier A (`CRON_SECRET`, `METRICS_SECRET`, `BACKUP_LEDGER_SECRET`): gera novo valor, faz PATCH no Vercel env, dispara redeploy. | Tier A se comporta como Tier B: apenas alerta + work-item para o operator. |
+
+**Quando virar `secrets.rotation_enforce` ON:** depois do primeiro ciclo completo com o manifest estável (30 dias sem falsos positivos) — aí o SLA real começa a valer.
+
+**Quando virar `secrets.auto_rotate_tier_a` ON:** somente após `VERCEL_TOKEN` com escopo `env:write` estar provisionado, testado contra staging, e 3 rotações Tier B consecutivas terem ocorrido sem drift (validando o caminho manual antes de ceder para a máquina).
+
+**Leitura do estado atual:**
+
+```sql
+SELECT key, enabled, updated_at, description
+  FROM public.feature_flags
+ WHERE key IN ('secrets.rotation_enforce', 'secrets.auto_rotate_tier_a');
+```
+
+**Flip via migration** (preferencial) ou SQL emergencial:
+
+```sql
+UPDATE public.feature_flags
+   SET enabled = true, updated_at = now()
+ WHERE key = 'secrets.rotation_enforce';
+```
+
+Todo flip deve ser registrado em `docs/security/incidents/<id>/flags.md` ou em `docs/execution-log.md` com justificativa — a mudança afeta a cadência de páging.
+
+## 10. Referências
 
 - `lib/secrets/{rotate,manifest,vercel,index}.ts`
 - `app/api/cron/rotate-secrets/route.ts`

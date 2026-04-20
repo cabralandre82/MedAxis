@@ -156,7 +156,35 @@ recovery row.
   if not, file a P1 follow-up — the automated recovery promise
   is broken until drill green.
 
-## 7. Quick reference
+## 7. Kill-switches & feature flags
+
+| `feature_flags.key`          | State default | Effect when ON                                                                                          | Effect when OFF                                                     |
+| ---------------------------- | ------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `'backup.freshness_enforce'` | OFF           | `/api/cron/backup-freshness` pages P1 when last BACKUP is > 9 days old OR last RESTORE_DRILL > 35 days. | Only emits `backup_freshness_breach_total` metric + email; no page. |
+
+**When to flip ON:** once a stable 30-day history of green backups is populated (prevents false pages during initial ramp-up).
+
+**When to flip OFF (temporarily):** during a planned backup-provider migration, where breach is expected. Re-enable within 24h.
+
+**Read current state:**
+
+```sql
+SELECT key, enabled, description
+  FROM public.feature_flags
+ WHERE key = 'backup.freshness_enforce';
+```
+
+**Flip via migration** (preferred) or emergency SQL:
+
+```sql
+UPDATE public.feature_flags
+   SET enabled = true, updated_at = now()
+ WHERE key = 'backup.freshness_enforce';
+```
+
+Every flip must be logged in `docs/security/incidents/<id>/flags.md` with justification.
+
+## 8. Quick reference
 
 ```sql
 -- Latest state per stream:

@@ -207,6 +207,33 @@ that environment until the RPC is fixed or rolled back.
 4. Re-enable the flag gradually: start with `rollout_percent = 5` for
    24 h before ramping back up.
 
+## Kill-switches & feature flags
+
+Three flags control the atomic-RPC path. All default OFF — the legacy multi-step client flow runs until each flag is explicitly flipped ON after a full-bake validation.
+
+| `feature_flags.key`         | State default | Effect when ON                                                                           | Effect when OFF                             |
+| --------------------------- | ------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `'orders.atomic_rpc'`       | OFF           | `services/orders.ts::createOrder` routes through `public.create_order_atomic()`.         | Legacy multi-step client flow (pre-Wave 7). |
+| `'coupons.atomic_rpc'`      | OFF           | `services/coupons.ts::activateCoupon` routes through `public.apply_coupon_atomic()`.     | Legacy multi-step client flow (pre-Wave 7). |
+| `'payments.atomic_confirm'` | OFF           | `services/payments.ts::confirmPayment` routes through `public.confirm_payment_atomic()`. | Legacy multi-step client flow (pre-Wave 7). |
+
+**Kill-switch during an incident:**
+
+```sql
+UPDATE public.feature_flags SET enabled = false, updated_at = now()
+ WHERE key = 'coupons.atomic_rpc';
+
+UPDATE public.feature_flags SET enabled = false, updated_at = now()
+ WHERE key = 'payments.atomic_confirm';
+
+UPDATE public.feature_flags SET enabled = false, updated_at = now()
+ WHERE key = 'orders.atomic_rpc';
+```
+
+Cache TTL is ≤ 30 s, so fallback to the legacy path is immediate. The wrapper emits `atomic_rpc_fallback_total{reason="flag_off"}` per request routed to legacy.
+
+**When to re-enable:** only after the RPC's regression is fixed, a test is added, and a `rollout_percent = 5` ramp shows no divergence vs. legacy for 24 h.
+
 ## See also
 
 - `docs/runbooks/README.md` — runbook index

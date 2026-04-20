@@ -141,12 +141,18 @@ Ambas default OFF no launch:
 | `legal_hold.block_purge`        | `enforce-retention` pula profiles/notifications sob hold; audit_logs já pula via RPC (hardcoded) |
 | `legal_hold.block_dsar_erasure` | `/api/admin/lgpd/anonymize/:userId` responde **409 LEGAL_HOLD_ACTIVE** ao invés de anonimizar    |
 
-Para flipar ON:
+Para flipar ON (uma linha de `public.feature_flags` por flag — scripts/migrations preferem comandos distintos para auditoria):
 
 ```sql
+-- Flag 1: bloquear purge em retention cron
 UPDATE public.feature_flags
    SET enabled = true, updated_at = now(), updated_by = '<super_admin uuid>'
- WHERE key IN ('legal_hold.block_purge', 'legal_hold.block_dsar_erasure');
+ WHERE key = 'legal_hold.block_purge';
+
+-- Flag 2: bloquear DSAR ERASURE → 409 LEGAL_HOLD_ACTIVE
+UPDATE public.feature_flags
+   SET enabled = true, updated_at = now(), updated_by = '<super_admin uuid>'
+ WHERE key = 'legal_hold.block_dsar_erasure';
 ```
 
 **Recomendação**: ativar `legal_hold.block_dsar_erasure` sempre que houver
