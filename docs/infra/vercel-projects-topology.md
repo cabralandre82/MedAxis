@@ -76,6 +76,40 @@ Existe **um único projeto Vercel ativo**: `clinipharma`. Ele serve:
      `ZENVIA_WHATSAPP_FROM`) para não deixar credenciais antigas rotando
      em projeto dormente. Quarentena mantida até 2026-05-03 conforme
      plano — só as credenciais saíram, o projeto fica para forense.
+7. **2026-04-18 (fim da noite, BRT):** **webhook de delivery-status
+   Zenvia.** Primeiro smoke test de SMS (21 99885-1851) não chegou; a
+   investigação revelou que a Zenvia v2 é webhook-only para status (não
+   há `GET` de status por messageId) e nenhuma subscription estava
+   configurada — produção ficava cega a qualquer falha de entrega.
+   Ações:
+   - Código: criado `app/api/notifications/zenvia/route.ts` com auth
+     por `X-Clinipharma-Zenvia-Secret`, dedup via `webhook_events`
+     (source=`zenvia`, key=`messageId:code:timestamp`), contador
+     Prometheus `sms_status_event_total{channel,status}` e log
+     estruturado em `module:webhooks/zenvia`. Rota adicionada às
+     exceções de CSRF e `PUBLIC_ROUTES` do middleware — mesmas
+     razões já aplicadas ao Asaas/Clicksign (commits `7991d52`,
+     `b630376`, `1554cee`).
+   - Vercel: gerado `ZENVIA_WEBHOOK_SECRET` (64 chars hex,
+     `openssl rand -hex 32`), setado como `type=sensitive` em
+     production + preview. `development` ignorado (Vercel não
+     permite sensitive em dev — aceitável pois webhook é público).
+   - Zenvia portal: subscription criada via API
+     (`POST /v2/subscriptions`) com `eventType=MESSAGE_STATUS`,
+     `channel=sms`, status `ACTIVE`. ID da subscription:
+     `c2a89116-9c2c-424d-81fd-8e94664924d9`. Se precisar deletar ou
+     rotacionar o secret, é esse ID que vai no
+     `DELETE /v2/subscriptions/{id}` ou
+     `PATCH /v2/subscriptions/{id}`.
+   - Validação: 6 chamadas sintéticas ao webhook em produção —
+     401 sem header, 401 com header errado (constant-time),
+     200 com header certo, 200+`duplicate:true` no replay, 200
+     em nova transição (NOT_DELIVERED) do mesmo messageId.
+     `webhook_events` ganhou 4 linhas (última id=4).
+   - Follow-up não feito neste passo: tracking do
+     `ZENVIA_WEBHOOK_SECRET` no manifest de rotação
+     (migration 056 + `lib/secrets/manifest.ts`) — adiado para PR
+     dedicado de rotação para não misturar diff de migração aqui.
 
 ## Por que `b2b-med-platform` ficou em quarentena (não deletado)
 
