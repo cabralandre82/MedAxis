@@ -50,6 +50,7 @@ import {
   claimWebhookEvent,
   clicksignIdempotencyKey,
   completeWebhookEvent,
+  zenviaIdempotencyKey,
 } from '@/lib/webhooks/dedup'
 
 beforeEach(() => {
@@ -86,6 +87,35 @@ describe('clicksignIdempotencyKey', () => {
 
   it('falls back to sentinels on missing fields', () => {
     expect(clicksignIdempotencyKey({})).toBe('no-doc:unknown:no-time')
+  })
+})
+
+describe('zenviaIdempotencyKey', () => {
+  it('combines messageId + status code + status timestamp', () => {
+    const k = zenviaIdempotencyKey({
+      messageId: '8100c0f7-0a73-47cc-ab65-fcbe2c87c4c0',
+      code: 'DELIVERED',
+      timestamp: '2026-04-18T23:59:59.999Z',
+    })
+    expect(k).toBe('8100c0f7-0a73-47cc-ab65-fcbe2c87c4c0:DELIVERED:2026-04-18T23:59:59.999Z')
+  })
+
+  it('is stable across invocations (dedupes Zenvia retries of the same transition)', () => {
+    const args = { messageId: 'm-1', code: 'NOT_DELIVERED', timestamp: '2026-04-18T12:00:00Z' }
+    expect(zenviaIdempotencyKey(args)).toBe(zenviaIdempotencyKey(args))
+  })
+
+  it('treats different status transitions of the same message as distinct', () => {
+    const sent = zenviaIdempotencyKey({ messageId: 'm-1', code: 'SENT', timestamp: 't1' })
+    const delivered = zenviaIdempotencyKey({ messageId: 'm-1', code: 'DELIVERED', timestamp: 't2' })
+    expect(sent).not.toBe(delivered)
+  })
+
+  it('uses a sentinel when Zenvia omits the status timestamp', () => {
+    expect(zenviaIdempotencyKey({ messageId: 'm-1', code: 'SENT' })).toBe('m-1:SENT:no-ts')
+    expect(zenviaIdempotencyKey({ messageId: 'm-1', code: 'SENT', timestamp: null })).toBe(
+      'm-1:SENT:no-ts'
+    )
   })
 })
 

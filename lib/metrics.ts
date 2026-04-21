@@ -241,6 +241,7 @@ export const Metrics = {
   RBAC_RPC_ERRORS_TOTAL: 'rbac_rpc_errors_total',
   WEBHOOK_CLAIM_TOTAL: 'webhook_claim_total',
   WEBHOOK_DUPLICATE_TOTAL: 'webhook_duplicate_total',
+  SMS_STATUS_EVENT_TOTAL: 'sms_status_event_total',
   CRON_RUN_TOTAL: 'cron_run_total',
   CRON_DURATION_MS: 'cron_duration_ms',
   CRON_LAST_SUCCESS_TS: 'cron_last_success_ts',

@@ -48,7 +48,7 @@ import { logger } from '@/lib/logger'
 import { getRequestContext } from '@/lib/logger/context'
 import { incCounter, Metrics } from '@/lib/metrics'
 
-export type WebhookSource = 'asaas' | 'clicksign' | 'inngest' | (string & {})
+export type WebhookSource = 'asaas' | 'clicksign' | 'inngest' | 'zenvia' | (string & {})
 
 export interface ClaimArgs {
   source: WebhookSource
@@ -119,6 +119,23 @@ export function clicksignIdempotencyKey(body: {
   const eventName = body?.event?.name ?? 'unknown'
   const when = body?.event?.occurred_at ?? 'no-time'
   return `${docKey}:${eventName}:${when}`
+}
+
+/**
+ * Deterministic idempotency key for Zenvia MESSAGE_STATUS events. The
+ * triple `(messageId, status code, status timestamp)` is stable across
+ * Zenvia retries of the same status transition and uniquely identifies
+ * one delivery outcome. We do NOT use Zenvia's envelope `id` (a fresh
+ * UUID per HTTP delivery attempt) — that would treat every retry as a
+ * new event and break dedup on network hiccups.
+ */
+export function zenviaIdempotencyKey(args: {
+  messageId: string
+  code: string
+  timestamp?: string | null
+}): string {
+  const ts = args.timestamp ?? 'no-ts'
+  return `${args.messageId}:${args.code}:${ts}`
 }
 
 const DEDUP_MODULE = { module: 'webhooks/dedup' }
