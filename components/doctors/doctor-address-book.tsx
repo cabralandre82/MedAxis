@@ -141,35 +141,41 @@ export function DoctorAddressBook({ addresses }: Props) {
           <div className="flex flex-shrink-0 items-center gap-1">
             {!addr.is_default && (
               <button
+                type="button"
                 onClick={() => handleSetDefault(addr.id)}
                 disabled={settingDefaultId === addr.id}
+                aria-label="Definir este endereço como padrão"
                 title="Definir como padrão"
                 className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-blue-600 disabled:opacity-40"
               >
                 {settingDefaultId === addr.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Star className="h-4 w-4" />
+                  <Star className="h-4 w-4" aria-hidden="true" />
                 )}
               </button>
             )}
             <button
+              type="button"
               onClick={() => openEdit(addr)}
+              aria-label="Editar endereço"
               title="Editar"
               className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
+              type="button"
               onClick={() => handleDelete(addr.id)}
               disabled={deletingId === addr.id}
+              aria-label="Excluir endereço"
               title="Excluir"
               className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
             >
               {deletingId === addr.id ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
           </div>
@@ -191,8 +197,14 @@ export function DoctorAddressBook({ addresses }: Props) {
             <h3 className="text-sm font-semibold text-gray-900">
               {editingId ? 'Editar endereço' : 'Novo endereço'}
             </h3>
-            <button onClick={closeForm} className="text-gray-400 hover:text-gray-600">
-              <X className="h-4 w-4" />
+            <button
+              type="button"
+              onClick={closeForm}
+              aria-label="Fechar formulário"
+              title="Fechar"
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
           <form onSubmit={handleSave} className="grid gap-3 sm:grid-cols-2">

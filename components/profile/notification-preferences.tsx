@@ -107,12 +107,14 @@ export function NotificationPreferences({ initialPreferences }: NotificationPref
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={() => toggle(type)}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none ${
                     enabled ? 'bg-[hsl(213,75%,24%)]' : 'bg-gray-200'
                   }`}
                   role="switch"
                   aria-checked={enabled}
+                  aria-label={`${enabled ? 'Desativar' : 'Ativar'} notificações de ${TYPE_LABELS[type] ?? type}`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${

@@ -43,24 +43,34 @@ export function CursorPagination({
   if (isFirstPage && !hasMore) return null
 
   return (
-    <div className="flex items-center justify-between py-2">
-      <p className="text-sm text-gray-500">
+    <nav aria-label="Paginação" className="flex items-center justify-between py-2">
+      <p className="text-sm text-gray-500" aria-live="polite">
         Exibindo {resultCount} registro{resultCount !== 1 ? 's' : ''}
       </p>
       <div className="flex gap-2">
         {!isFirstPage && (
-          <Link href={buildHref(prevCursor, 'before')} className={linkClass}>
-            <ChevronLeft className="h-4 w-4" />
+          <Link
+            href={buildHref(prevCursor, 'before')}
+            className={linkClass}
+            rel="prev"
+            aria-label="Ir para a página anterior"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             Anterior
           </Link>
         )}
         {hasMore && (
-          <Link href={buildHref(nextCursor, 'after')} className={linkClass}>
+          <Link
+            href={buildHref(nextCursor, 'after')}
+            className={linkClass}
+            rel="next"
+            aria-label="Ir para a próxima página"
+          >
             Próxima
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         )}
       </div>
-    </div>
+    </nav>
   )
 }

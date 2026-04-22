@@ -60,9 +60,12 @@ export function Header({ user, title }: HeaderProps) {
         <PushPermissionButton />
         <NotificationBell />
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors outline-none hover:bg-gray-50">
+          <DropdownMenuTrigger
+            aria-label={`Menu da conta de ${user.full_name}`}
+            className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors outline-none hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-[hsl(196,91%,33%)] focus-visible:ring-offset-2"
+          >
             <Avatar className="h-8 w-8">
-              <AvatarImage src={user.avatar_url ?? undefined} />
+              <AvatarImage src={user.avatar_url ?? undefined} alt="" />
               <AvatarFallback className="bg-[hsl(213,75%,24%)] text-xs font-semibold text-white">
                 {getInitials(user.full_name)}
               </AvatarFallback>
@@ -73,7 +76,7 @@ export function Header({ user, title }: HeaderProps) {
                 <p className="text-xs text-gray-500">{ROLE_LABELS[primaryRole] ?? primaryRole}</p>
               )}
             </div>
-            <ChevronDown className="h-4 w-4 text-gray-400" />
+            <ChevronDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
@@ -94,12 +97,12 @@ export function Header({ user, title }: HeaderProps) {
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push('/profile')}>
-              <User className="h-4 w-4" />
+              <User className="h-4 w-4" aria-hidden="true" />
               Meu perfil
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={handleSignOut}>
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>

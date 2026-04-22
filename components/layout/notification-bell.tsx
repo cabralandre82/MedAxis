@@ -125,13 +125,23 @@ export function NotificationBell() {
   return (
     <div ref={containerRef} className="relative">
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-        aria-label="Notificações"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={
+          unreadCount > 0
+            ? `Notificações — ${unreadCount} não lidas`
+            : 'Notificações — nenhuma não lida'
+        }
+        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:ring-2 focus-visible:ring-[hsl(196,91%,33%)] focus-visible:ring-offset-2"
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-5 w-5" aria-hidden="true" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+          <span
+            className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white"
+            aria-hidden="true"
+          >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -151,11 +161,12 @@ export function NotificationBell() {
             </h3>
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={markAllRead}
                 disabled={loading}
                 className="flex items-center gap-1 text-xs text-blue-600 hover:underline disabled:opacity-50"
               >
-                <CheckCheck className="h-3.5 w-3.5" />
+                <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 Marcar todas como lidas
               </button>
             )}
@@ -165,19 +176,23 @@ export function NotificationBell() {
           <div className="max-h-96 divide-y divide-gray-50 overflow-y-auto">
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center py-10 text-center">
-                <Bell className="mb-2 h-8 w-8 text-gray-200" />
+                <Bell className="mb-2 h-8 w-8 text-gray-200" aria-hidden="true" />
                 <p className="text-sm text-gray-400">Nenhuma notificação</p>
               </div>
             ) : (
               notifications.map((n) => (
                 <button
+                  type="button"
                   key={n.id}
                   onClick={() => markAsRead(n.id, n.link)}
+                  aria-label={
+                    n.read_at ? `Notificação lida: ${n.title}` : `Notificação não lida: ${n.title}`
+                  }
                   className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 ${
                     !n.read_at ? 'bg-blue-50/40' : ''
                   }`}
                 >
-                  <span className="mt-0.5 flex-shrink-0 text-base leading-none">
+                  <span className="mt-0.5 flex-shrink-0 text-base leading-none" aria-hidden="true">
                     {TYPE_ICONS[n.type] ?? '🔔'}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -196,7 +211,7 @@ export function NotificationBell() {
                       })}
                     </p>
                   </div>
-                  <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                  <div className="flex flex-shrink-0 flex-col items-end gap-1" aria-hidden="true">
                     {!n.read_at && (
                       <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
                     )}

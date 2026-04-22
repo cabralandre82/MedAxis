@@ -455,8 +455,16 @@ export function RegistrationForm() {
                       {uploaded ? 'Trocar' : 'Enviar'}
                     </Button>
                     {uploaded && (
-                      <button onClick={() => removeUpload(doc.type)}>
-                        <X className="h-4 w-4 text-gray-400 hover:text-red-500" />
+                      <button
+                        type="button"
+                        onClick={() => removeUpload(doc.type)}
+                        aria-label={`Remover documento ${doc.label}`}
+                        title="Remover"
+                      >
+                        <X
+                          className="h-4 w-4 text-gray-400 hover:text-red-500"
+                          aria-hidden="true"
+                        />
                       </button>
                     )}
                   </div>

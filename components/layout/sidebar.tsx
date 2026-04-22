@@ -209,6 +209,8 @@ export function Sidebar({ userRoles }: SidebarProps) {
               viewBox="0 0 24 24"
               className="h-5 w-5 text-[hsl(213,75%,24%)]"
               fill="currentColor"
+              aria-hidden="true"
+              focusable="false"
             >
               <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-7 3a1 1 0 0 1 1 1v3h3a1 1 0 0 1 0 2h-3v3a1 1 0 0 1-2 0v-3H8a1 1 0 0 1 0-2h3V7a1 1 0 0 1 1-1z" />
             </svg>
@@ -218,7 +220,7 @@ export function Sidebar({ userRoles }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
         <ul className="space-y-0.5">
           {visibleItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -227,6 +229,7 @@ export function Sidebar({ userRoles }: SidebarProps) {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
                     isActive
@@ -234,7 +237,7 @@ export function Sidebar({ userRoles }: SidebarProps) {
                       : 'text-blue-100 hover:bg-white/10 hover:text-white'
                   )}
                 >
-                  <Icon className="h-4.5 w-4.5 flex-shrink-0" />
+                  <Icon className="h-4.5 w-4.5 flex-shrink-0" aria-hidden="true" />
                   {item.label}
                 </Link>
               </li>

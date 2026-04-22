@@ -177,41 +177,58 @@ export function GlobalSearch() {
   }
 
   return (
-    <div ref={containerRef} className="relative w-64">
+    <div ref={containerRef} className="relative w-64" role="search">
       <div className="relative">
-        <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <Search
+          className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
+          aria-hidden="true"
+        />
+        <label htmlFor="global-search-input" className="sr-only">
+          Busca global da plataforma
+        </label>
         <input
           ref={inputRef}
-          type="text"
+          id="global-search-input"
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Buscar… ⌘K"
+          aria-label="Busca global"
           className="h-9 w-full rounded-lg border border-gray-200 bg-white pr-8 pl-8 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[hsl(196,91%,33%)] focus:outline-none"
         />
         {(query || loading) && (
           <button
+            type="button"
             onClick={clear}
+            aria-label={loading ? 'Carregando resultados' : 'Limpar busca'}
             className="absolute top-1/2 right-2.5 -translate-y-1/2 text-gray-400 hover:text-gray-700"
           >
             {loading ? (
-              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+              <span
+                className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600"
+                aria-hidden="true"
+              />
             ) : (
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
             )}
           </button>
         )}
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute top-11 left-0 z-50 w-96 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+        <div
+          id="global-search-results"
+          className="absolute top-11 left-0 z-50 w-96 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+        >
           <div className="divide-y divide-gray-50">
             {results.map((result, idx) => {
               const cfg = TYPE_CONFIG[result.type]
               const Icon = cfg.icon
               return (
                 <button
+                  type="button"
                   key={result.id}
                   onClick={() => navigate(result)}
                   className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 ${
@@ -220,6 +237,7 @@ export function GlobalSearch() {
                 >
                   <div
                     className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${cfg.bg}`}
+                    aria-hidden="true"
                   >
                     <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
                   </div>

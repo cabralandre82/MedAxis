@@ -76,7 +76,7 @@ export function OcrAnalysisButton({ registrationId }: { registrationId: string }
     <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ScanText className="h-4 w-4 text-indigo-600" />
+          <ScanText className="h-4 w-4 text-indigo-600" aria-hidden="true" />
           <span className="text-sm font-medium text-indigo-800">Análise de documentos com IA</span>
           <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
             OCR
@@ -85,10 +85,16 @@ export function OcrAnalysisButton({ registrationId }: { registrationId: string }
         <div className="flex items-center gap-2">
           {result && (
             <button
+              type="button"
               onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
               className="flex items-center gap-1 text-xs text-indigo-600 hover:underline"
             >
-              {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {expanded ? (
+                <ChevronUp className="h-3 w-3" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-3 w-3" aria-hidden="true" />
+              )}
               {expanded ? 'Ocultar' : 'Ver resultado'}
             </button>
           )}
@@ -101,12 +107,12 @@ export function OcrAnalysisButton({ registrationId }: { registrationId: string }
           >
             {loading ? (
               <>
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                 Analisando...
               </>
             ) : (
               <>
-                <ScanText className="mr-1.5 h-3.5 w-3.5" />
+                <ScanText className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
                 {result ? 'Reanalisar' : 'Analisar documentos'}
               </>
             )}
@@ -115,8 +121,8 @@ export function OcrAnalysisButton({ registrationId }: { registrationId: string }
       </div>
 
       {error && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600">
-          <AlertTriangle className="h-3.5 w-3.5" />
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600" role="alert">
+          <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
           {error}
         </p>
       )}

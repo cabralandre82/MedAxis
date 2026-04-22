@@ -133,10 +133,13 @@ export function PendingDocsUpload({ requestedDocs }: PendingDocsUploadProps) {
                 </Button>
                 {uploaded && (
                   <button
+                    type="button"
                     onClick={() => removeUpload(doc.type)}
+                    aria-label={`Remover documento ${doc.label}`}
+                    title="Remover"
                     className="text-gray-400 hover:text-red-500"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" aria-hidden="true" />
                   </button>
                 )}
               </div>

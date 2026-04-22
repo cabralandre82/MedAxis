@@ -88,9 +88,10 @@ export function CatalogFilters({
               variant="ghost"
               size="icon"
               onClick={clearAll}
+              aria-label="Limpar filtros"
               title="Limpar filtros"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
         </form>

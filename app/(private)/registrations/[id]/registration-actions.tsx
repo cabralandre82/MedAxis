@@ -173,8 +173,13 @@ export function RegistrationActions({ requestId, entityType, entityId }: Registr
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-red-700">Motivo da reprovação</p>
-            <button onClick={() => setPanel(null)}>
-              <X className="h-4 w-4 text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setPanel(null)}
+              aria-label="Fechar painel de reprovação"
+              title="Fechar"
+            >
+              <X className="h-4 w-4 text-gray-400" aria-hidden="true" />
             </button>
           </div>
           <Textarea
@@ -206,8 +211,13 @@ export function RegistrationActions({ requestId, entityType, entityId }: Registr
             <p className="text-sm font-medium text-amber-700">
               Selecione os documentos necessários
             </p>
-            <button onClick={() => setPanel(null)}>
-              <X className="h-4 w-4 text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setPanel(null)}
+              aria-label="Fechar painel de solicitação de documentos"
+              title="Fechar"
+            >
+              <X className="h-4 w-4 text-gray-400" aria-hidden="true" />
             </button>
           </div>
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">

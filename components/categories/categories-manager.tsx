@@ -231,14 +231,30 @@ export function CategoriesManager({ categories: initial }: CategoriesManagerProp
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         <table className="w-full text-sm">
+          <caption className="sr-only">
+            Categorias cadastradas com ordem, descrição, contagem de produtos, status e ações de
+            edição
+          </caption>
           <thead>
             <tr className="border-b bg-slate-50 text-left text-xs font-semibold tracking-wider text-slate-500 uppercase">
-              <th className="w-10 px-3 py-3 text-center">Ord.</th>
-              <th className="px-4 py-3">Nome / Slug</th>
-              <th className="hidden px-4 py-3 sm:table-cell">Descrição</th>
-              <th className="px-4 py-3 text-center">Produtos</th>
-              <th className="px-4 py-3 text-center">Status</th>
-              <th className="px-4 py-3 text-right">Ações</th>
+              <th scope="col" className="w-10 px-3 py-3 text-center">
+                Ord.
+              </th>
+              <th scope="col" className="px-4 py-3">
+                Nome / Slug
+              </th>
+              <th scope="col" className="hidden px-4 py-3 sm:table-cell">
+                Descrição
+              </th>
+              <th scope="col" className="px-4 py-3 text-center">
+                Produtos
+              </th>
+              <th scope="col" className="px-4 py-3 text-center">
+                Status
+              </th>
+              <th scope="col" className="px-4 py-3 text-right">
+                Ações
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -352,8 +368,10 @@ export function CategoriesManager({ categories: initial }: CategoriesManagerProp
                           className="h-7 w-7 p-0"
                           onClick={cancelEdit}
                           disabled={isPending}
+                          aria-label="Cancelar edição"
+                          title="Cancelar edição"
                         >
-                          <X className="h-3.5 w-3.5" />
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
                         </Button>
                       </div>
                     ) : (
@@ -363,16 +381,22 @@ export function CategoriesManager({ categories: initial }: CategoriesManagerProp
                           variant="ghost"
                           className="h-7 w-7 p-0 text-slate-500 hover:text-slate-900"
                           onClick={() => startEdit(cat)}
+                          aria-label={`Editar categoria ${cat.name}`}
                           title="Editar"
                           disabled={isPending}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           className={`h-7 w-7 p-0 ${cat.is_active ? 'text-slate-400 hover:text-red-500' : 'text-slate-400 hover:text-green-600'}`}
                           onClick={() => handleToggle(cat.id, cat.is_active)}
+                          aria-label={
+                            cat.is_active
+                              ? `Desativar categoria ${cat.name}`
+                              : `Ativar categoria ${cat.name}`
+                          }
                           title={cat.is_active ? 'Desativar' : 'Ativar'}
                           disabled={
                             isPending ||
@@ -380,9 +404,9 @@ export function CategoriesManager({ categories: initial }: CategoriesManagerProp
                           }
                         >
                           {cat.is_active ? (
-                            <PowerOff className="h-3.5 w-3.5" />
+                            <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />
                           ) : (
-                            <Power className="h-3.5 w-3.5" />
+                            <Power className="h-3.5 w-3.5" aria-hidden="true" />
                           )}
                         </Button>
                       </div>
