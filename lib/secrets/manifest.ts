@@ -129,6 +129,13 @@ export const SECRET_MANIFEST: readonly SecretDescriptor[] = [
       'SMS gateway (WhatsApp gated by WHATSAPP_ENABLED — off at launch). Rotation in Zenvia developer portal + Vercel env.',
   },
   {
+    name: 'ZENVIA_WEBHOOK_SECRET',
+    tier: 'B',
+    provider: 'zenvia-portal',
+    description:
+      'Shared secret the Zenvia delivery-status webhook sends via X-Clinipharma-Zenvia-Secret (see app/api/notifications/zenvia). Rotation: generate new value, PATCH Vercel env + Zenvia subscription (subscription id c2a89116-9c2c-424d-81fd-8e94664924d9) in the same maintenance window to avoid 401 gap.',
+  },
+  {
     name: 'INNGEST_EVENT_KEY',
     tier: 'B',
     provider: 'inngest-portal',

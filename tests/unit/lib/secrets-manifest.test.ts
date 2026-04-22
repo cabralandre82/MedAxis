@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   SECRET_MANIFEST,
@@ -30,7 +30,7 @@ import {
   secretsByTier,
 } from '@/lib/secrets/manifest'
 
-const MIGRATION_PATH = resolve(__dirname, '../../../supabase/migrations/056_secret_rotation.sql')
+const MIGRATIONS_DIR = resolve(__dirname, '../../../supabase/migrations')
 const ALLOWED_PROVIDERS = new Set([
   'vercel-env',
   'supabase-mgmt',
@@ -46,27 +46,97 @@ const ALLOWED_PROVIDERS = new Set([
   'manual',
 ])
 
-/**
- * Pull every `jsonb_build_object('n', '<name>', 't', '<tier>', 'p', '<prov>')`
- * out of the SQL file. Order does not matter; we sort before
- * comparing.
- */
-function extractSqlManifest(): { name: string; tier: string; provider: string }[] {
-  const sql = readFileSync(MIGRATION_PATH, 'utf8')
-  const regex =
-    /jsonb_build_object\(\s*'n'\s*,\s*'([^']+)'\s*,\s*'t'\s*,\s*'([^']+)'\s*,\s*'p'\s*,\s*'([^']+)'\s*\)/g
-  const out: { name: string; tier: string; provider: string }[] = []
-  for (const m of sql.matchAll(regex)) {
+type ManifestEntry = { name: string; tier: string; provider: string }
+
+const JSONB_ENTRY_RE =
+  /jsonb_build_object\(\s*'n'\s*,\s*'([^']+)'\s*,\s*'t'\s*,\s*'([^']+)'\s*,\s*'p'\s*,\s*'([^']+)'\s*\)/g
+
+function parseEntries(sql: string): ManifestEntry[] {
+  const out: ManifestEntry[] = []
+  for (const m of sql.matchAll(JSONB_ENTRY_RE)) {
     out.push({ name: m[1], tier: m[2], provider: m[3] })
   }
   return out
 }
 
+function loadMigrationsTouchingManifest(): { file: string; sql: string }[] {
+  const files = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort() // filename lex order = chronological (NNN_ prefix)
+  return files
+    .map((file) => ({ file, sql: readFileSync(resolve(MIGRATIONS_DIR, file), 'utf8') }))
+    .filter(
+      ({ sql }) =>
+        /secret_rotation_overdue/.test(sql) ||
+        (/secret_rotation_record/.test(sql) && /jsonb_build_object/.test(sql))
+    )
+}
+
+/**
+ * The **authoritative** manifest = the `v_manifest` array inside the
+ * last migration that `CREATE OR REPLACE`s `secret_rotation_overdue`.
+ * PostgreSQL executes those migrations in order, so the final DB
+ * state matches the latest definition. This is exactly how drift was
+ * handled in 056 vs 059: 056 declared 19 entries, 059 re-declares 20.
+ */
+function extractRpcManifest(): ManifestEntry[] {
+  const migrations = loadMigrationsTouchingManifest().filter(({ sql }) =>
+    /CREATE OR REPLACE FUNCTION public\.secret_rotation_overdue/i.test(sql)
+  )
+  if (migrations.length === 0) {
+    throw new Error(
+      'No migration defines secret_rotation_overdue — manifest parity is unverifiable.'
+    )
+  }
+  // Latest migration wins (CREATE OR REPLACE semantics).
+  const latest = migrations[migrations.length - 1]
+  // Extract ONLY the v_manifest array inside the function body, not
+  // any unrelated jsonb_build_object elsewhere in the file.
+  const fnMatch = latest.sql.match(
+    /CREATE OR REPLACE FUNCTION public\.secret_rotation_overdue[\s\S]+?\$\$;/i
+  )
+  if (!fnMatch) {
+    throw new Error(`Could not isolate function body in ${latest.file}.`)
+  }
+  return parseEntries(fnMatch[0])
+}
+
+/**
+ * Union of every jsonb entry across every genesis DO block in every
+ * migration. After all migrations run, each secret should have been
+ * seeded at least once (056 seeded the original 19, 059 seeds the
+ * 20th, future migrations will seed new ones). The RPC body entries
+ * themselves are excluded — we already check those separately.
+ */
+function extractGenesisSeedSet(): Set<string> {
+  const seen = new Set<string>()
+  for (const { sql } of loadMigrationsTouchingManifest()) {
+    // Strip the function body so its inline manifest isn't double-
+    // counted as a genesis seed.
+    const withoutFn = sql.replace(
+      /CREATE OR REPLACE FUNCTION public\.secret_rotation_overdue[\s\S]+?\$\$;/gi,
+      ''
+    )
+    for (const e of parseEntries(withoutFn)) {
+      seen.add(`${e.name}:${e.tier}:${e.provider}`)
+    }
+    // Migrations that seed a single secret inline (like 059's DO block
+    // that calls secret_rotation_record('ZENVIA_WEBHOOK_SECRET', ...)
+    // without a jsonb literal) still count — match those too.
+    const inlineSeedRe =
+      /secret_rotation_record\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'genesis'/g
+    for (const m of withoutFn.matchAll(inlineSeedRe)) {
+      seen.add(`${m[1]}:${m[2]}:${m[3]}`)
+    }
+  }
+  return seen
+}
+
 describe('SECRET_MANIFEST shape', () => {
-  it('has 19 entries (3 Tier A + 11 Tier B + 5 Tier C)', () => {
-    expect(SECRET_MANIFEST_SIZE).toBe(19)
+  it('has 20 entries (3 Tier A + 12 Tier B + 5 Tier C)', () => {
+    expect(SECRET_MANIFEST_SIZE).toBe(20)
     expect(secretsByTier('A')).toHaveLength(3)
-    expect(secretsByTier('B')).toHaveLength(11)
+    expect(secretsByTier('B')).toHaveLength(12)
     expect(secretsByTier('C')).toHaveLength(5)
   })
 
@@ -139,36 +209,56 @@ describe('SECRET_MANIFEST domain invariants', () => {
 })
 
 describe('runtime ↔ SQL manifest parity', () => {
-  it('SQL manifest mirrors runtime manifest exactly (twice — overdue + genesis)', () => {
-    const sqlEntries = extractSqlManifest()
+  /**
+   * Semantics of these checks:
+   *
+   *   - The **RPC manifest** is the set returned by the latest
+   *     `CREATE OR REPLACE FUNCTION secret_rotation_overdue` in any
+   *     migration. That's what the cron will actually see at runtime.
+   *     It MUST equal the runtime manifest exactly (no superset).
+   *
+   *   - The **genesis seed** is the union of every manifest entry
+   *     seeded across all migrations (jsonb literal seeds + inline
+   *     `secret_rotation_record(..., 'genesis', ...)` calls). Every
+   *     runtime secret MUST have been seeded at least once, else the
+   *     cron will report it as `never-rotated` forever.
+   *
+   * This design lets future migrations add a single new secret by
+   * (a) shipping a `CREATE OR REPLACE` of the RPC body with the new
+   * entry and (b) a single `secret_rotation_record(..., 'genesis')`
+   * call — without re-shipping the full manifest twice like 056 did.
+   */
+  it('latest RPC definition equals the runtime manifest exactly', () => {
+    const rpc = extractRpcManifest()
+    expect(rpc.length).toBe(SECRET_MANIFEST_SIZE)
 
-    // The SQL file embeds the same manifest twice (overdue RPC + genesis seed).
-    // We expect 2 × runtime size.
-    expect(sqlEntries.length).toBe(SECRET_MANIFEST_SIZE * 2)
+    const rpcKeys = new Set(rpc.map((e) => `${e.name}:${e.tier}:${e.provider}`))
+    const runtimeKeys = new Set(SECRET_MANIFEST.map((s) => `${s.name}:${s.tier}:${s.provider}`))
 
-    const sqlSet = new Set(sqlEntries.map((e) => `${e.name}:${e.tier}:${e.provider}`))
-    const runtimeSet = new Set(SECRET_MANIFEST.map((s) => `${s.name}:${s.tier}:${s.provider}`))
+    const missingInRpc = [...runtimeKeys].filter((k) => !rpcKeys.has(k))
+    const staleInRpc = [...rpcKeys].filter((k) => !runtimeKeys.has(k))
 
-    // Every runtime entry must appear in SQL (as exactly two copies).
-    for (const key of runtimeSet) {
-      expect(sqlSet.has(key)).toBe(true)
+    expect(
+      missingInRpc,
+      `runtime manifest has entries absent from latest RPC: ${missingInRpc.join(', ')}`
+    ).toEqual([])
+    expect(
+      staleInRpc,
+      `latest RPC has stale entries absent from runtime manifest: ${staleInRpc.join(', ')}`
+    ).toEqual([])
+  })
+
+  it('every runtime secret has a genesis seed somewhere in the migration corpus', () => {
+    const seeded = extractGenesisSeedSet()
+    const missing: string[] = []
+    for (const s of SECRET_MANIFEST) {
+      const key = `${s.name}:${s.tier}:${s.provider}`
+      if (!seeded.has(key)) missing.push(key)
     }
-
-    // Every SQL entry must appear in runtime.
-    for (const key of sqlSet) {
-      expect(runtimeSet.has(key)).toBe(true)
-    }
-
-    // Both copies of the SQL manifest must be identical (one in
-    // secret_rotation_overdue, one in the genesis DO block).
-    const counts = new Map<string, number>()
-    for (const e of sqlEntries) {
-      const k = `${e.name}:${e.tier}:${e.provider}`
-      counts.set(k, (counts.get(k) ?? 0) + 1)
-    }
-    for (const [, n] of counts) {
-      expect(n).toBe(2)
-    }
+    expect(
+      missing,
+      `runtime secrets without a genesis seed (cron will report them as never-rotated): ${missing.join(', ')}`
+    ).toEqual([])
   })
 })
 

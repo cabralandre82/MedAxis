@@ -388,7 +388,7 @@ describe('getRotationStatus', () => {
 
     const { getRotationStatus } = await import('@/lib/secrets/rotate')
     const status = await getRotationStatus()
-    expect(status.neverRotatedCount).toBe(18) // 19 manifest - 1 in inventory
+    expect(status.neverRotatedCount).toBe(19) // 20 manifest - 1 in inventory
   })
 
   it('throws on inventory read error', async () => {
