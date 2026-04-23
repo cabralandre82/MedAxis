@@ -3048,3 +3048,54 @@ rotatedBy: 'on-call:alice@x' })` para o ledger refletir a
 | Security Scan | [24612972850](https://github.com/cabralandre82/clinipharma/actions/runs/24612972850) | 🟢 success |
 
 ---
+
+## Wave 18 — Compliance consolidation — 2026-04-18
+
+### Wave 18.4 — Migration 058 + 059 aplicadas em produção — 2026-04-18 16:00 BRT
+
+**Status:** 🟢 concluído
+**Commits (já existentes):** `d729f52` (058 — RLS deny-all markers), `05d8b45` (059 bundle),
+`b630376` (lib/secrets/manifest.ts alinhado)
+**Migrations aplicadas (prod):**
+
+- `058_rls_deny_all_markers.sql` @ 2026-04-18 — COMMENT ON TABLE em 6 tabelas deny-all
+  (backup_runs, rate_limit_violations, rls_canary_log, legal_holds, dsar_audit,
+  secret_rotations). Smoke: `6 tables RLS-enabled + commented`.
+- `059_track_zenvia_webhook_secret.sql` @ 2026-04-18 — CREATE OR REPLACE FUNCTION
+  `secret_rotation_overdue` com 20 entradas (adiciona `ZENVIA_WEBHOOK_SECRET` em Tier B,
+  provider `zenvia-portal`) + genesis idempotente. Smoke: `inventory=20, overdue=0,
+chain_breaks=0`.
+
+**Validação pós-apply:**
+
+```
+secret_inventory: 20 linhas
+public.secret_rotation_overdue(90): 0 overdue
+public.secret_rotation_overdue(36500): 0 overdue (manifest completo, nenhum never-rotated)
+secret_rotations seq=20: ZENVIA_WEBHOOK_SECRET / Tier B / genesis / migration:059 / success=t
+pg_class COMMENTS: todas as 6 tabelas carregam [rls-policy: ...] prose readable por SUPER_ADMIN
+```
+
+**Entregáveis:**
+
+- Paridade restaurada entre `lib/secrets/manifest.ts` (runtime) e o manifest embutido
+  em `secret_rotation_overdue()` (banco). `tests/unit/lib/secrets-manifest.test.ts`
+  valida ambos a cada run (passing 15/15).
+- Todos os 3 endpoints do secret-rotation pipeline agora enxergam o novo secret:
+  `/api/cron/rotate-secrets` (7 dias Tier A + alerta Tier B/C overdue),
+  `/api/health/deep` (`checks.secretRotation`), dashboard Grafana SLO-12.
+
+**Observações:**
+
+- Migrations idempotentes — ambas podem ser re-rodadas sem efeito. `058` faz só
+  `COMMENT ON TABLE`; `059` tem `CREATE OR REPLACE` + `DO $$ IF NOT EXISTS $$`
+  guarded seed.
+- `supabase db push --linked` com acesso ao pooler `aws-1-us-east-1` funcionou sem
+  pausa manual do cron. Janela de deploy ≈ 3 s combinada.
+- Relógio da produção Supabase estava ~5 dias à frente do relógio local (genesis
+  grava `last_rotated_at = now() = 2026-04-23 UTC`); não afeta a máquina de
+  estados — o cron calcula age contra `now()` do próprio banco.
+
+**Follow-ups criados:**
+
+- Nenhum. Item encerra `docs/PENDING.md` pendência operacional do Wave 15.
