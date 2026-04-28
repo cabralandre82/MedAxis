@@ -94,3 +94,37 @@ export const STATUS_LABELS: Record<string, string> = {
   CANCELED: 'Cancelado',
   WITH_ISSUE: 'Com Problema',
 }
+
+/**
+ * Canonical Tailwind color classes for each status pill.
+ * Centralised so dashboard, list, detail, and timeline use the same
+ * palette and we can audit i18n+colour drift in a single place.
+ */
+export const STATUS_BADGE_COLORS: Record<string, string> = {
+  DRAFT: 'bg-gray-100 text-gray-700',
+  AWAITING_DOCUMENTS: 'bg-yellow-100 text-yellow-800',
+  READY_FOR_REVIEW: 'bg-blue-100 text-blue-800',
+  AWAITING_PAYMENT: 'bg-orange-100 text-orange-800',
+  PAYMENT_UNDER_REVIEW: 'bg-orange-100 text-orange-800',
+  PAYMENT_CONFIRMED: 'bg-teal-100 text-teal-800',
+  COMMISSION_CALCULATED: 'bg-teal-100 text-teal-800',
+  TRANSFER_PENDING: 'bg-blue-100 text-blue-800',
+  TRANSFER_COMPLETED: 'bg-blue-100 text-blue-800',
+  RELEASED_FOR_EXECUTION: 'bg-indigo-100 text-indigo-800',
+  RECEIVED_BY_PHARMACY: 'bg-purple-100 text-purple-800',
+  IN_EXECUTION: 'bg-purple-100 text-purple-800',
+  READY: 'bg-green-100 text-green-800',
+  SHIPPED: 'bg-green-100 text-green-800',
+  DELIVERED: 'bg-green-100 text-green-800',
+  COMPLETED: 'bg-emerald-100 text-emerald-800',
+  CANCELED: 'bg-red-100 text-red-800',
+  WITH_ISSUE: 'bg-red-100 text-red-800',
+}
+
+export function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status
+}
+
+export function statusBadgeClass(status: string): string {
+  return STATUS_BADGE_COLORS[status] ?? 'bg-gray-100 text-gray-700'
+}

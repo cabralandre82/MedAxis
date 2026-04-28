@@ -1,7 +1,7 @@
 'use client'
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import { getMessaging, getToken, onMessage, type Messaging } from 'firebase/messaging'
+import { getMessaging, getToken, isSupported, onMessage, type Messaging } from 'firebase/messaging'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -22,25 +22,57 @@ function getFirebaseApp(): FirebaseApp {
   return app
 }
 
-function getFirebaseMessaging(): Messaging | null {
+/**
+ * Browser-aware lazy resolver for Firebase Messaging.
+ *
+ * `firebase/messaging` 9+ rejects asynchronously on browsers that lack
+ * the required APIs (Mobile Safari < 16.4, in-app webviews, Brave with
+ * blockers, etc.). The throw bubbles up as an *unhandled promise
+ * rejection* if you call `getMessaging()` directly, which is exactly
+ * what Sentry caught as `de5eecaa3dd94957b59161d64ad262ae` on iPhone
+ * iOS 18.7. The fix is to ALWAYS gate behind `isSupported()` (Firebase's
+ * own probe) before constructing the Messaging instance.
+ *
+ * Returns `null` for any of:
+ *  - SSR (no `window`)
+ *  - browsers Firebase declares unsupported
+ *  - constructor still throws (defense in depth — `isSupported` has
+ *    been observed to return true in some webviews and then `getMessaging`
+ *    still throws synchronously)
+ *
+ * Result is cached after first probe so we only pay the round-trip once.
+ */
+let messagingProbe: Promise<Messaging | null> | null = null
+
+async function getFirebaseMessaging(): Promise<Messaging | null> {
   if (typeof window === 'undefined') return null
-  if (!messaging) {
-    try {
-      messaging = getMessaging(getFirebaseApp())
-    } catch {
-      return null
-    }
+  if (messaging) return messaging
+  if (!messagingProbe) {
+    messagingProbe = (async () => {
+      try {
+        const supported = await isSupported()
+        if (!supported) return null
+        messaging = getMessaging(getFirebaseApp())
+        return messaging
+      } catch {
+        return null
+      }
+    })()
   }
-  return messaging
+  return messagingProbe
 }
 
 export async function requestPushPermission(): Promise<string | null> {
   try {
-    if (!('Notification' in window)) return null
-    const permission = await Notification.requestPermission()
+    if (typeof window === 'undefined') return null
+    // `'Notification' in window` is not enough — some webviews expose
+    // the property as `undefined`. We need a real callable check.
+    const NotificationApi = (window as { Notification?: typeof Notification }).Notification
+    if (typeof NotificationApi?.requestPermission !== 'function') return null
+    const permission = await NotificationApi.requestPermission()
     if (permission !== 'granted') return null
 
-    const m = getFirebaseMessaging()
+    const m = await getFirebaseMessaging()
     if (!m) return null
 
     const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
@@ -65,16 +97,35 @@ export async function requestPushPermission(): Promise<string | null> {
   }
 }
 
+/**
+ * Subscribes to foreground messages **iff** Firebase Messaging is supported
+ * in the current browser. Returns a no-op unsubscribe synchronously so
+ * callers can safely use it from `useEffect` without awaiting.
+ *
+ * Internally we resolve `getFirebaseMessaging()` async (because of
+ * `isSupported`); on unsupported browsers we never call `onMessage` and
+ * the whole call is a silent no-op.
+ */
 export function onForegroundMessage(
   callback: (payload: { title?: string; body?: string; link?: string }) => void
-) {
-  const m = getFirebaseMessaging()
-  if (!m) return () => {}
-  return onMessage(m, (payload) => {
-    callback({
-      title: payload.notification?.title,
-      body: payload.notification?.body,
-      link: payload.data?.link,
+): () => void {
+  let unsubscribe: (() => void) | null = null
+  let cancelled = false
+
+  void (async () => {
+    const m = await getFirebaseMessaging()
+    if (!m || cancelled) return
+    unsubscribe = onMessage(m, (payload) => {
+      callback({
+        title: payload.notification?.title,
+        body: payload.notification?.body,
+        link: payload.data?.link,
+      })
     })
-  })
+  })()
+
+  return () => {
+    cancelled = true
+    unsubscribe?.()
+  }
 }

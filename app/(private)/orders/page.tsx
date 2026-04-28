@@ -8,6 +8,7 @@ import { CursorPagination } from '@/components/ui/cursor-pagination'
 import { ExportButton } from '@/components/shared/export-button'
 import { Plus } from 'lucide-react'
 import { TemplatesList } from '@/components/orders/templates/templates-list'
+import { resolveViewMode } from '@/lib/orders/view-mode'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,11 +54,15 @@ export default async function OrdersPage({ searchParams }: Props) {
   // ── Cursor-based pagination ─────────────────────────────────────────────
   // Use adminClient with explicit scope filter so CLINIC_ADMIN and PHARMACY_ADMIN
   // always see their own orders regardless of RLS bootstrap state.
+  // Note: pharmacy_cost_per_unit is selected on order_items so the table can
+  // render the *repasse total* per row for PHARMACY_ADMIN — the canonical
+  // sales price (`total_price`) is filtered out by `resolveViewMode` below
+  // before rendering. See lib/orders/view-mode.ts for the rule.
   let query = admin.from('orders').select(
     `id, code, order_status, payment_status, transfer_status,
        total_price, created_at,
        clinics (trade_name), doctors (full_name), pharmacies (trade_name),
-       order_items (product_id, products (name))`
+       order_items (product_id, quantity, pharmacy_cost_per_unit, products (name))`
   )
 
   if (clinicId) query = query.eq('clinic_id', clinicId)
@@ -98,7 +103,9 @@ export default async function OrdersPage({ searchParams }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && <ExportButton type="orders" />}
-          {!isAdmin && (
+          {/* "Novo pedido" só faz sentido para quem **compra** — clínica ou
+              médico. Farmácia executa pedidos, não cria. */}
+          {!isAdmin && !isPharmacy && (
             <ButtonLink href="/catalog">
               <Plus className="mr-2 h-4 w-4" />
               Novo pedido
@@ -109,7 +116,10 @@ export default async function OrdersPage({ searchParams }: Props) {
 
       {!isAdmin && clinicId && <TemplatesList clinicId={clinicId} />}
 
-      <OrdersTable orders={orders as unknown as OrderRow[]} isAdmin={!!isAdmin} />
+      <OrdersTable
+        orders={orders as unknown as OrderRow[]}
+        viewMode={resolveViewMode(user?.roles)}
+      />
 
       <CursorPagination
         nextCursor={nextCursor}

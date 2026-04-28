@@ -6,6 +6,8 @@ import {
   slugify,
   getInitials,
   truncate,
+  formatDate,
+  formatDateTime,
 } from '@/lib/utils'
 
 describe('formatCurrency', () => {
@@ -92,5 +94,43 @@ describe('truncate', () => {
   it('truncates long strings', () => {
     const result = truncate('hello world', 5)
     expect(result).toBe('hello...')
+  })
+})
+
+/**
+ * SSR / hydration regression guard.
+ *
+ * Prior to 2026-04-28 these used `date-fns/format` which reads
+ * `Date.prototype.getHours` — environment-local. Server-side (Vercel
+ * runs UTC) and client (BRT/UTC-3) produced different strings,
+ * triggering React hydration mismatches on `/orders/[id]`. Sentry id:
+ * 2bd8f447e9274b5bbbd9676e00efeea4.
+ *
+ * The replacement uses `Intl.DateTimeFormat` with an explicit
+ * `timeZone: 'America/Sao_Paulo'` so the rendered value is fully
+ * deterministic regardless of where the code runs.
+ *
+ * If a future PR reverts to date-fns or drops the timezone, this test
+ * will fail in any non-BRT runtime (CI in UTC qualifies).
+ */
+describe('formatDate / formatDateTime — timezone-pinned (BR)', () => {
+  // 13:30 UTC === 10:30 BRT-3 — the gap that broke hydration.
+  const ISO = '2026-04-28T13:30:00.000Z'
+
+  it('formatDate: dd/MM/yyyy in São Paulo TZ', () => {
+    expect(formatDate(ISO)).toBe('28/04/2026')
+  })
+
+  it('formatDateTime: dd/MM/yyyy às HH:mm in São Paulo TZ', () => {
+    // 13:30 UTC -> 10:30 in São Paulo (UTC-3, no DST since 2019)
+    expect(formatDateTime(ISO)).toBe('28/04/2026 às 10:30')
+  })
+
+  it('is deterministic across late-evening boundary', () => {
+    // 23:30 UTC on Apr 28 -> 20:30 BRT on the SAME day.
+    expect(formatDate('2026-04-28T23:30:00.000Z')).toBe('28/04/2026')
+    // 02:30 UTC on Apr 29 -> 23:30 BRT on Apr 28 (still previous day).
+    expect(formatDate('2026-04-29T02:30:00.000Z')).toBe('28/04/2026')
+    expect(formatDateTime('2026-04-29T02:30:00.000Z')).toBe('28/04/2026 às 23:30')
   })
 })

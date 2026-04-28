@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Search, ExternalLink } from 'lucide-react'
+import { type FinancialViewMode, visibleOrderTotal, priceColumnLabel } from '@/lib/orders/view-mode'
 
 export interface OrderRow {
   id: string
@@ -25,7 +26,12 @@ export interface OrderRow {
   clinics: { trade_name: string } | null
   doctors: { full_name: string } | null
   pharmacies: { trade_name: string } | null
-  order_items: Array<{ product_id: string; products: { name: string } | null }> | null
+  order_items: Array<{
+    product_id: string
+    quantity: number
+    pharmacy_cost_per_unit?: number | null
+    products: { name: string } | null
+  }> | null
 }
 
 const ORDER_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -51,10 +57,19 @@ const ORDER_STATUS_CONFIG: Record<string, { label: string; className: string }> 
 
 interface OrdersTableProps {
   orders: OrderRow[]
-  isAdmin: boolean
+  /**
+   * Drives both column visibility (Clínica/Farmácia only show for admin)
+   * AND the canonical price the user is allowed to see. Pharmacy view
+   * NEVER renders the sales price — it shows the repasse total computed
+   * from `order_items[].pharmacy_cost_per_unit × quantity`.
+   * See lib/orders/view-mode.ts.
+   */
+  viewMode: FinancialViewMode
 }
 
-export function OrdersTable({ orders, isAdmin }: OrdersTableProps) {
+export function OrdersTable({ orders, viewMode }: OrdersTableProps) {
+  const isAdmin = viewMode === 'admin'
+  const isPharmacy = viewMode === 'pharmacy'
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
@@ -107,7 +122,13 @@ export function OrdersTable({ orders, isAdmin }: OrdersTableProps) {
               {isAdmin && <TableHead className="font-semibold">Clínica</TableHead>}
               <TableHead className="font-semibold">Médico</TableHead>
               {isAdmin && <TableHead className="font-semibold">Farmácia</TableHead>}
-              <TableHead className="text-right font-semibold">Valor</TableHead>
+              <TableHead className="text-right font-semibold">
+                {isPharmacy
+                  ? 'Repasse'
+                  : priceColumnLabel(viewMode) === 'Repasse'
+                    ? 'Repasse'
+                    : 'Valor'}
+              </TableHead>
               <TableHead className="font-semibold">Status</TableHead>
               <TableHead className="font-semibold">Data</TableHead>
               <TableHead />
@@ -163,7 +184,7 @@ export function OrdersTable({ orders, isAdmin }: OrdersTableProps) {
                       </TableCell>
                     )}
                     <TableCell className="text-right text-sm font-medium">
-                      {formatCurrency(order.total_price)}
+                      {formatCurrency(visibleOrderTotal(viewMode, order))}
                     </TableCell>
                     <TableCell>
                       <span

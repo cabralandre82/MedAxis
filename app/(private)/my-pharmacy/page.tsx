@@ -50,9 +50,13 @@ export default async function MyPharmacyPage() {
     { data: ordersRaw },
   ] = await Promise.all([
     supabase.from('pharmacies').select('*').eq('id', pharmacyId).single(),
+    // Pharmacy-facing surface — render `pharmacy_cost` (repasse) only.
+    // `price_current` (sales price) is intentionally NOT selected so it
+    // can never accidentally bleed into this view via a future change.
+    // See lib/orders/view-mode.ts for the canonical rule.
     supabase
       .from('products')
-      .select('id, name, sku, price_current, status')
+      .select('id, name, sku, pharmacy_cost, status')
       .eq('pharmacy_id', pharmacyId)
       .order('name'),
     supabase
@@ -75,7 +79,7 @@ export default async function MyPharmacyPage() {
     id: string
     name: string
     sku: string
-    price_current: number
+    pharmacy_cost: number
     status: string
   }>
   const transfers = (transfersRaw ?? []) as unknown as Array<{
@@ -277,8 +281,11 @@ export default async function MyPharmacyPage() {
                       <p className="text-xs text-gray-400">SKU: {product.sku}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold text-[hsl(213,75%,24%)]">
-                        {formatCurrency(product.price_current)}
+                      <span
+                        className="text-sm font-semibold text-[hsl(213,75%,24%)]"
+                        title="Valor de repasse — receita líquida ao executar este produto"
+                      >
+                        {formatCurrency(product.pharmacy_cost)}
                       </span>
                       <Badge
                         variant={product.status === 'active' ? 'default' : 'secondary'}

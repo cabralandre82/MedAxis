@@ -73,13 +73,28 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
     .maybeSingle()
   const myPharmacyId = memberRow?.pharmacy_id ?? null
 
-  // Scoped order query — always filter by pharmacy_id
+  // Scoped order query — always filter by pharmacy_id.
+  // We also include AWAITING_DOCUMENTS orders that have at least one
+  // document waiting for pharmacy review. This bridges the gap until
+  // the document workflow (regression-audit-2026-04-28 item #6) ships
+  // an automatic transition to READY_FOR_REVIEW on prescription upload.
+  // Without this branch, the "Revisar documentos" counter shows 0
+  // even when there is an order parked because the clinic uploaded
+  // the recipe but the status never advanced.
+  // We deliberately fetch a wider set and let the in-process filter
+  // below count what actually needs review — the network cost is one
+  // extra column on `order_documents` and at most a few rows.
   const { data: orders } = myPharmacyId
     ? await admin
         .from('orders')
-        .select('id, code, order_status, total_price, created_at, clinics(trade_name)')
+        .select(
+          `id, code, order_status, total_price, created_at,
+           clinics(trade_name),
+           order_documents(id, status)`
+        )
         .eq('pharmacy_id', myPharmacyId)
         .in('order_status', [
+          'AWAITING_DOCUMENTS',
           'READY_FOR_REVIEW',
           'RELEASED_FOR_EXECUTION',
           'RECEIVED_BY_PHARMACY',
@@ -104,7 +119,26 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
   const allOrders = orders ?? []
   const allTransfers = transfers ?? []
 
-  const pendingReview = allOrders.filter((o) => o.order_status === 'READY_FOR_REVIEW')
+  // "Revisar documentos" = orders explicitly in READY_FOR_REVIEW *plus*
+  // orders still at AWAITING_DOCUMENTS that have at least one uploaded
+  // document waiting for analysis (status ∈ {PENDING, PENDING_REVIEW}).
+  // This is the counter the pharmacy operator clicks from the dashboard
+  // to find work parked on their side.
+  type DashboardOrder = (typeof allOrders)[number] & {
+    order_documents?: Array<{ id: string; status: string }> | null
+  }
+  // `order_documents.status` enum is {PENDING, APPROVED, REJECTED}
+  // (see supabase/migrations/033_document_review.sql). PENDING is the
+  // "waiting for pharmacy review" state.
+  const hasDocAwaitingReview = (o: DashboardOrder): boolean =>
+    Array.isArray(o.order_documents) &&
+    o.order_documents.some((d) => String(d.status) === 'PENDING')
+
+  const pendingReview = (allOrders as DashboardOrder[]).filter(
+    (o) =>
+      o.order_status === 'READY_FOR_REVIEW' ||
+      (o.order_status === 'AWAITING_DOCUMENTS' && hasDocAwaitingReview(o))
+  )
   const toStart = allOrders.filter((o) => o.order_status === 'RELEASED_FOR_EXECUTION')
   const inProgress = allOrders.filter((o) =>
     ['RECEIVED_BY_PHARMACY', 'IN_EXECUTION'].includes(o.order_status)

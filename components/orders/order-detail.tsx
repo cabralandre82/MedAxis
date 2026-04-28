@@ -6,6 +6,13 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { OrderRealtimeUpdater, LiveBadge } from '@/components/orders/order-realtime-updater'
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
+import {
+  resolveViewMode,
+  visibleLineTotal,
+  visibleOrderTotal,
+  visibleUnitAmount,
+  unitColumnLabel,
+} from '@/lib/orders/view-mode'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -79,6 +86,9 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
   const router = useRouter()
   const isAdmin = currentUser.roles.some((r) => ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(r))
   const isPharmacy = currentUser.roles.includes('PHARMACY_ADMIN')
+  // Centralised RBAC for visible amounts. Pharmacy sees repasse only —
+  // never `unit_price` / `total_price`. See lib/orders/view-mode.ts.
+  const viewMode = resolveViewMode(currentUser.roles)
 
   // Determines if any item in the order is a manipulated (compounded) product.
   // Used to switch between pharmacy/distributor language in the execution stepper.
@@ -197,6 +207,7 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
     quantity: number
     unit_price: number
     total_price: number
+    pharmacy_cost_per_unit?: number | null
     discount_amount?: number
     original_total_price?: number
     coupon_id?: string | null
@@ -271,8 +282,12 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
                   <tr className="border-b text-left text-xs text-gray-400">
                     <th className="pb-2 font-medium">Produto</th>
                     <th className="w-16 pb-2 text-center font-medium">Qtd</th>
-                    <th className="w-28 pb-2 text-right font-medium">Unit.</th>
-                    <th className="w-28 pb-2 text-right font-medium">Subtotal</th>
+                    <th className="w-28 pb-2 text-right font-medium">
+                      {unitColumnLabel(viewMode)}
+                    </th>
+                    <th className="w-28 pb-2 text-right font-medium">
+                      {isPharmacy ? 'Repasse' : 'Subtotal'}
+                    </th>
                     <th className="w-8 pb-2" />
                   </tr>
                 </thead>
@@ -306,15 +321,18 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
                         </td>
                         <td className="py-2.5 text-center text-gray-700">{item.quantity}</td>
                         <td className="py-2.5 text-right text-gray-700">
-                          {formatCurrency(Number(item.unit_price))}
-                          {item.coupon_id && Number(item.discount_amount) > 0 && (
+                          {formatCurrency(visibleUnitAmount(viewMode, item))}
+                          {/* Coupon discount only matters for the buyer (clinic/doctor).
+                              Pharmacy never sees coupon math because it operates on
+                              the repasse line, not the sales line. */}
+                          {!isPharmacy && item.coupon_id && Number(item.discount_amount) > 0 && (
                             <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
                               -{formatCurrency(Number(item.discount_amount) / item.quantity)}/un
                             </span>
                           )}
                         </td>
                         <td className="py-2.5 text-right font-semibold text-gray-900">
-                          {formatCurrency(Number(item.total_price))}
+                          {formatCurrency(visibleLineTotal(viewMode, item))}
                         </td>
                         <td className="py-2.5 text-center">
                           {canRemove && (
@@ -335,6 +353,27 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
                 </tbody>
                 <tfoot>
                   {(() => {
+                    // Pharmacy view: only the repasse total. Buyer/admin
+                    // view: gross subtotal, coupon discount line(s), and
+                    // the final paid total. visibleOrderTotal() returns
+                    // the right number for each role.
+                    if (isPharmacy) {
+                      return (
+                        <tr className="border-t">
+                          <td colSpan={3} className="pt-3 text-sm font-semibold text-gray-700">
+                            Total do repasse
+                          </td>
+                          <td className="pt-3 text-right text-base font-bold text-[hsl(213,75%,24%)]">
+                            {formatCurrency(
+                              visibleOrderTotal(viewMode, {
+                                total_price: Number(order.total_price ?? 0),
+                                order_items: orderItems,
+                              })
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    }
                     const totalDiscount = orderItems.reduce(
                       (s, i) => s + Number(i.discount_amount ?? 0),
                       0

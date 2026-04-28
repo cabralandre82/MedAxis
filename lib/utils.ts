@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { format, formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 export function cn(...inputs: ClassValue[]) {
@@ -14,12 +14,48 @@ export function formatCurrency(value: number, currency = 'BRL'): string {
   }).format(value)
 }
 
+/**
+ * Date / time formatters — TIMEZONE-PINNED
+ * --------------------------------------------------------------
+ * The platform serves Brazilian users only. We pin the timezone to
+ * `America/Sao_Paulo` on **both** server (Vercel runs UTC by default)
+ * and client. If the timezone is not pinned, SSR renders 'às 14:30'
+ * (UTC) and the client re-renders 'às 11:30' (BRT-3) → React reports
+ * a hydration mismatch. This was Sentry issue
+ * `2bd8f447e9274b5bbbd9676e00efeea4` on `/orders/[id]`.
+ *
+ * Using `Intl.DateTimeFormat` with `timeZone` is the only way to get
+ * deterministic output — `date-fns/format` reads `Date.prototype.getHours`
+ * which is environment-local. Keep the locale pt-BR here so months and
+ * separators match what users expect.
+ */
+const BR_TIMEZONE = 'America/Sao_Paulo'
+
+const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: BR_TIMEZONE,
+})
+
+const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: BR_TIMEZONE,
+})
+
 export function formatDate(date: string | Date): string {
-  return format(new Date(date), 'dd/MM/yyyy', { locale: ptBR })
+  return dateFormatter.format(new Date(date))
 }
 
 export function formatDateTime(date: string | Date): string {
-  return format(new Date(date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  // Intl renders "dd/MM/yyyy, HH:mm". We replace the comma with " às " to
+  // match the legacy human-readable output the UI relied on.
+  return dateTimeFormatter.format(new Date(date)).replace(', ', ' às ')
 }
 
 export function formatRelativeTime(date: string | Date): string {

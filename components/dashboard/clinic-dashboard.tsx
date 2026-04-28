@@ -1,11 +1,11 @@
 import { createClient } from '@/lib/db/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ButtonLink } from '@/components/ui/button-link'
-import { Badge } from '@/components/ui/badge'
 import { ClipboardList, ShoppingBag, FileWarning } from 'lucide-react'
 import type { ProfileWithRoles } from '@/types'
 import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { statusLabel, statusBadgeClass } from '@/lib/orders/status-machine'
 
 export async function ClinicDashboard({ user }: { user: ProfileWithRoles }) {
   const supabase = await createClient()
@@ -105,9 +105,15 @@ export async function ClinicDashboard({ user }: { user: ProfileWithRoles }) {
                       {formatDate(order.created_at)} · {formatCurrency(order.total_price)}
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs">
-                    {order.order_status.replace(/_/g, ' ')}
-                  </Badge>
+                  {/* Status pill — i18n + cor canônicas vindas de
+                      lib/orders/status-machine.ts. Antes renderizava
+                      `order_status.replace(/_/g, ' ')` que cuspia o enum
+                      em inglês cru. */}
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(order.order_status)}`}
+                  >
+                    {statusLabel(order.order_status)}
+                  </span>
                 </div>
               ))}
             </div>

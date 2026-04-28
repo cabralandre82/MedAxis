@@ -48,15 +48,20 @@ export default async function ProductsPage({ searchParams }: Props) {
   const page = parsePage(pageRaw)
   const { from, to } = paginationRange(page, PAGE_SIZE)
 
+  // Pharmacy view: pull `pharmacy_cost` (the repasse value the pharmacy receives)
+  // and render that instead of `price_current` (the sales price the buyer pays).
+  // See lib/orders/view-mode.ts for the rule. The two columns coexist in the
+  // schema; we always select both because the `force-dynamic` page is server-
+  // rendered per request and the trade-off is one extra column on the wire.
   let q = supabase
     .from('products')
     .select(
-      `id, name, sku, concentration, presentation, price_current,
+      `id, name, sku, concentration, presentation, price_current, pharmacy_cost,
        estimated_deadline_days, active, featured, needs_price_review,
        product_categories (name), pharmacies (trade_name)`,
       { count: 'exact' }
     )
-    .order('price_current', { ascending: true }) // unpriced (0) float to top
+    .order(isPharmacy ? 'pharmacy_cost' : 'price_current', { ascending: true }) // unpriced (0) float to top
     .order('name')
 
   if (isPharmacy && pharmacyId) q = q.eq('pharmacy_id', pharmacyId)
@@ -101,7 +106,9 @@ export default async function ProductsPage({ searchParams }: Props) {
                 <TableHead className="font-semibold">SKU</TableHead>
                 <TableHead className="font-semibold">Categoria</TableHead>
                 <TableHead className="font-semibold">Farmácia</TableHead>
-                <TableHead className="text-right font-semibold">Preço</TableHead>
+                <TableHead className="text-right font-semibold">
+                  {isPharmacy ? 'Repasse' : 'Preço'}
+                </TableHead>
                 <TableHead className="text-center font-semibold">Prazo</TableHead>
                 <TableHead className="font-semibold">Status</TableHead>
                 <TableHead />
@@ -145,7 +152,11 @@ export default async function ProductsPage({ searchParams }: Props) {
                     </TableCell>
                     <TableCell className="text-right">
                       <span className="text-sm font-semibold text-[hsl(213,75%,24%)]">
-                        {formatCurrency(p.price_current)}
+                        {formatCurrency(
+                          isPharmacy
+                            ? Number((p as { pharmacy_cost?: number | null }).pharmacy_cost ?? 0)
+                            : p.price_current
+                        )}
                       </span>
                     </TableCell>
                     <TableCell className="text-center">
@@ -153,7 +164,13 @@ export default async function ProductsPage({ searchParams }: Props) {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        {p.price_current === 0 ? (
+                        {(
+                          isPharmacy
+                            ? Number(
+                                (p as { pharmacy_cost?: number | null }).pharmacy_cost ?? 0
+                              ) === 0
+                            : p.price_current === 0
+                        ) ? (
                           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                             ⏳ Aguardando preço
                           </span>
