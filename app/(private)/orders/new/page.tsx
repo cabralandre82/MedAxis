@@ -12,6 +12,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 import { NewOrderForm, type NewOrderFormProduct } from '@/components/orders/new-order-form'
 import { parseCartParam } from '@/lib/orders/doctor-field-rules'
 import { BackButton } from '@/components/ui/back-button'
+import { resolveBuyerCouponPreview } from '@/lib/orders/buyer-coupon-context'
 import type { DoctorAddress } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -137,6 +138,16 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
     }
   }
 
+  // Buyer-side coupon preview — visible price in the cart matches the
+  // price the trigger will charge at insert. Without this, the cart
+  // showed `price_current` (full) while the DB applied the coupon
+  // silently — leaving the buyer to discover the discount only on the
+  // confirmation screen. (regression-audit-2026-04-28 follow-up to #1.)
+  const couponPreviewByProduct = await resolveBuyerCouponPreview(
+    user,
+    products.map((p) => p.id)
+  )
+
   return (
     <div className="max-w-3xl">
       <div className="mb-6">
@@ -157,6 +168,7 @@ export default async function NewOrderPage({ searchParams }: NewOrderPageProps) 
         myDoctorId={myDoctorId}
         myAddresses={myAddresses}
         myDoctorClinics={myDoctorClinics}
+        couponPreviewByProduct={couponPreviewByProduct}
       />
     </div>
   )

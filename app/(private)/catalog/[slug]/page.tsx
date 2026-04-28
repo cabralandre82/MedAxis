@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { ProductDetail } from '@/components/catalog/product-detail'
 import { ProductRecommendations } from '@/components/catalog/product-recommendations'
 import { BackButton } from '@/components/ui/back-button'
+import { getCurrentUser } from '@/lib/auth/session'
+import { resolveBuyerCouponPreview } from '@/lib/orders/buyer-coupon-context'
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>
@@ -65,10 +67,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
     })
     .filter(Boolean)
 
+  // Buyer-side coupon preview — clinic/doctor see the discounted price
+  // here too, not just on the catalogue grid. Pharmacies never see it.
+  // (regression-audit-2026-04-28 follow-up: fix #1 covered the grid but
+  // missed this page and /orders/new — both fixed in the same wave.)
+  const currentUser = await getCurrentUser()
+  const couponMap = await resolveBuyerCouponPreview(currentUser, [product.id])
+  const coupon = couponMap[product.id] ?? null
+
   return (
     <div className="space-y-6">
       <BackButton href="/catalog" label="Catálogo" />
-      <ProductDetail product={product} />
+      <ProductDetail product={product} coupon={coupon} />
       {recommendations.length > 0 && (
         <ProductRecommendations
           recommendations={

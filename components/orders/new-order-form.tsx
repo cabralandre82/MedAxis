@@ -11,6 +11,7 @@ import { createOrder, type OrderDocument } from '@/services/orders'
 import { resolveDoctorFieldState } from '@/lib/orders/doctor-field-rules'
 import { REQUIRED_DOCUMENT_TYPES } from '@/components/orders/document-manager'
 import { formatCurrency, cn } from '@/lib/utils'
+import { previewDiscountedUnitPrice, type CatalogCouponPreview } from '@/lib/coupons/preview'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +32,7 @@ import {
   MapPin,
   PlusCircle,
   Pill,
+  Tag,
 } from 'lucide-react'
 import Link from 'next/link'
 import type { DoctorAddress } from '@/types'
@@ -71,6 +73,16 @@ interface NewOrderFormProps {
   myAddresses?: DoctorAddress[]
   /** Clinics the doctor is linked to (for clinic purchase option). */
   myDoctorClinics?: { id: string; trade_name: string }[]
+  /**
+   * Active coupons applicable to the current buyer (clinic or doctor),
+   * keyed by `product_id`. Used to render the discounted unit price in
+   * cart rows, the dropdown, and the order summary so the visible total
+   * matches what the DB trigger will charge at insert time.
+   *
+   * Pharmacies never see this surface (they don't reach `/orders/new`),
+   * so an empty map here is the safe default for non-buyer paths.
+   */
+  couponPreviewByProduct?: Record<string, CatalogCouponPreview>
 }
 
 export function NewOrderForm({
@@ -84,7 +96,23 @@ export function NewOrderForm({
   myDoctorId,
   myAddresses = [],
   myDoctorClinics = [],
+  couponPreviewByProduct = {},
 }: NewOrderFormProps) {
+  // Single source of truth for "what does this product cost in this
+  // cart, given the buyer's coupons?". Returns full + discounted unit
+  // prices and the coupon meta. We compute it on demand because the
+  // user can swap clinics mid-flow (admins/doctors w/ multiple
+  // clinics) without us re-fetching — but for the catalog buyer view
+  // this only changes the surface, not the DB write (the trigger
+  // re-evaluates coupon eligibility server-side at insert time).
+  function priceFor(productId: string, unitPrice: number) {
+    const coupon = couponPreviewByProduct[productId]
+    if (!coupon) {
+      return { unit: unitPrice, full: unitPrice, perUnitDiscount: 0, coupon: null as null }
+    }
+    const { discountedUnit, perUnitDiscount } = previewDiscountedUnitPrice(unitPrice, coupon)
+    return { unit: discountedUnit, full: unitPrice, perUnitDiscount, coupon }
+  }
   const router = useRouter()
   const isDoctor = !!myDoctorId
 
@@ -139,7 +167,12 @@ export function NewOrderForm({
     setCart((prev) => prev.map((c) => (c.product.id === productId ? { ...c, quantity: qty } : c)))
   }
 
-  const total = cart.reduce((sum, c) => sum + c.product.price_current * c.quantity, 0)
+  const total = cart.reduce(
+    (sum, c) => sum + priceFor(c.product.id, c.product.price_current).unit * c.quantity,
+    0
+  )
+  const grossTotal = cart.reduce((sum, c) => sum + c.product.price_current * c.quantity, 0)
+  const totalDiscount = grossTotal - total
   const maxDeadline = Math.max(0, ...cart.map((c) => c.product.estimated_deadline_days))
   const pharmacyName = cart[0]?.product.pharmacies?.trade_name ?? '—'
 
@@ -275,7 +308,7 @@ export function NewOrderForm({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate text-sm font-medium text-gray-900">{item.product.name}</p>
                   {item.product.requires_prescription && (
                     <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-amber-800 uppercase">
@@ -283,9 +316,41 @@ export function NewOrderForm({
                       Receita
                     </span>
                   )}
+                  {(() => {
+                    const p = priceFor(item.product.id, item.product.price_current)
+                    if (p.perUnitDiscount <= 0 || !p.coupon) return null
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+                        title={
+                          p.coupon.discount_type === 'PERCENT'
+                            ? `Cupom ${p.coupon.code}: -${p.coupon.discount_value}% por unidade`
+                            : `Cupom ${p.coupon.code}: -${formatCurrency(p.coupon.discount_value)} por unidade`
+                        }
+                      >
+                        <Tag className="h-2.5 w-2.5" aria-hidden="true" />
+                        Cupom {p.coupon.code}
+                      </span>
+                    )
+                  })()}
                 </div>
                 <p className="text-xs text-gray-500">
-                  {item.product.concentration} · {formatCurrency(item.product.price_current)}/un
+                  {item.product.concentration} ·{' '}
+                  {(() => {
+                    const p = priceFor(item.product.id, item.product.price_current)
+                    if (p.perUnitDiscount <= 0) return `${formatCurrency(p.full)}/un`
+                    return (
+                      <>
+                        <span className="font-medium text-emerald-700">
+                          {formatCurrency(p.unit)}
+                        </span>
+                        <span className="ml-1 text-gray-300 line-through">
+                          {formatCurrency(p.full)}
+                        </span>
+                        /un
+                      </>
+                    )
+                  })()}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -296,9 +361,25 @@ export function NewOrderForm({
                   onChange={(e) => updateQty(item.product.id, parseInt(e.target.value))}
                   className="w-20 text-center"
                 />
-                <span className="w-24 text-right text-sm font-semibold text-slate-700">
-                  {formatCurrency(item.product.price_current * item.quantity)}
-                </span>
+                {(() => {
+                  const p = priceFor(item.product.id, item.product.price_current)
+                  const lineTotal = p.unit * item.quantity
+                  const lineFull = p.full * item.quantity
+                  return (
+                    <span className="w-28 text-right text-sm font-semibold text-slate-700">
+                      {p.perUnitDiscount > 0 ? (
+                        <span className="flex flex-col items-end leading-tight">
+                          <span className="text-emerald-700">{formatCurrency(lineTotal)}</span>
+                          <span className="text-[10px] font-normal text-gray-300 line-through">
+                            {formatCurrency(lineFull)}
+                          </span>
+                        </span>
+                      ) : (
+                        formatCurrency(lineTotal)
+                      )}
+                    </span>
+                  )
+                })()}
                 <button
                   type="button"
                   onClick={() => removeFromCart(item.product.id)}
@@ -332,13 +413,23 @@ export function NewOrderForm({
                   className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 >
                   <option value="">Selecione...</option>
-                  {eligibleProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.requires_prescription ? '💊 ' : ''}
-                      {p.name} — {formatCurrency(p.price_current)}
-                      {p.requires_prescription ? ' (receita obrigatória)' : ''}
-                    </option>
-                  ))}
+                  {eligibleProducts.map((p) => {
+                    const pr = priceFor(p.id, p.price_current)
+                    // Native <option> can't render rich content, so we inline
+                    // the discounted price (and append "(cupom XYZ)") so the
+                    // buyer sees the deal before adding to cart.
+                    const priceLabel =
+                      pr.perUnitDiscount > 0 && pr.coupon
+                        ? `${formatCurrency(pr.unit)} (cupom ${pr.coupon.code})`
+                        : formatCurrency(pr.full)
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {p.requires_prescription ? '💊 ' : ''}
+                        {p.name} — {priceLabel}
+                        {p.requires_prescription ? ' (receita obrigatória)' : ''}
+                      </option>
+                    )
+                  })}
                 </select>
                 {eligibleProducts.some((p) => p.requires_prescription) && (
                   <p id="rx-products-hint" className="text-xs text-amber-700">
@@ -663,17 +754,48 @@ export function NewOrderForm({
           <CardContent className="p-5">
             <h3 className="mb-3 font-semibold text-gray-900">Resumo do pedido</h3>
             <div className="space-y-2 text-sm">
-              {cart.map((item) => (
-                <div key={item.product.id} className="flex justify-between">
-                  <span className="max-w-[200px] truncate text-gray-500">
-                    {item.product.name} ×{item.quantity}
-                  </span>
-                  <span className="ml-4 text-gray-900">
-                    {formatCurrency(item.product.price_current * item.quantity)}
-                  </span>
-                </div>
-              ))}
+              {cart.map((item) => {
+                const p = priceFor(item.product.id, item.product.price_current)
+                const lineTotal = p.unit * item.quantity
+                const lineFull = p.full * item.quantity
+                return (
+                  <div key={item.product.id} className="flex justify-between">
+                    <span className="max-w-[200px] truncate text-gray-500">
+                      {item.product.name} ×{item.quantity}
+                      {p.perUnitDiscount > 0 && p.coupon && (
+                        <span className="ml-1 text-[11px] text-emerald-700">
+                          (cupom {p.coupon.code})
+                        </span>
+                      )}
+                    </span>
+                    <span className="ml-4 text-gray-900">
+                      {p.perUnitDiscount > 0 ? (
+                        <>
+                          <span className="text-emerald-700">{formatCurrency(lineTotal)}</span>
+                          <span className="ml-1 text-[11px] text-gray-300 line-through">
+                            {formatCurrency(lineFull)}
+                          </span>
+                        </>
+                      ) : (
+                        formatCurrency(lineTotal)
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
               <Separator />
+              {totalDiscount > 0 && (
+                <>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Subtotal</span>
+                    <span className="line-through">{formatCurrency(grossTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-emerald-700">
+                    <span>Desconto (cupons)</span>
+                    <span>− {formatCurrency(totalDiscount)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>
                 <span className="text-[hsl(213,75%,24%)]">{formatCurrency(total)}</span>
