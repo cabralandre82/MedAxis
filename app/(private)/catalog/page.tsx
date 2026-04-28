@@ -8,6 +8,7 @@ import { parsePage, paginationRange } from '@/lib/utils'
 import { ButtonLink } from '@/components/ui/button-link'
 import { Plus } from 'lucide-react'
 import { Suspense } from 'react'
+import { getActiveCouponsByProductForBuyer } from '@/services/coupons'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,6 +122,49 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
     supabase.from('pharmacies').select('id, trade_name').eq('status', 'ACTIVE').order('trade_name'),
   ])
 
+  // Buyer-side coupon preview — clinic or doctor sees a "with coupon"
+  // chip on each card so they don't have to place an order to learn
+  // whether the coupon is wired up. Pharmacies never see this.
+  // (regression-audit-2026-04-28 item #1)
+  let couponPreviewByProduct: Record<
+    string,
+    {
+      id: string
+      code: string
+      discount_type: 'PERCENT' | 'FIXED'
+      discount_value: number
+      max_discount_amount: number | null
+      valid_until: string | null
+    }
+  > = {}
+  if (!isPharmacy && currentUser) {
+    let buyerClinicId: string | null = null
+    let buyerDoctorId: string | null = null
+    if (currentUser.roles.includes('CLINIC_ADMIN')) {
+      const { data: cm } = await supabase
+        .from('clinic_members')
+        .select('clinic_id')
+        .eq('user_id', currentUser.id)
+        .maybeSingle()
+      buyerClinicId = cm?.clinic_id ?? null
+    } else if (currentUser.roles.includes('DOCTOR')) {
+      const { data: doctor } = await supabase
+        .from('doctors')
+        .select('id')
+        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+        .maybeSingle()
+      buyerDoctorId = doctor?.id ?? null
+    }
+    const productIds = (products ?? []).map((p) => String((p as { id: string }).id))
+    if (productIds.length && (buyerClinicId || buyerDoctorId)) {
+      couponPreviewByProduct = await getActiveCouponsByProductForBuyer({
+        clinicId: buyerClinicId,
+        doctorId: buyerDoctorId,
+        productIds,
+      })
+    }
+  }
+
   if (isPharmacy) {
     return (
       <div className="space-y-6">
@@ -164,7 +208,10 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
         />
       </Suspense>
 
-      <CatalogGrid products={(products ?? []) as unknown as ProductCard[]} />
+      <CatalogGrid
+        products={(products ?? []) as unknown as ProductCard[]}
+        couponPreviewByProduct={couponPreviewByProduct}
+      />
 
       <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
     </div>

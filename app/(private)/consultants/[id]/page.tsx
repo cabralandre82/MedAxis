@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth/session'
 
 import { ButtonLink } from '@/components/ui/button-link'
 import { BackButton } from '@/components/ui/back-button'
+import { ConsultantStatusActions } from '@/components/consultants/consultant-status-actions'
 import { formatCNPJ, formatCurrency } from '@/lib/utils'
 import type { SalesConsultant, ConsultantCommission } from '@/types'
 
@@ -101,6 +102,18 @@ export default async function ConsultantDetailPage({
           )}
         </div>
       </div>
+
+      {/* Status switcher — SUPER_ADMIN only. The form-level "Editar" link
+          handles the cadastral fields; the status pertains to operational
+          state and lives in its own dedicated control. */}
+      {isSuperAdmin && (
+        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+          <ConsultantStatusActions
+            consultantId={c.id}
+            currentStatus={c.status as 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'}
+          />
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-3">

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/db/admin'
 import { getCurrentUser } from '@/lib/auth/session'
 import { rateLimit } from '@/lib/rate-limit'
 import { logger } from '@/lib/logger'
+import { advanceOrderAfterDocumentUpload } from '@/lib/orders/document-transitions'
 
 const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'image/webp']
@@ -85,5 +86,25 @@ export async function POST(req: NextRequest) {
     uploaded.push(uploadData.path)
   }
 
-  return NextResponse.json({ success: true, uploaded })
+  // Couple document upload to order state — moves AWAITING_DOCUMENTS to
+  // READY_FOR_REVIEW so the pharmacy can run analysis. See
+  // lib/orders/document-transitions.ts for the rationale.
+  let transitioned = false
+  let newStatus: string | null = null
+  if (uploaded.length > 0) {
+    const result = await advanceOrderAfterDocumentUpload({
+      orderId,
+      changedByUserId: user.id,
+      reason: `${uploaded.length} documento(s) enviado(s) — análise solicitada`,
+    })
+    transitioned = result.transitioned
+    newStatus = result.status
+  }
+
+  return NextResponse.json({
+    success: true,
+    uploaded,
+    order_status: newStatus,
+    transitioned,
+  })
 }

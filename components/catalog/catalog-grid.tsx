@@ -6,8 +6,9 @@ import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { Button } from '@/components/ui/button'
-import { Clock, Package, Star, Bell } from 'lucide-react'
+import { Clock, Package, Star, Bell, Tag } from 'lucide-react'
 import { InterestModal } from './interest-modal'
+import { previewDiscountedUnitPrice, type CatalogCouponPreview } from '@/lib/coupons/preview'
 
 export interface ProductCard {
   id: string
@@ -34,9 +35,21 @@ interface CatalogGridProps {
   products: ProductCard[]
   /** When true, show management CTAs (edit/toggle) instead of order CTAs */
   pharmacyMode?: boolean
+  /**
+   * Optional preview map: `product_id → coupon`. When a product has a
+   * coupon for the current buyer (clinic or doctor), the card renders a
+   * crossed-out price plus the discounted price + a "with coupon" chip,
+   * matching what the order will actually charge after creation. Pass
+   * `{}` (or omit) to disable the feature.
+   */
+  couponPreviewByProduct?: Record<string, CatalogCouponPreview>
 }
 
-export function CatalogGrid({ products, pharmacyMode = false }: CatalogGridProps) {
+export function CatalogGrid({
+  products,
+  pharmacyMode = false,
+  couponPreviewByProduct = {},
+}: CatalogGridProps) {
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -50,13 +63,26 @@ export function CatalogGrid({ products, pharmacyMode = false }: CatalogGridProps
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} pharmacyMode={pharmacyMode} />
+        <ProductCard
+          key={product.id}
+          product={product}
+          pharmacyMode={pharmacyMode}
+          coupon={couponPreviewByProduct[product.id]}
+        />
       ))}
     </div>
   )
 }
 
-function ProductCard({ product, pharmacyMode }: { product: ProductCard; pharmacyMode?: boolean }) {
+function ProductCard({
+  product,
+  pharmacyMode,
+  coupon,
+}: {
+  product: ProductCard
+  pharmacyMode?: boolean
+  coupon?: CatalogCouponPreview
+}) {
   const [interestOpen, setInterestOpen] = useState(false)
   const unavailable = product.status === 'unavailable'
 
@@ -133,10 +159,55 @@ function ProductCard({ product, pharmacyMode }: { product: ProductCard; pharmacy
 
           <div className="space-y-2 border-t border-gray-100 pt-3">
             {!unavailable && (
-              <div className="flex items-baseline justify-between">
-                <span className="text-xl font-bold text-[hsl(213,75%,24%)]">
-                  {formatCurrency(product.price_current)}
-                </span>
+              <div className="space-y-1">
+                {coupon ? (
+                  // Buyer has an active coupon for this product — show
+                  // the discounted unit + a chip with the coupon code so
+                  // they can verify it before placing the order.
+                  // (regression-audit-2026-04-28 item #1)
+                  (() => {
+                    const { discountedUnit, perUnitDiscount } = previewDiscountedUnitPrice(
+                      product.price_current,
+                      coupon
+                    )
+                    if (perUnitDiscount <= 0) {
+                      return (
+                        <span className="text-xl font-bold text-[hsl(213,75%,24%)]">
+                          {formatCurrency(product.price_current)}
+                        </span>
+                      )
+                    }
+                    return (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xl font-bold text-emerald-700">
+                            {formatCurrency(discountedUnit)}
+                          </span>
+                          <span className="text-xs text-gray-400 line-through">
+                            {formatCurrency(product.price_current)}
+                          </span>
+                        </div>
+                        <div
+                          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
+                          title={
+                            coupon.discount_type === 'PERCENT'
+                              ? `Cupom ${coupon.code}: -${coupon.discount_value}% por unidade`
+                              : `Cupom ${coupon.code}: -${formatCurrency(coupon.discount_value)} por unidade`
+                          }
+                        >
+                          <Tag className="h-3 w-3" aria-hidden="true" />
+                          Cupom {coupon.code} aplicado
+                        </div>
+                      </>
+                    )
+                  })()
+                ) : (
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xl font-bold text-[hsl(213,75%,24%)]">
+                      {formatCurrency(product.price_current)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

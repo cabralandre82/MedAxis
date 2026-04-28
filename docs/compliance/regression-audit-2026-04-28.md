@@ -132,7 +132,22 @@ Após Onda 1 + 2 implementadas:
   - [x] `npx tsc --noEmit` ✓
   - [x] `npx vitest run` ✓ 1938/1938 passing
   - [x] `npx eslint` ✓ zero errors
-- [ ] Onda 2 — Workflow de documento, cupom catálogo, consultor status, list/detail consistency
+- [x] **Onda 2 — concluída em 2026-04-28** (commit a seguir)
+  - [x] `lib/orders/document-transitions.ts` — `advanceOrderAfterDocumentUpload()` costura upload de documento → `AWAITING_DOCUMENTS → READY_FOR_REVIEW` + linha em `order_status_history`. Idempotente, com guarda otimista de race.
+  - [x] `app/api/documents/upload/route.ts` — pluga a transição após o loop de upload. Resposta passou a incluir `order_status` e `transitioned`.
+  - [x] `tests/unit/lib/orders/document-transitions.test.ts` — 6 testes (transition, no-op em outros status, falha de update vs falha de history não rola back, custom reason)
+  - [x] `lib/coupons/preview.ts` — `previewDiscountedUnitPrice()` (puro, isomórfico) — único lugar onde a matemática vive.
+  - [x] `services/coupons.ts` — `getActiveCouponsByProductForBuyer()` para o catálogo (PERCENT/FIXED + max + valid_until).
+  - [x] `app/(private)/catalog/page.tsx` — busca cupons aplicáveis ao buyer e injeta no grid.
+  - [x] `components/catalog/catalog-grid.tsx` — preview com preço riscado + chip "Cupom XYZ aplicado".
+  - [x] `tests/unit/lib/coupons-preview.test.ts` — 7 testes pinando a matemática (PERCENT, FIXED, cap, clamp).
+  - [x] `app/(private)/users/page.tsx` — cruza `auth.users.banned_until` com `profiles.is_active` para alinhar lista vs detalhe.
+  - [x] `components/consultants/consultant-status-actions.tsx` — switcher 3-state (ACTIVE/INACTIVE/SUSPENDED) com confirm + transition.
+  - [x] `app/(private)/consultants/[id]/page.tsx` — pluga o switcher acima do header.
+  - [x] `components/consultants/assign-consultant-dialog.tsx` — empty-state explícito quando nenhum consultor ACTIVE existe + link para cadastrar/abrir lista.
+  - [x] `npx tsc --noEmit` ✓
+  - [x] `npx vitest run` ✓ **1951/1951 passing**
+  - [x] `npx eslint` em todos arquivos modificados ✓ zero erros
 - [ ] Onda 3 — Multi-receita por produto, consultor-as-user, logs Vercel
 - [ ] Guardrails permanentes (`scripts/claims/check-rbac-view-leak.sh`, ESLint custom rule, trigger Supabase mirror)
 

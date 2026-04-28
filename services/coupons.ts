@@ -511,3 +511,69 @@ export async function getActiveCouponsForOrder(
 
   return Object.fromEntries(data.map((c) => [c.product_id, c.id]))
 }
+
+/**
+ * Catalog-side coupon preview.
+ *
+ * Returns full coupon shape (not just id) keyed by `product_id` so the
+ * catalog grid can show "you have a coupon — pay R$ X" before the order
+ * is even created. Without this the discount only became visible *after*
+ * the buyer placed the order, which trapped them in a "is the coupon
+ * really active?" loop reported on 2026-04-28.
+ *
+ * Usage: call once at the top of `app/(private)/catalog/page.tsx` and
+ * pass the resulting map down to `CatalogGrid` as a prop.
+ *
+ * Resolution: clinic > doctor (CLINIC_ADMIN's clinic coupons take
+ * precedence; DOCTOR sees their personal coupons).
+ */
+export type { CatalogCouponPreview } from '@/lib/coupons/preview'
+import type { CatalogCouponPreview } from '@/lib/coupons/preview'
+
+export async function getActiveCouponsByProductForBuyer(args: {
+  clinicId: string | null
+  doctorId?: string | null
+  productIds: string[]
+}): Promise<Record<string, CatalogCouponPreview>> {
+  const { clinicId, doctorId, productIds } = args
+  if (!productIds.length) return {}
+  if (!clinicId && !doctorId) return {}
+
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+
+  const base = admin
+    .from('coupons')
+    .select('id, product_id, code, discount_type, discount_value, max_discount_amount, valid_until')
+    .eq('active', true)
+    .not('activated_at', 'is', null)
+    .in('product_id', productIds)
+    .or(`valid_until.is.null,valid_until.gte.${now}`)
+
+  const query = clinicId ? base.eq('clinic_id', clinicId) : base.eq('doctor_id', doctorId!)
+
+  const { data, error } = await query
+  if (error || !data?.length) return {}
+
+  return Object.fromEntries(
+    data.map((c) => [
+      c.product_id as string,
+      {
+        id: c.id as string,
+        code: c.code as string,
+        discount_type: c.discount_type as 'PERCENT' | 'FIXED',
+        discount_value: Number(c.discount_value),
+        max_discount_amount: c.max_discount_amount == null ? null : Number(c.max_discount_amount),
+        valid_until: c.valid_until as string | null,
+      } satisfies CatalogCouponPreview,
+    ])
+  )
+}
+
+// NOTE: the pure helper `previewDiscountedUnitPrice` lives in
+// `lib/coupons/preview.ts`. We deliberately do NOT re-export it from
+// here because this file carries `'use server'` and re-exporting a
+// non-async function would violate the App Router contract (caught by
+// tests/unit/services/coupons-use-server.test.ts). Callers — both
+// server and client — should import the helper directly from
+// `@/lib/coupons/preview`.
