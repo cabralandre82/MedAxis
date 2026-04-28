@@ -203,6 +203,12 @@ Após Onda 1 + 2 implementadas:
   - Build logs (deployment `dpl_5rP1ksc6yZhg2GP2HT7pzgVqEtE4`): apenas warnings cosméticos do SDK do Sentry (5×) — `DEPRECATION WARNING` para `sentry.client.config.ts` / `autoInstrumentMiddleware` / `autoInstrumentServerFunctions` e o aviso "Could not find onRequestError hook in instrumentation file". Tudo no Sentry SDK ≥9, não bloqueante. Tracked como Onda 3 housekeeping.
   - Runtime logs históricos: Vercel não expõe via REST API pública (sem log drain configurado, sem plano Observability+). A fonte autoritativa para erros runtime é o **Sentry**, e os 2 issues reportados (S1 hydration `/orders/[id]`, S2 firebase `/dashboard` iOS) já foram fixados na Onda 1 com testes pinando o gate.
 
+- [x] **Dependabot alert #11 — `uuid < 14.0.0` (GHSA-w5hq-g745-h8pq) — dispensado em 2026-04-28** (`tolerable_risk`)
+  - Auditoria do call site de uuid em todos os deps transitivos (`firebase-admin`, `svix`, `@google-cloud/storage`, `google-gax`, `gaxios`, `teeny-request`, `exceljs`): **100% das 11 chamadas usam `v4()`**, que **não é vulnerável** (a própria advisory confirma — apenas `v3/v5/v6` com `buf`+`offset` caller-controlled estão afetados). Nosso código não importa `uuid` direto.
+  - **Não foi feito override** porque uuid@12+ é ESM-only (CJS dropped) — forçaria quebra de todos os deps CJS acima. Não há backport patched para 8.x/9.x/10.x/11.x.
+  - **Guardrail novo**: `scripts/claims/check-uuid-vulnerable-call.mjs` (verifier #17) varre `app/`, `components/`, `lib/`, `services/`, `scripts/` por chamadas a `v3/v5/v6` com 3+ argumentos (= buffer passado). Falha o build se algum PR futuro adicionar uma chamada vulnerável. 385 arquivos varridos, 0 leaks. Sanity-checkado com fixture de 6 cenários (3 fails legítimos + 3 passes corretos).
+  - **Documentação**: `docs/security/known-acceptable-vulns.md` ganhou VULN-002 com vetor CVSS 4.0 6.3 medium, evidência da auditoria do call site, justificativa técnica do "por que não fazemos override", mitigações compensatórias e gatilhos de re-revisão (próxima em 2026-07-28).
+
 ### Próximos itens (não nesta janela)
 
 - **Sentry SDK upgrade**: Resolve os 5 DEPRECATION warnings cosméticos do build (`sentry.client.config.ts` → `instrumentation-client.ts`, `autoInstrumentMiddleware` → `webpack.autoInstrumentMiddleware`, etc). Housekeeping; não bloqueia produção.

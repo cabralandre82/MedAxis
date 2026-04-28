@@ -31,6 +31,7 @@ VERIFIERS=(
   "check-audit-chain-integrity.mjs"
   "check-migration-ordering-integrity.mjs"
   "check-rbac-view-leak.sh"
+  "check-uuid-vulnerable-call.mjs"
 )
 
 EXIT_CODE=0
