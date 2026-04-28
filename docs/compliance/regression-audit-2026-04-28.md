@@ -148,7 +148,32 @@ Após Onda 1 + 2 implementadas:
   - [x] `npx tsc --noEmit` ✓
   - [x] `npx vitest run` ✓ **1951/1951 passing**
   - [x] `npx eslint` em todos arquivos modificados ✓ zero erros
-- [ ] Onda 3 — Multi-receita por produto, consultor-as-user, logs Vercel
-- [ ] Guardrails permanentes (`scripts/claims/check-rbac-view-leak.sh`, ESLint custom rule, trigger Supabase mirror)
+- [ ] Onda 3 — Multi-receita por produto, consultor-as-user
+- [x] **Guardrails permanentes — concluídos em 2026-04-28**
+  - [x] `scripts/claims/check-rbac-view-leak.sh` — varre superfícies pharmacy-facing por `price_current`/`unit_price`/`total_price`; aceita gates explícitos (import de `lib/orders/view-mode`, `isPharmacyAdmin`, `viewMode`, `// @rbac-view: ok`). 29 arquivos no scope, 0 leaks.
+  - [x] `scripts/claims/run-all.sh` — verifier integrado ao run weekly.
+  - [x] **Achados ao instalar o verifier (corrigidos no mesmo commit):**
+    - `components/dashboard/pharmacy-dashboard.tsx` — selecionava `total_price` na query de orders sem render. Field removido do `select`.
+    - `components/products/product-variants-manager.tsx` — exibia `price_current` de cada variante mesmo quando aberto pela farmácia. Adicionado `isPharmacyAdmin` que esconde preço de venda + margem + input de "Preço ao cliente".
+    - `app/(private)/orders/new/page.tsx`, `components/orders/new-order-form.tsx`, `components/orders/templates/save-template-modal.tsx`, `components/orders/templates/templates-list.tsx` — buyer-only (clínica/médico), marcados com `// @rbac-view: ok` + rationale.
+  - [x] `eslint-rules/no-raw-status-render.js` + `eslint.config.mjs` — proíbe `<*>.<…_status>.replace(/_/g, …)` em todo o repo. Erro, não warning.
+  - [x] **Achado ao ativar a rule:** `components/dashboard/doctor-dashboard.tsx` tinha exatamente o mesmo bug do clinic-dashboard pré-Onda 1 — corrigido com `statusLabel()` + `statusBadgeClass()`.
+  - [x] `tests/unit/eslint-no-raw-status-render.test.ts` — 13 casos (6 valid, 7 invalid) via ESLint `RuleTester`.
+  - [x] `supabase/migrations/060_profile_active_mirror_from_auth.sql` — trigger `AFTER UPDATE OF banned_until ON auth.users` espelha `profiles.is_active` automaticamente. Inclui backfill bounded e smoke test que aborta a migration se houver drift remanescente. Fecha a janela onde `services/users.ts#deactivateUser` falha em best-effort.
+  - [x] `tests/unit/migration-060-profile-active-mirror.test.ts` — 8 testes pinando shape do DDL (SECURITY DEFINER, search_path pinned, WHEN clause, semântica de `banned_until < now()`, smoke test, GRANT EXECUTE).
+  - [x] `npx tsc --noEmit` ✓
+  - [x] `npx vitest run` ✓ **1960/1960 passing**
+  - [x] `npx eslint .` ✓ zero erros (warnings pre-existentes em `scripts/claims/*.mjs`)
+  - [x] `./scripts/claims/run-all.sh` ✓ 16 verifiers passando, zero findings
+- [x] **Auditoria de logs Vercel — concluída em 2026-04-28**
+  - Build logs (deployment `dpl_5rP1ksc6yZhg2GP2HT7pzgVqEtE4`): apenas warnings cosméticos do SDK do Sentry (5×) — `DEPRECATION WARNING` para `sentry.client.config.ts` / `autoInstrumentMiddleware` / `autoInstrumentServerFunctions` e o aviso "Could not find onRequestError hook in instrumentation file". Tudo no Sentry SDK ≥9, não bloqueante. Tracked como Onda 3 housekeeping.
+  - Runtime logs históricos: Vercel não expõe via REST API pública (sem log drain configurado, sem plano Observability+). A fonte autoritativa para erros runtime é o **Sentry**, e os 2 issues reportados (S1 hydration `/orders/[id]`, S2 firebase `/dashboard` iOS) já foram fixados na Onda 1 com testes pinando o gate.
+
+### Próximos itens (não nesta janela)
+
+- **Onda 3** (épico):
+  - Item #11 — Multi-receita por produto (UI por item de pedido).
+  - Itens #16, #17 — Consultor como `profile`/usuário (login, dashboard próprio, emails).
+  - Sentry SDK upgrade (resolve os DEPRECATION warnings do build).
 
 Será atualizado on-the-fly conforme commits aterrissam.

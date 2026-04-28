@@ -30,6 +30,7 @@ VERIFIERS=(
   "check-alert-coverage.mjs"
   "check-audit-chain-integrity.mjs"
   "check-migration-ordering-integrity.mjs"
+  "check-rbac-view-leak.sh"
 )
 
 EXIT_CODE=0

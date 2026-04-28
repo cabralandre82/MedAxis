@@ -1,3 +1,6 @@
+// @rbac-view: ok — buyer-only feature (TemplatesList renders order
+// templates owned by a clinic; mounted from /orders for clinics, never
+// shown to pharmacies). `unit_price` here is the buyer's own price.
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'

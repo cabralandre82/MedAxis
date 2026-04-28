@@ -6,6 +6,7 @@ import { ShoppingBag, FileWarning } from 'lucide-react'
 import type { ProfileWithRoles } from '@/types'
 import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { statusLabel, statusBadgeClass } from '@/lib/orders/status-machine'
 
 export async function DoctorDashboard({ user }: { user: ProfileWithRoles }) {
   const supabase = await createClient()
@@ -79,8 +80,11 @@ export async function DoctorDashboard({ user }: { user: ProfileWithRoles }) {
                       {formatDate(order.created_at)} · {formatCurrency(order.total_price)}
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs">
-                    {order.order_status.replace(/_/g, ' ')}
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${statusBadgeClass(order.order_status)}`}
+                  >
+                    {statusLabel(order.order_status)}
                   </Badge>
                 </div>
               ))}

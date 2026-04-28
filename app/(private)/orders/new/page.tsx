@@ -1,3 +1,9 @@
+// @rbac-view: ok — buyer-only flow. Pharmacies do not create orders;
+// the page-level role gate at line ~54 explicitly branches on
+// CLINIC_ADMIN/DOCTOR and falls back to admin (see also issue #10 in
+// regression-audit-2026-04-28.md, where the "Novo pedido" button was
+// removed from /orders for pharmacy users). Selecting `price_current`
+// here is part of the catalogue rendered to the BUYER only.
 import { Metadata } from 'next'
 import { createAdminClient } from '@/lib/db/admin'
 

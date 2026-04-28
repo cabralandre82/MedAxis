@@ -25,6 +25,15 @@ interface ProductVariantsManagerProps {
   productId: string
   basePrice: number
   basePharmacyCost: number
+  /**
+   * When true, the component hides every reference to `price_current`
+   * (the sales price the buyer pays) — pharmacies must only see and
+   * edit `pharmacy_cost`. The new-variant form defaults the sales
+   * price to the parent product's `basePrice`. Mirrors the contract
+   * enforced by `lib/orders/view-mode.ts` and exercised by
+   * `scripts/claims/check-rbac-view-leak.sh`.
+   */
+  isPharmacyAdmin?: boolean
 }
 
 const COMMON_ATTRS = ['Concentração', 'Apresentação', 'Quantidade']
@@ -33,6 +42,7 @@ export function ProductVariantsManager({
   productId,
   basePrice,
   basePharmacyCost,
+  isPharmacyAdmin = false,
 }: ProductVariantsManagerProps) {
   const [variants, setVariants] = useState<Variant[]>([])
   const [expanded, setExpanded] = useState(false)
@@ -197,8 +207,9 @@ export function ProductVariantsManager({
                       </p>
                     )}
                     <p className="mt-0.5 text-xs text-gray-500">
-                      {formatCurrency(v.price_current)} · custo {formatCurrency(v.pharmacy_cost)} ·
-                      margem plataforma {formatCurrency(margin(v))}
+                      {isPharmacyAdmin
+                        ? `repasse ${formatCurrency(v.pharmacy_cost)}`
+                        : `${formatCurrency(v.price_current)} · custo ${formatCurrency(v.pharmacy_cost)} · margem plataforma ${formatCurrency(margin(v))}`}
                     </p>
                   </div>
                   <div className="ml-2 flex shrink-0 items-center gap-1">
@@ -250,27 +261,31 @@ export function ProductVariantsManager({
                       />
                     </div>
                   ))}
+                  {!isPharmacyAdmin && (
+                    <div>
+                      <Label className="text-xs">Preço ao cliente (R$)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={newVariant.price_current}
+                        onChange={(e) =>
+                          setNewVariant((v) => ({
+                            ...v,
+                            price_current: Number(e.target.value),
+                            platform_commission_value: Math.max(
+                              Number(e.target.value) - v.pharmacy_cost,
+                              0
+                            ),
+                          }))
+                        }
+                        className="mt-1 h-8 text-sm"
+                      />
+                    </div>
+                  )}
                   <div>
-                    <Label className="text-xs">Preço ao cliente (R$)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={newVariant.price_current}
-                      onChange={(e) =>
-                        setNewVariant((v) => ({
-                          ...v,
-                          price_current: Number(e.target.value),
-                          platform_commission_value: Math.max(
-                            Number(e.target.value) - v.pharmacy_cost,
-                            0
-                          ),
-                        }))
-                      }
-                      className="mt-1 h-8 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Custo farmácia (R$)</Label>
+                    <Label className="text-xs">
+                      {isPharmacyAdmin ? 'Repasse (R$)' : 'Custo farmácia (R$)'}
+                    </Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -288,14 +303,16 @@ export function ProductVariantsManager({
                       className="mt-1 h-8 text-sm"
                     />
                   </div>
-                  <div className="col-span-2 rounded border bg-white px-3 py-2 text-xs text-gray-500">
-                    Margem plataforma:{' '}
-                    <strong className="text-gray-800">
-                      {formatCurrency(
-                        Math.max(newVariant.price_current - newVariant.pharmacy_cost, 0)
-                      )}
-                    </strong>
-                  </div>
+                  {!isPharmacyAdmin && (
+                    <div className="col-span-2 rounded border bg-white px-3 py-2 text-xs text-gray-500">
+                      Margem plataforma:{' '}
+                      <strong className="text-gray-800">
+                        {formatCurrency(
+                          Math.max(newVariant.price_current - newVariant.pharmacy_cost, 0)
+                        )}
+                      </strong>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button

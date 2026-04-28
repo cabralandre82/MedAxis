@@ -724,6 +724,7 @@ export function ProductForm({
             productId={product.id}
             basePrice={watch('price_current') ?? 0}
             basePharmacyCost={watch('pharmacy_cost') ?? 0}
+            isPharmacyAdmin={isPharmacyAdmin}
           />
         </section>
       )}

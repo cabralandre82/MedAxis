@@ -1,3 +1,7 @@
+// @rbac-view: ok — order templates are a buyer-side feature (clinic
+// reuses past order layouts). Pharmacies don't see /orders/new and
+// therefore don't see this modal. `unit_price` here is sent to the
+// server purely for reconstructing the template payload.
 'use client'
 
 import { useState, useTransition } from 'react'

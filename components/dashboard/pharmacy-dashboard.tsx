@@ -84,11 +84,16 @@ export async function PharmacyDashboard({ user }: { user: ProfileWithRoles }) {
   // We deliberately fetch a wider set and let the in-process filter
   // below count what actually needs review — the network cost is one
   // extra column on `order_documents` and at most a few rows.
+  // We deliberately do NOT select `total_price` here. The pharmacy
+  // dashboard renders counters and labels — never currency for these
+  // orders — so pulling sales price across the wire is both useless and
+  // a latent RBAC-leak temptation. The view-leak verifier
+  // (`scripts/claims/check-rbac-view-leak.sh`) enforces this.
   const { data: orders } = myPharmacyId
     ? await admin
         .from('orders')
         .select(
-          `id, code, order_status, total_price, created_at,
+          `id, code, order_status, created_at,
            clinics(trade_name),
            order_documents(id, status)`
         )

@@ -1,3 +1,7 @@
+// @rbac-view: ok — buyer-only client form (only mounted by
+// app/(private)/orders/new/page.tsx, which gates by CLINIC_ADMIN/DOCTOR/admin).
+// Pharmacies do not create orders. `price_current` shown here is the
+// price the buyer is about to pay.
 'use client'
 
 import { useState } from 'react'
