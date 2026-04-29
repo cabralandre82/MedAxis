@@ -106,11 +106,12 @@ Não-exemplos (proibidos):
 
 ### 3.4 Cron e jobs
 
-| Métrica                | Tipo      | Labels          | Descrição                                                                        | Dashboard       |
-| ---------------------- | --------- | --------------- | -------------------------------------------------------------------------------- | --------------- |
-| `cron_run_total`       | counter   | `job`, `status` | Cada execução de cron (`status=success\|failed\|skipped_locked`)                 | platform-health |
-| `cron_duration_ms`     | histogram | `job`           | Tempo de cada cron                                                               | platform-health |
-| `cron_last_success_ts` | gauge     | `job`           | Timestamp Unix da última execução bem-sucedida (alvo: < 26 h para crons diários) | platform-health |
+| Métrica                       | Tipo      | Labels          | Descrição                                                                                                                                                                             | Dashboard       |
+| ----------------------------- | --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `cron_run_total`              | counter   | `job`, `status` | Cada execução de cron (`status=success\|failed\|skipped_locked`)                                                                                                                      | platform-health |
+| `cron_duration_ms`            | histogram | `job`           | Tempo de cada cron                                                                                                                                                                    | platform-health |
+| `cron_last_success_ts`        | gauge     | `job`           | Timestamp Unix da última execução bem-sucedida (alvo: < 26 h para crons diários)                                                                                                      | platform-health |
+| `payment_reminder_sent_total` | counter   | `kind`          | Lembretes de pagamento (boleto/PIX) enviados pelo cron `payment-reminders`. `kind` ∈ `D_MINUS_3\|D_MINUS_1\|D_DAY\|OVERDUE`. Substituiu os e-mails Asaas (silenciados em 2026-04-29). | platform-health |
 
 ### 3.5 Atomic RPCs (transações de domínio)
 

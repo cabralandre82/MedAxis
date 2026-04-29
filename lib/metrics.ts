@@ -243,6 +243,7 @@ export const Metrics = {
   WEBHOOK_DUPLICATE_TOTAL: 'webhook_duplicate_total',
   SMS_STATUS_EVENT_TOTAL: 'sms_status_event_total',
   CRON_RUN_TOTAL: 'cron_run_total',
+  PAYMENT_REMINDER_SENT_TOTAL: 'payment_reminder_sent_total',
   CRON_DURATION_MS: 'cron_duration_ms',
   CRON_LAST_SUCCESS_TS: 'cron_last_success_ts',
   CIRCUIT_BREAKER_STATE: 'circuit_breaker_state',

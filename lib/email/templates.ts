@@ -200,6 +200,112 @@ export function orderStatusUpdatedEmail(data: OrderStatusUpdatedEmailData): {
   return { subject, html: layout(subject, body) }
 }
 
+// ─── Payment reminders (replaces Asaas-side e-mails since 2026-04-29) ─
+
+export type PaymentReminderKind = 'D_MINUS_3' | 'D_MINUS_1' | 'D_DAY' | 'OVERDUE'
+
+export interface PaymentReminderEmailData {
+  orderCode: string
+  orderId: string
+  totalPrice: string
+  dueDate: string
+  /** Days from due date. Negative = before due, 0 = today, positive = overdue. */
+  daysFromDue: number
+  /** Customer-facing copy hint (e.g. clinic trade name) — appears in the salutation. */
+  recipientName?: string
+}
+
+const REMINDER_PROFILES: Record<
+  PaymentReminderKind,
+  {
+    subjectPrefix: string
+    badgeText: string
+    badgeColor: string
+    headline: string
+    leadCopy: (data: PaymentReminderEmailData) => string
+    ctaLabel: string
+  }
+> = {
+  D_MINUS_3: {
+    subjectPrefix: 'Lembrete: pagamento em 3 dias',
+    badgeText: 'Vence em 3 dias',
+    badgeColor: '#2563eb',
+    headline: 'Seu pedido está aguardando pagamento',
+    leadCopy: (d) =>
+      `O pagamento do pedido <strong>${d.orderCode}</strong> vence em <strong>${d.dueDate}</strong>. Você pode pagar agora pelo painel da Clinipharma — temos PIX, boleto e cartão prontos pra você.`,
+    ctaLabel: 'Ver formas de pagar',
+  },
+  D_MINUS_1: {
+    subjectPrefix: 'Pagamento vence amanhã',
+    badgeText: 'Vence amanhã',
+    badgeColor: '#d97706',
+    headline: 'Seu pagamento vence amanhã',
+    leadCopy: (d) =>
+      `O pedido <strong>${d.orderCode}</strong> vence em <strong>${d.dueDate}</strong> (amanhã). Para evitar atrasos no envio dos itens, finalize o pagamento agora — leva menos de um minuto pelo PIX.`,
+    ctaLabel: 'Pagar agora',
+  },
+  D_DAY: {
+    subjectPrefix: 'Pagamento vence hoje',
+    badgeText: 'Vence hoje',
+    badgeColor: '#d97706',
+    headline: 'Seu pagamento vence hoje',
+    leadCopy: (d) =>
+      `O pedido <strong>${d.orderCode}</strong> vence <strong>hoje (${d.dueDate})</strong>. Após o vencimento o boleto perde a validade e o pedido pode ser cancelado automaticamente. Pague agora pelo painel.`,
+    ctaLabel: 'Pagar agora',
+  },
+  OVERDUE: {
+    subjectPrefix: 'Pagamento em atraso',
+    badgeText: 'Em atraso',
+    badgeColor: '#dc2626',
+    headline: 'Pagamento em atraso',
+    leadCopy: (d) =>
+      `O pedido <strong>${d.orderCode}</strong> venceu em <strong>${d.dueDate}</strong> (${d.daysFromDue} dia${
+        d.daysFromDue === 1 ? '' : 's'
+      } de atraso). Para evitar o cancelamento automático, regularize o pagamento agora — você pode gerar um novo PIX ou boleto pelo painel.`,
+    ctaLabel: 'Regularizar pagamento',
+  },
+}
+
+/**
+ * Build the Clinipharma-branded payment reminder e-mail. Every cadence
+ * shares the same layout (same brand colors, same CTA target — the
+ * order detail page) and only the copy + badge change. Keeping them
+ * in one function makes it impossible to forget a button or send a
+ * 'D-1' subject with 'D-3' body.
+ *
+ * The CTA always lands on `/orders/<id>` because that's where our own
+ * UI exposes PIX / boleto / cartão — we deliberately do NOT link to
+ * the Asaas invoice URL directly. Linking to our page keeps branding
+ * tight and means a future "split payment" or "renegotiate" feature
+ * can be exposed on the same screen.
+ */
+export function paymentReminderEmail(
+  kind: PaymentReminderKind,
+  data: PaymentReminderEmailData
+): { subject: string; html: string } {
+  const profile = REMINDER_PROFILES[kind]
+  const subject = `${profile.subjectPrefix} — Pedido ${data.orderCode}`
+  const greeting = data.recipientName
+    ? paragraph(`Olá, <strong>${data.recipientName}</strong>!`)
+    : ''
+  const body = `
+    ${heading(profile.headline)}
+    ${badge(profile.badgeText, profile.badgeColor)}
+    ${greeting}
+    ${paragraph(profile.leadCopy(data))}
+    ${infoTable([
+      ['Pedido', data.orderCode],
+      ['Valor', data.totalPrice],
+      ['Vencimento', data.dueDate],
+    ])}
+    ${ctaButton(profile.ctaLabel, `${APP_URL}/orders/${data.orderId}`)}
+    ${paragraph(
+      `<span style="font-size:13px;color:#64748b;">Se já pagou, pode ignorar este e-mail — a confirmação chega automaticamente assim que o banco compensa.</span>`
+    )}
+  `
+  return { subject, html: layout(subject, body) }
+}
+
 export interface ConsultantTransferEmailData {
   consultantName: string
   totalAmount: string
