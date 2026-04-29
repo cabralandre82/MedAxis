@@ -36,6 +36,7 @@ describe('CRITICAL_TYPES', () => {
       'ORDER_CREATED',
       'ORDER_STATUS',
       'PAYMENT_CONFIRMED',
+      'PAYMENT_REMINDER',
       'DOCUMENT_UPLOADED',
       'SUPPORT_REPLY',
       'SUPPORT_RESOLVED',
