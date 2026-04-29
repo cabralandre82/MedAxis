@@ -247,7 +247,6 @@ function parseTableColumns(sql, table) {
   }
   return cols;
 }
-const auditLogsCols = parseTableColumns(migSrc, 'audit_logs');
 const checkpointCols = parseTableColumns(migSrc, 'audit_chain_checkpoints');
 
 // 2e. CHECK values for audit_chain_checkpoints.reason.
