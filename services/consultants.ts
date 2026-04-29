@@ -18,6 +18,39 @@ import { emitirNFSeParaConsultor } from '@/services/nfse'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? 'https://clinipharma.com.br'
 
 /**
+ * Global consultant commission rate, in percent.
+ *
+ * Migration 005 dropped `sales_consultants.commission_rate` and moved
+ * the value to `app_settings` under the key `consultant_commission_rate`
+ * (rate is now uniform across all consultants — product decision). The
+ * previous code path kept reading `consultant.commission_rate` from
+ * `sales_consultants` even after the column was gone, producing
+ * `42703 undefined_column` on every create / clinic-link / transfer
+ * email path. This helper is the single read site for the rate; if a
+ * future product policy reintroduces per-consultant rates, the migration
+ * comes here.
+ *
+ * Returns 5 (percent) when the setting row is missing.
+ */
+async function getGlobalConsultantRate(
+  adminClient: ReturnType<typeof createAdminClient>
+): Promise<number> {
+  try {
+    const { data } = await adminClient
+      .from('app_settings')
+      .select('value_json')
+      .eq('key', 'consultant_commission_rate')
+      .single()
+    const raw = data?.value_json
+    if (raw === null || raw === undefined) return 5
+    const parsed = Number(typeof raw === 'string' ? raw : JSON.stringify(raw))
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : 5
+  } catch {
+    return 5
+  }
+}
+
+/**
  * Maps a PostgREST/Postgres error from `sales_consultants.insert` into
  * a Portuguese, actionable message. The operator triggering this is
  * always a SUPER_ADMIN, so the message can name the constraint /
@@ -136,7 +169,12 @@ export async function createConsultant(
     const { data: consultant, error } = await adminClient
       .from('sales_consultants')
       .insert({ ...parsed.data, status: 'ACTIVE' })
-      .select('id, full_name, email, commission_rate')
+      // `commission_rate` USED to live on `sales_consultants` until
+      // migration 005 hoisted it to `app_settings`. Selecting the
+      // dropped column was returning `42703 undefined_column` — that
+      // was the actual root cause of the 2026-04-29 "Erro ao criar
+      // consultor" toast. Rate is read from app_settings further down.
+      .select('id, full_name, email')
       .single()
 
     if (error) {
@@ -247,18 +285,21 @@ export async function createConsultant(
 
       // Welcome email with password-set link — non-blocking
       try {
-        const { data: linkData } = await adminClient.auth.admin.generateLink({
-          type: 'recovery',
-          email: parsed.data.email,
-          options: { redirectTo: `${APP_URL}/auth/callback?type=recovery` },
-        })
+        const [{ data: linkData }, globalRate] = await Promise.all([
+          adminClient.auth.admin.generateLink({
+            type: 'recovery',
+            email: parsed.data.email,
+            options: { redirectTo: `${APP_URL}/auth/callback?type=recovery` },
+          }),
+          getGlobalConsultantRate(adminClient),
+        ])
         const inviteUrl = linkData?.properties?.hashed_token
           ? `${APP_URL}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery`
           : `${APP_URL}/login`
         const tmpl = consultantWelcomeEmail({
           consultantName: parsed.data.full_name,
           inviteUrl,
-          commissionRate: String(consultant.commission_rate ?? 5),
+          commissionRate: String(globalRate),
         })
         await sendEmail({ to: parsed.data.email, ...tmpl })
       } catch (emailErr) {
@@ -349,7 +390,17 @@ export async function updateConsultantStatus(
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id)
 
-    if (error) return { error: 'Erro ao atualizar status' }
+    if (error) {
+      logger.error('[updateConsultantStatus] sales_consultants.update failed', {
+        consultantId: id,
+        nextStatus: status,
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
+      return { error: friendlyConsultantInsertError(error) }
+    }
 
     await createAuditLog({
       actorUserId: actor.id,
@@ -366,6 +417,183 @@ export async function updateConsultantStatus(
   } catch (err) {
     if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
     return { error: 'Erro interno' }
+  }
+}
+
+// ─── Delete ────────────────────────────────────────────────────────────────
+
+/**
+ * Hard-deletes a consultant record + the associated auth user when safe.
+ *
+ * Why this exists: the operator surface had a status switcher
+ * (ACTIVE / INACTIVE / SUSPENDED) but no way to remove a mistakenly-
+ * created record. The "consultor teste" entry sat there indefinitely
+ * because nothing in the UI could clear it.
+ *
+ * Safety rails (deletion is irreversible):
+ *
+ *   1. Refuses if there is ANY commission row (`consultant_commissions`)
+ *      or transfer row (`consultant_transfers`) tied to this consultant.
+ *      Those tables drive financial reporting and tax/fiscal retention
+ *      (LGPD Art. 16, II — obrigação legal de conservação fiscal). The
+ *      operator must use status='INACTIVE' instead, which keeps the
+ *      ledger intact.
+ *   2. Unlinks linked clinics first (`clinics.consultant_id = NULL`).
+ *      The FK already does ON DELETE SET NULL, but doing it explicitly
+ *      lets us audit-log the unlinks.
+ *   3. Deletes the auth.users row only if the linked user has
+ *      `SALES_CONSULTANT` as their ONLY role. If they have another
+ *      role (CLINIC_ADMIN, DOCTOR, etc) they continue to exist in
+ *      auth — we just sever the consultant link.
+ *
+ * Audit-log: writes `PROFILE` / `DELETE` action with the deleted
+ * snapshot in `oldValues` so a subsequent investigation can recover the
+ * minimum identifying fields.
+ */
+export async function deleteConsultant(
+  id: string
+): Promise<{ error?: string; deletedAuthUser?: boolean; unlinkedClinics?: number }> {
+  try {
+    const actor = await requireRole(['SUPER_ADMIN'])
+    const adminClient = createAdminClient()
+
+    const { data: consultant, error: fetchErr } = await adminClient
+      .from('sales_consultants')
+      .select('id, full_name, email, cnpj, user_id, status')
+      .eq('id', id)
+      .single()
+    if (fetchErr || !consultant) {
+      return { error: 'Consultor não encontrado.' }
+    }
+
+    const [{ count: commissionCount }, { count: transferCount }] = await Promise.all([
+      adminClient
+        .from('consultant_commissions')
+        .select('id', { head: true, count: 'exact' })
+        .eq('consultant_id', id),
+      adminClient
+        .from('consultant_transfers')
+        .select('id', { head: true, count: 'exact' })
+        .eq('consultant_id', id),
+    ])
+    const totalFinancial = (commissionCount ?? 0) + (transferCount ?? 0)
+    if (totalFinancial > 0) {
+      return {
+        error:
+          `Esse consultor tem ${commissionCount ?? 0} comissão(ões) e ${transferCount ?? 0} repasse(s) registrado(s). ` +
+          'Por obrigação fiscal e LGPD esses dados devem ser preservados — use o status "Inativo" em vez de excluir.',
+      }
+    }
+
+    const { data: clinicsForUnlink, error: clinicsFetchErr } = await adminClient
+      .from('clinics')
+      .select('id')
+      .eq('consultant_id', id)
+    if (clinicsFetchErr) {
+      logger.error('[deleteConsultant] failed to enumerate linked clinics', {
+        consultantId: id,
+        error: clinicsFetchErr,
+      })
+      return { error: 'Erro ao verificar clínicas vinculadas. Tente novamente.' }
+    }
+    const linkedClinicIds = (clinicsForUnlink ?? []).map((c) => c.id)
+    if (linkedClinicIds.length > 0) {
+      const { error: unlinkErr } = await adminClient
+        .from('clinics')
+        .update({ consultant_id: null, updated_at: new Date().toISOString() })
+        .in('id', linkedClinicIds)
+      if (unlinkErr) {
+        logger.error('[deleteConsultant] clinics unlink failed', {
+          consultantId: id,
+          clinicIds: linkedClinicIds,
+          code: unlinkErr.code,
+          message: unlinkErr.message,
+        })
+        return { error: friendlyConsultantInsertError(unlinkErr) }
+      }
+    }
+
+    const { error: deleteErr } = await adminClient.from('sales_consultants').delete().eq('id', id)
+    if (deleteErr) {
+      logger.error('[deleteConsultant] sales_consultants.delete failed', {
+        consultantId: id,
+        code: deleteErr.code,
+        message: deleteErr.message,
+        details: deleteErr.details,
+        hint: deleteErr.hint,
+      })
+      return { error: friendlyConsultantInsertError(deleteErr) }
+    }
+
+    let deletedAuthUser = false
+    if (consultant.user_id) {
+      try {
+        const { data: roleRows, error: roleErr } = await adminClient
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', consultant.user_id)
+        if (roleErr) {
+          logger.warn('[deleteConsultant] could not enumerate user_roles', {
+            userId: consultant.user_id,
+            error: roleErr,
+          })
+        } else {
+          const roles = (roleRows ?? []).map((r) => r.role)
+          const onlySalesConsultant = roles.length === 1 && roles[0] === 'SALES_CONSULTANT'
+          if (onlySalesConsultant) {
+            await adminClient
+              .from('user_roles')
+              .delete()
+              .eq('user_id', consultant.user_id)
+              .eq('role', 'SALES_CONSULTANT')
+            const { error: authDeleteErr } = await adminClient.auth.admin.deleteUser(
+              consultant.user_id
+            )
+            if (authDeleteErr) {
+              logger.warn('[deleteConsultant] auth.admin.deleteUser failed', {
+                userId: consultant.user_id,
+                error: authDeleteErr,
+              })
+            } else {
+              deletedAuthUser = true
+            }
+          } else if (roles.length > 1) {
+            await adminClient
+              .from('user_roles')
+              .delete()
+              .eq('user_id', consultant.user_id)
+              .eq('role', 'SALES_CONSULTANT')
+          }
+        }
+      } catch (authCleanupErr) {
+        logger.warn('[deleteConsultant] auth user cleanup threw', {
+          userId: consultant.user_id,
+          error: authCleanupErr,
+        })
+      }
+    }
+
+    await createAuditLog({
+      actorUserId: actor.id,
+      actorRole: actor.roles[0],
+      entityType: AuditEntity.PROFILE,
+      entityId: id,
+      action: AuditAction.DELETE,
+      oldValues: {
+        ...consultant,
+        entity: 'sales_consultant',
+        unlinked_clinics: linkedClinicIds.length,
+        deleted_auth_user: deletedAuthUser,
+      },
+    })
+
+    revalidatePath('/consultants')
+    revalidatePath('/users')
+    return { unlinkedClinics: linkedClinicIds.length, deletedAuthUser }
+  } catch (err) {
+    if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }
+    logger.error('deleteConsultant error:', { error: err })
+    return { error: 'Erro interno ao excluir consultor.' }
   }
 }
 
@@ -424,20 +652,21 @@ export async function assignConsultantToClinic(
     // block the assignment write itself.
     if (consultantId) {
       try {
-        const [{ data: consultant }, { data: clinic }] = await Promise.all([
+        const [{ data: consultant }, { data: clinic }, globalRate] = await Promise.all([
           adminClient
             .from('sales_consultants')
-            .select('email, full_name, commission_rate')
+            .select('email, full_name')
             .eq('id', consultantId)
             .single(),
           adminClient.from('clinics').select('trade_name').eq('id', clinicId).single(),
+          getGlobalConsultantRate(adminClient),
         ])
 
         if (consultant?.email && clinic?.trade_name) {
           const tmpl = consultantClinicLinkedEmail({
             consultantName: consultant.full_name,
             clinicName: clinic.trade_name,
-            commissionRate: String(consultant.commission_rate ?? 5),
+            commissionRate: String(globalRate),
           })
           await sendEmail({ to: consultant.email, ...tmpl })
         }

@@ -110,6 +110,7 @@ export default async function ConsultantDetailPage({
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
           <ConsultantStatusActions
             consultantId={c.id}
+            consultantName={c.full_name}
             currentStatus={c.status as 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'}
           />
         </div>

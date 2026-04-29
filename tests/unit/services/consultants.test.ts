@@ -8,13 +8,19 @@ import {
   updateConsultantStatus,
   assignConsultantToClinic,
   registerConsultantTransfer,
+  deleteConsultant,
 } from '@/services/consultants'
 
 vi.mock('@/lib/db/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/rbac', () => ({ requireRole: vi.fn() }))
 vi.mock('@/lib/audit', () => ({
   createAuditLog: vi.fn().mockResolvedValue(undefined),
-  AuditAction: { CREATE: 'CREATE', UPDATE: 'UPDATE', TRANSFER_REGISTERED: 'TRANSFER_REGISTERED' },
+  AuditAction: {
+    CREATE: 'CREATE',
+    UPDATE: 'UPDATE',
+    DELETE: 'DELETE',
+    TRANSFER_REGISTERED: 'TRANSFER_REGISTERED',
+  },
   AuditEntity: { PROFILE: 'PROFILE', CLINIC: 'CLINIC', TRANSFER: 'TRANSFER' },
 }))
 vi.mock('@/lib/validators', () => ({
@@ -359,7 +365,12 @@ describe('updateConsultantStatus', () => {
     } as unknown as ReturnType<typeof adminModule.createAdminClient>)
 
     const result = await updateConsultantStatus('cons-1', 'ACTIVE')
-    expect(result.error).toBe('Erro ao atualizar status')
+    // The status updater now goes through the same friendly-error
+    // helper as create/update — operators were getting "Erro ao
+    // atualizar status" with no diagnostic. We pin that an error
+    // came back AND that it carries the diagnostic detail.
+    expect(result.error).toBeDefined()
+    expect(result.error).toMatch(/fail/)
   })
 })
 
@@ -554,6 +565,242 @@ describe('registerConsultantTransfer', () => {
   it('returns Sem permissão when FORBIDDEN', async () => {
     vi.mocked(rbacModule.requireRole).mockRejectedValue(new Error('FORBIDDEN'))
     const result = await registerConsultantTransfer('cons-1', ['comm-1'], 'REF-001')
+    expect(result.error).toBe('Sem permissão')
+  })
+})
+
+describe('deleteConsultant', () => {
+  function buildAdminClient(opts: {
+    consultant: Record<string, unknown> | null
+    fetchErr?: { message: string } | null
+    commissionCount: number
+    transferCount: number
+    linkedClinics?: Array<{ id: string }>
+    deleteErr?: { code?: string; message: string } | null
+    userRoles?: Array<{ role: string }>
+    deleteAuthErr?: { message: string } | null
+  }) {
+    const consultantSingle = vi.fn().mockResolvedValue({
+      data: opts.consultant,
+      error: opts.fetchErr ?? null,
+    })
+    const consultantSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ single: consultantSingle }),
+    })
+
+    const commissionsCount = vi
+      .fn()
+      .mockResolvedValue({ count: opts.commissionCount, data: null, error: null })
+    const transfersCount = vi
+      .fn()
+      .mockResolvedValue({ count: opts.transferCount, data: null, error: null })
+    const commissionsSelect = vi.fn().mockReturnValue({ eq: commissionsCount })
+    const transfersSelect = vi.fn().mockReturnValue({ eq: transfersCount })
+
+    const clinicsFetch = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: opts.linkedClinics ?? [], error: null }),
+    })
+    const clinicsUnlinkUpdate = vi.fn().mockReturnValue({
+      in: vi.fn().mockResolvedValue({ error: null }),
+    })
+
+    const consultantDeleteEq = vi.fn().mockResolvedValue({ error: opts.deleteErr ?? null })
+    const consultantDelete = vi.fn().mockReturnValue({ eq: consultantDeleteEq })
+
+    const userRolesSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: opts.userRoles ?? [], error: null }),
+    })
+    const userRolesDeleteEq = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    })
+    const userRolesDelete = vi.fn().mockReturnValue({ eq: userRolesDeleteEq })
+
+    let consultantHits = 0
+    const fromMock = vi.fn().mockImplementation((table: string) => {
+      if (table === 'sales_consultants') {
+        consultantHits++
+        // First call is the load (.select).
+        // Second call is the .delete().
+        if (consultantHits === 1) {
+          return { select: consultantSelect }
+        }
+        return { delete: consultantDelete }
+      }
+      if (table === 'consultant_commissions') return { select: commissionsSelect }
+      if (table === 'consultant_transfers') return { select: transfersSelect }
+      if (table === 'clinics') return { select: clinicsFetch, update: clinicsUnlinkUpdate }
+      if (table === 'user_roles') return { select: userRolesSelect, delete: userRolesDelete }
+      return makeQueryBuilder(null, null)
+    })
+
+    return {
+      admin: {
+        from: fromMock,
+        auth: {
+          admin: {
+            deleteUser: vi.fn().mockResolvedValue({ error: opts.deleteAuthErr ?? null }),
+          },
+        },
+      },
+      consultantSingle,
+      clinicsUnlinkUpdate,
+    }
+  }
+
+  it('deletes a clean consultant (no FK refs, no auth user)', async () => {
+    const stub = buildAdminClient({
+      consultant: {
+        id: 'cons-1',
+        full_name: 'Teste',
+        email: 'c@test.com',
+        cnpj: '11222333000181',
+        user_id: null,
+        status: 'ACTIVE',
+      },
+      commissionCount: 0,
+      transferCount: 0,
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await deleteConsultant('cons-1')
+    expect(result.error).toBeUndefined()
+    expect(result.unlinkedClinics).toBe(0)
+    expect(result.deletedAuthUser).toBe(false)
+  })
+
+  it('refuses delete when commissions exist (LGPD/fiscal retention)', async () => {
+    const stub = buildAdminClient({
+      consultant: {
+        id: 'cons-1',
+        full_name: 'X',
+        email: 'x@x.com',
+        user_id: null,
+        cnpj: 'x',
+        status: 'ACTIVE',
+      },
+      commissionCount: 3,
+      transferCount: 0,
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await deleteConsultant('cons-1')
+    expect(result.error).toMatch(/3 comissão/)
+    expect(result.error).toMatch(/Inativo/)
+  })
+
+  it('refuses delete when transfers exist', async () => {
+    const stub = buildAdminClient({
+      consultant: {
+        id: 'cons-1',
+        full_name: 'X',
+        email: 'x@x.com',
+        user_id: null,
+        cnpj: 'x',
+        status: 'ACTIVE',
+      },
+      commissionCount: 0,
+      transferCount: 2,
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await deleteConsultant('cons-1')
+    expect(result.error).toMatch(/2 repasse/)
+  })
+
+  it('unlinks linked clinics before deleting', async () => {
+    const stub = buildAdminClient({
+      consultant: {
+        id: 'cons-1',
+        full_name: 'X',
+        email: 'x@x.com',
+        user_id: null,
+        cnpj: 'x',
+        status: 'ACTIVE',
+      },
+      commissionCount: 0,
+      transferCount: 0,
+      linkedClinics: [{ id: 'clinic-a' }, { id: 'clinic-b' }],
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await deleteConsultant('cons-1')
+    expect(result.error).toBeUndefined()
+    expect(result.unlinkedClinics).toBe(2)
+    expect(stub.clinicsUnlinkUpdate).toHaveBeenCalledOnce()
+  })
+
+  it('removes auth user only when SALES_CONSULTANT is the only role', async () => {
+    const stub = buildAdminClient({
+      consultant: {
+        id: 'cons-1',
+        full_name: 'X',
+        email: 'x@x.com',
+        cnpj: 'x',
+        status: 'ACTIVE',
+        user_id: 'user-1',
+      },
+      commissionCount: 0,
+      transferCount: 0,
+      userRoles: [{ role: 'SALES_CONSULTANT' }],
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await deleteConsultant('cons-1')
+    expect(result.error).toBeUndefined()
+    expect(result.deletedAuthUser).toBe(true)
+  })
+
+  it('keeps auth user when consultant wears another hat (multi-role)', async () => {
+    const stub = buildAdminClient({
+      consultant: {
+        id: 'cons-1',
+        full_name: 'X',
+        email: 'x@x.com',
+        cnpj: 'x',
+        status: 'ACTIVE',
+        user_id: 'user-1',
+      },
+      commissionCount: 0,
+      transferCount: 0,
+      userRoles: [{ role: 'SALES_CONSULTANT' }, { role: 'CLINIC_ADMIN' }],
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await deleteConsultant('cons-1')
+    expect(result.error).toBeUndefined()
+    expect(result.deletedAuthUser).toBe(false)
+  })
+
+  it('returns "Consultor não encontrado" when consultant does not exist', async () => {
+    const stub = buildAdminClient({
+      consultant: null,
+      fetchErr: { message: 'PGRST116' },
+      commissionCount: 0,
+      transferCount: 0,
+    })
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      stub.admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await deleteConsultant('does-not-exist')
+    expect(result.error).toMatch(/não encontrado/)
+  })
+
+  it('returns Sem permissão when FORBIDDEN', async () => {
+    vi.mocked(rbacModule.requireRole).mockRejectedValue(new Error('FORBIDDEN'))
+    const result = await deleteConsultant('cons-1')
     expect(result.error).toBe('Sem permissão')
   })
 })

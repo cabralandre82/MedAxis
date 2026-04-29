@@ -10,12 +10,25 @@ interface ConsultantDashboardProps {
 export async function ConsultantDashboard({ user }: ConsultantDashboardProps) {
   const adminClient = createAdminClient()
 
-  // Find consultant record linked to this user
-  const { data: consultant } = await adminClient
-    .from('sales_consultants')
-    .select('id, full_name, commission_rate')
-    .eq('user_id', user.id)
-    .single()
+  // `commission_rate` was dropped from `sales_consultants` in migration
+  // 005 — it is now a single global value in `app_settings`. Reading
+  // the dropped column was returning 42703 undefined_column on the
+  // dashboard load. Pull the rate from `app_settings` instead.
+  const [{ data: consultant }, { data: rateSetting }] = await Promise.all([
+    adminClient.from('sales_consultants').select('id, full_name').eq('user_id', user.id).single(),
+    adminClient
+      .from('app_settings')
+      .select('value_json')
+      .eq('key', 'consultant_commission_rate')
+      .single(),
+  ])
+
+  const commissionRate = (() => {
+    const raw = rateSetting?.value_json
+    if (raw === null || raw === undefined) return 5
+    const parsed = Number(typeof raw === 'string' ? raw : JSON.stringify(raw))
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : 5
+  })()
 
   if (!consultant) {
     return (
@@ -86,7 +99,7 @@ export async function ConsultantDashboard({ user }: ConsultantDashboardProps) {
           Olá, {consultant.full_name.split(' ')[0]}
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Sua taxa de comissão: <strong>{consultant.commission_rate}%</strong> sobre cada pedido
+          Sua taxa de comissão: <strong>{commissionRate}%</strong> sobre cada pedido
         </p>
       </div>
 
