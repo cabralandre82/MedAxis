@@ -111,12 +111,50 @@ export async function generateAsaasChargeForOrder(orderId: string): Promise<Asaa
     .maybeSingle()
 
   if (existingPayment?.asaas_payment_id && existingPayment.status === 'PENDING') {
+    // Self-heal a missing PIX QR. Asaas returns 4xx on `pixQrCode` when
+    // the merchant has no Pix key registered at charge-creation time;
+    // we swallow that failure (boleto + card still work) and persist
+    // `asaas_pix_qr_code = NULL`. If the merchant later registers a
+    // key, every `PENDING` charge becomes eligible for QR retrieval —
+    // but the row is frozen until somebody re-triggers the helper.
+    // Hitting Asaas once in this branch closes that gap whenever the
+    // clinic clicks "Gerar cobrança" again or document approval
+    // re-fires the auto-trigger after a Pix-key registration.
+    // Backfilled in production for order CP-2026-000015 via the
+    // `scripts/refresh-pix-qr.ts` companion (2026-04-29 incident).
+    let pixQrCode = existingPayment.asaas_pix_qr_code
+    let pixCopyPaste = existingPayment.asaas_pix_copy_paste
+    if (!pixQrCode) {
+      try {
+        const pix = await getPixQrCode(existingPayment.asaas_payment_id)
+        pixQrCode = pix.encodedImage
+        pixCopyPaste = pix.payload
+        await admin
+          .from('payments')
+          .update({
+            asaas_pix_qr_code: pixQrCode,
+            asaas_pix_copy_paste: pixCopyPaste,
+          })
+          .eq('id', existingPayment.id)
+      } catch (err) {
+        // Still missing — Asaas merchant likely has no Pix key yet.
+        // Leave the row alone; boleto + card invoice link are enough
+        // for the clinic to settle. Log so an operator notices the
+        // recurring failure pattern (e.g. forgotten Pix key on a new
+        // tenant onboarding) without crashing the request.
+        logger.warn('[generateAsaasCharge] PIX QR refresh failed on idempotent path', {
+          orderId,
+          asaasPaymentId: existingPayment.asaas_payment_id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
     return {
       ok: true,
       asaasPaymentId: existingPayment.asaas_payment_id,
       invoiceUrl: existingPayment.asaas_invoice_url,
-      pixQrCode: existingPayment.asaas_pix_qr_code,
-      pixCopyPaste: existingPayment.asaas_pix_copy_paste,
+      pixQrCode,
+      pixCopyPaste,
       boletoUrl: existingPayment.asaas_boleto_url,
       dueDate: existingPayment.payment_due_date ?? undefined,
     }
