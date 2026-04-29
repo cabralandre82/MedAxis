@@ -169,7 +169,7 @@ if (!fs.existsSync(dsarLibPath)) {
   const tsKinds = extractUnion(dsarLib, 'DsarKind');
   const tsStatuses = extractUnion(dsarLib, 'DsarStatus');
 
-  function compareSets(a, b, labelA, labelB) {
+  function compareSets(a, b, _labelA, _labelB) {
     const setA = new Set(a); const setB = new Set(b);
     const missingInB = a.filter(x => !setB.has(x));
     const extraInB  = b.filter(x => !setA.has(x));

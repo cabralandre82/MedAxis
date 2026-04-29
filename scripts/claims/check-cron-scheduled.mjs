@@ -78,7 +78,7 @@ const duplicatePaths = [];
 
 for (let i = 0; i < scheduled.length; i++) {
   const entry = scheduled[i];
-  const { path: cronPath, schedule } = entry;
+  const { path: cronPath } = entry;
 
   if (typeof cronPath !== 'string' || !cronPath) {
     fail('crons[i].path is a non-empty string',

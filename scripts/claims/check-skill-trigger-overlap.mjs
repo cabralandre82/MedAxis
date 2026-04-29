@@ -125,11 +125,9 @@ for (const s of skills) {
 }
 
 // ── 3. Flag any key claimed by ≥ 2 distinct skills ────────────────────────
-let overlapFound = false;
 for (const [norm, claimers] of index.entries()) {
   const distinctSkills = [...new Set(claimers.map(c => c.skill))];
   if (distinctSkills.length >= 2) {
-    overlapFound = true;
     const examples = claimers
       .map(c => `"${c.raw}" in ${c.skill}`)
       .join(', ');

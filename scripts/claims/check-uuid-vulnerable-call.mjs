@@ -124,8 +124,6 @@ const files = SCAN_DIRS.flatMap((d) =>
 
 let scanned = 0;
 
-const ARG_RE_3PLUS = /\(([^()]*?,[^()]*?,[^()]*?)\)/; // 3+ args, no nested parens
-
 // Helper: given the file source, return a list of local
 // identifiers that resolve to uuid.v3 / v5 / v6.
 function resolveVulnerableBindings(src) {
