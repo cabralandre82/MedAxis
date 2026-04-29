@@ -108,11 +108,36 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       disposition: r.disposition ?? 'enforce',
     })
 
-    // logger.warn() is mirrored into `public.server_logs` (90-day
-    // retention via RP-09). We deliberately do NOT include the
-    // `originalPolicy` in the persisted log — it's verbose and the
-    // current policy is recoverable from `lib/security/csp.ts`.
-    logger.warn('csp_violation', {
+    // Classify whether this violation is actionable on our end.
+    //
+    // Two violations dominate the noise floor and are NOT caused by
+    // app code:
+    //
+    //   1. `style-src-elem 'inline'` from /_next/static/chunks/*.js —
+    //      Next.js's CSS streaming injects unnonced <style> blocks
+    //      into the streamed HTML; even with `'unsafe-inline'` in
+    //      the directive, CSP3 ignores it whenever `'nonce-XXX'` is
+    //      also present (the nonce promotes the policy to strict).
+    //   2. `script-src 'eval'` from the same chunk path — third-party
+    //      libs bundled by Next use `new Function()` / `eval` as part
+    //      of their normal operation (sourcemap decoders, JSON
+    //      schema compilers, etc).
+    //
+    // Both are well-documented limitations of Next.js + nonce CSP
+    // and would require a bundler-level fix that is out of scope
+    // for the runtime. We keep the metric counters firing so the
+    // dashboards still show the rate, but log the line at INFO so
+    // the operator's "warn/error" feed is not drowned in noise that
+    // demands no action. Anything *outside* of /_next/static/chunks
+    // (e.g. an inline style we shipped, an external script that
+    // showed up in dev-tools) still warns — that one IS our bug.
+    const fromVendorChunk = (r.sourceFile ?? '').includes('/_next/static/chunks/')
+    const isKnownVendorNoise =
+      fromVendorChunk &&
+      ((r.directive === 'style-src-elem' && r.blockedHost === 'inline') ||
+        (r.directive === 'script-src' && r.blockedHost === 'eval'))
+
+    const payload = {
       module: 'security.csp',
       action: 'csp_violation',
       directive: r.directive,
@@ -134,7 +159,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // retention window.
       reporter_ip: ip,
       user_agent: userAgent,
-    })
+      noise_class: isKnownVendorNoise ? 'next_vendor_bundle' : undefined,
+    }
+
+    if (isKnownVendorNoise) {
+      logger.info('csp_violation', payload)
+    } else {
+      logger.warn('csp_violation', payload)
+    }
   }
 
   return new NextResponse(null, { status: 204 })

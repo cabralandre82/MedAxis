@@ -139,27 +139,18 @@ function makeInMemoryLimiter(windowMs: number, max: number): RateLimiter {
  */
 async function makeRedisLimiter(windowMs: number, max: number): Promise<RateLimiter> {
   try {
-    // Assign the specifiers to variables so TS cannot statically
-    // resolve them. This keeps `tsc --noEmit` green even when the
-    // `@upstash/*` packages aren't listed in package.json (they're
-    // a production opt-in, not a default dependency). At runtime
-    // the modules are only actually loaded when the Redis env
-    // vars are set.
-    const rlSpecifier = '@upstash/ratelimit'
-    const redisSpecifier = '@upstash/redis'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rlMod: any = await (
-      new Function('s', 'return import(s)') as (s: string) => Promise<unknown>
-    )(rlSpecifier).catch(() => null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const redisMod: any = await (
-      new Function('s', 'return import(s)') as (s: string) => Promise<unknown>
-    )(redisSpecifier).catch(() => null)
-    if (!rlMod || !redisMod) {
-      throw new Error('upstash packages not installed')
-    }
-    const { Ratelimit } = rlMod
-    const { Redis } = redisMod
+    // The packages now live in package.json (production dep, not
+    // optional). Use plain `await import()` so the bundler can
+    // resolve them statically — the historical `new Function('s',
+    // 'return import(s)')` workaround was failing in Vercel's
+    // production runtime ("Upstash packages not available, using
+    // in-memory fallback" warn on every request after deploy
+    // 2026-04-29) because the dynamic resolver could not find the
+    // module path at runtime even when the package was bundled.
+    const [{ Ratelimit }, { Redis }] = await Promise.all([
+      import('@upstash/ratelimit'),
+      import('@upstash/redis'),
+    ])
 
     const ratelimit = new Ratelimit({
       redis: Redis.fromEnv(),
@@ -175,9 +166,15 @@ async function makeRedisLimiter(windowMs: number, max: number): Promise<RateLimi
         return { ok: success, remaining, resetAt: Number(reset), windowMs, limit: max }
       },
     }
-  } catch {
-    logger.warn('Upstash packages not available, using in-memory fallback', {
+  } catch (err) {
+    // Now that the packages are first-class deps, hitting this branch
+    // is a genuine misconfiguration (bundler stripped them, env vars
+    // pointing at an unreachable Redis, etc). Surface the underlying
+    // error in the log line — silent fallback was masking the cause.
+    logger.warn('Upstash limiter init failed — falling back to in-memory', {
       module: 'rate-limit',
+      errorMessage: err instanceof Error ? err.message : String(err),
+      errorName: err instanceof Error ? err.name : undefined,
     })
     return makeInMemoryLimiter(windowMs, max)
   }

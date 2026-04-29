@@ -185,4 +185,78 @@ describe('POST /api/csp-report — handler', () => {
     expect(res.status).toBe(204)
     expect(res.headers.get('Allow')).toContain('POST')
   })
+
+  // Bug 2026-04-29: every page load was generating warn-level
+  // `csp_violation` lines for `style-src-elem inline` / `script-src
+  // eval` originating from /_next/static/chunks/*.js (Next.js streaming
+  // CSS + bundled vendor libs that use eval). Those are not actionable
+  // for us — the bundler shape is fixed by Next/Webpack. The handler
+  // now classifies them as INFO instead of WARN so the operator's
+  // warn/error feed isn't drowned in unactionable noise. Real
+  // violations (anything outside /_next/static/chunks) still warn.
+  it('logs known Next vendor-bundle violations at info, not warn', async () => {
+    const infoSpy = vi.fn()
+    const warnSpy = vi.fn()
+    vi.doMock('@/lib/logger', () => ({
+      logger: {
+        info: infoSpy,
+        warn: warnSpy,
+        error: vi.fn(),
+        debug: vi.fn(),
+      },
+    }))
+    const { POST } = await load()
+    const body = JSON.stringify({
+      'csp-report': {
+        'document-uri': 'https://clinipharma.com.br/orders',
+        'effective-directive': 'style-src-elem',
+        'blocked-uri': 'inline',
+        'source-file': 'https://clinipharma.com.br/_next/static/chunks/2375-abc.js',
+      },
+    })
+    const req = new NextRequest('https://clinipharma.com.br/api/csp-report', {
+      method: 'POST',
+      headers: { 'content-type': 'application/csp-report' },
+      body,
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(204)
+    expect(infoSpy).toHaveBeenCalledTimes(1)
+    expect(infoSpy.mock.calls[0]?.[1]).toMatchObject({
+      noise_class: 'next_vendor_bundle',
+      directive: 'style-src-elem',
+    })
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it('still warns for violations not classified as vendor noise', async () => {
+    const infoSpy = vi.fn()
+    const warnSpy = vi.fn()
+    vi.doMock('@/lib/logger', () => ({
+      logger: {
+        info: infoSpy,
+        warn: warnSpy,
+        error: vi.fn(),
+        debug: vi.fn(),
+      },
+    }))
+    const { POST } = await load()
+    const body = JSON.stringify({
+      'csp-report': {
+        'document-uri': 'https://clinipharma.com.br/dashboard',
+        'effective-directive': 'script-src',
+        'blocked-uri': 'https://attacker.example/x.js',
+        'source-file': 'https://clinipharma.com.br/dashboard',
+      },
+    })
+    const req = new NextRequest('https://clinipharma.com.br/api/csp-report', {
+      method: 'POST',
+      headers: { 'content-type': 'application/csp-report' },
+      body,
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(204)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(infoSpy).not.toHaveBeenCalled()
+  })
 })

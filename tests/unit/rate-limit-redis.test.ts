@@ -120,4 +120,52 @@ describe('rateLimit — Redis env var detection', () => {
     delete process.env.UPSTASH_REDIS_REST_URL
     delete process.env.UPSTASH_REDIS_REST_TOKEN
   })
+
+  // Regression for the 2026-04-29 incident: the legacy
+  // `new Function('s', 'return import(s)')` resolver was failing in
+  // the production runtime even though @upstash/* packages were
+  // bundled and env vars were set, causing every page load to log
+  // "Upstash packages not available, using in-memory fallback".
+  // The fix uses a plain `await import('@upstash/...')` so the
+  // bundler resolves the modules statically. This test pins that
+  // contract — when the env vars are set AND the modules resolve,
+  // the Redis-backed limiter must be reachable.
+  it('uses the Redis backend when env vars + modules are available', async () => {
+    vi.resetModules()
+    process.env.UPSTASH_REDIS_REST_URL = 'https://mock.upstash.io'
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'mock-token'
+
+    const limitMock = vi.fn().mockResolvedValue({
+      success: true,
+      remaining: 4,
+      reset: Date.now() + 60_000,
+    })
+
+    vi.doMock('@upstash/ratelimit', () => ({
+      Ratelimit: class {
+        static slidingWindow() {
+          return 'slidingWindow-mock'
+        }
+        constructor() {
+          /* noop */
+        }
+        limit = limitMock
+      },
+    }))
+    vi.doMock('@upstash/redis', () => ({
+      Redis: { fromEnv: () => ({ kind: 'mock-redis' }) },
+    }))
+
+    const { rateLimit } = await import('@/lib/rate-limit')
+    const limiter = rateLimit({ windowMs: 60_000, max: 5 })
+    const result = await limiter.check('redis-path-1')
+    expect(result.ok).toBe(true)
+    expect(result.remaining).toBe(4)
+    expect(limitMock).toHaveBeenCalledTimes(1)
+
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+    vi.doUnmock('@upstash/ratelimit')
+    vi.doUnmock('@upstash/redis')
+  })
 })
