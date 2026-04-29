@@ -272,6 +272,73 @@ describe('createConsultant', () => {
         expect.anything()
       )
     })
+
+    it('rolls back fully when user_roles.upsert is rejected by CHECK constraint', async () => {
+      // Pre-2026-04-29 the user_roles.role CHECK didn't include
+      // SALES_CONSULTANT, so the upsert returned 23514 check_violation
+      // and the operator saw "Erro ao atribuir papel ao consultor".
+      // Migration 065 fixed the constraint, but this test pins the
+      // rollback contract: if user_roles.upsert ever fails again
+      // (different reason), the new auth user AND the half-created
+      // sales_consultants row must both be reverted, and the
+      // surfaced toast must include the underlying SQL detail.
+      const consultantInsertSingle = vi.fn().mockResolvedValue({
+        data: { id: 'cons-9', full_name: 'C', email: 'c@test.com' },
+        error: null,
+      })
+      const consultantInsert = vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ single: consultantInsertSingle }),
+      })
+      const consultantDelete = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      })
+
+      let consultantCalls = 0
+      const userRolesUpsert = vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: '23514', message: 'check constraint user_roles_role_check' },
+      })
+      const fromMock = vi.fn().mockImplementation((table: string) => {
+        if (table === 'sales_consultants') {
+          consultantCalls++
+          return consultantCalls === 1 ? { insert: consultantInsert } : { delete: consultantDelete }
+        }
+        if (table === 'profiles')
+          return { upsert: vi.fn().mockResolvedValue({ data: null, error: null }) }
+        if (table === 'user_roles') return { upsert: userRolesUpsert }
+        return makeQueryBuilder(null, null)
+      })
+
+      const deleteUserMock = vi.fn().mockResolvedValue({ data: null, error: null })
+      vi.mocked(adminModule.createAdminClient).mockReturnValue({
+        from: fromMock,
+        auth: {
+          admin: {
+            createUser: vi.fn().mockResolvedValue({
+              data: { user: { id: 'auth-9', email: 'c@test.com' } },
+              error: null,
+            }),
+            generateLink: vi.fn(),
+            deleteUser: deleteUserMock,
+            listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
+          },
+        },
+      } as unknown as ReturnType<typeof adminModule.createAdminClient>)
+
+      const result = await createConsultant({
+        full_name: 'C',
+        email: 'c@test.com',
+        cnpj: '11222333000181',
+      } as Parameters<typeof createConsultant>[0])
+
+      // Toast carries the SQL detail (not the old generic string).
+      expect(result.error).toMatch(/SALES_CONSULTANT/)
+      expect(result.error).toMatch(/user_roles_role_check/)
+      expect(result.error).toMatch(/constraint violada/)
+      // Both rollbacks executed: auth.users + sales_consultants row.
+      expect(deleteUserMock).toHaveBeenCalledWith('auth-9')
+      expect(consultantDelete).toHaveBeenCalled()
+    })
   })
 })
 

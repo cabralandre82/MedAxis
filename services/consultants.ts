@@ -261,14 +261,43 @@ export async function createConsultant(
         logger.error('[createConsultant] user_roles.upsert failed', {
           userId,
           consultantId: consultant.id,
-          error: roleErr,
+          code: roleErr.code,
+          message: roleErr.message,
+          details: roleErr.details,
+          hint: roleErr.hint,
         })
-        // Roll back: if WE created the auth user, undo it so the operator
-        // can retry. If the user already existed we leave it alone.
+        // Full rollback: anything we created in this request must be
+        // undone so the operator can fix the inputs and retry without
+        // leftover orphans. Pre-2026-04-29 we only deleted the auth
+        // user; the sales_consultants row stayed forever, requiring
+        // manual SQL cleanup. The check_violation on SALES_CONSULTANT
+        // (migration 065) was also being masked by the generic toast.
         if (createdAuthUser) {
-          await adminClient.auth.admin.deleteUser(userId).catch(() => {})
+          await adminClient.auth.admin.deleteUser(userId).catch((err) =>
+            logger.warn('[createConsultant] rollback deleteUser failed', {
+              userId,
+              error: err,
+            })
+          )
         }
-        return { error: 'Erro ao atribuir papel ao consultor' }
+        const { error: rollbackErr } = await adminClient
+          .from('sales_consultants')
+          .delete()
+          .eq('id', consultant.id)
+        if (rollbackErr) {
+          logger.error('[createConsultant] rollback sales_consultants.delete failed', {
+            consultantId: consultant.id,
+            error: rollbackErr,
+          })
+        }
+
+        // Surface the underlying SQL error instead of the generic
+        // "Erro ao atribuir papel ao consultor". The operator was
+        // staring at that toast with zero diagnostic for over a week.
+        const friendly = friendlyConsultantInsertError(roleErr)
+        return {
+          error: `Não foi possível atribuir o papel SALES_CONSULTANT ao novo usuário. ${friendly}`,
+        }
       }
 
       // Link consultant ↔ user
