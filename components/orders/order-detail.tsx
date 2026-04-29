@@ -140,25 +140,38 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
       rejection_reason?: string | null
     }>) ?? []
 
-  const payment =
-    (
-      order.payments as Array<{
-        id: string
-        gross_amount: number
-        status: string
-        payment_method: string | null
-        reference_code: string | null
-        confirmed_at: string | null
-        notes: string | null
-        asaas_payment_id: string | null
-        asaas_invoice_url: string | null
-        asaas_pix_qr_code: string | null
-        asaas_pix_copy_paste: string | null
-        asaas_boleto_url: string | null
-        payment_link: string | null
-        payment_due_date: string | null
-      }>
-    )?.[0] ?? null
+  // PostgREST nested-select shape note (2026-04-29 incident):
+  // `payments.order_id` has a UNIQUE INDEX (`payments_order_id_unique`),
+  // so PostgREST infers the relationship as 1:1 and returns the
+  // child row as a single OBJECT — not as an array. The previous
+  // `as Array<...>?.[0]` cast worked at compile time but at runtime
+  // the JS expression `object[0]` is `undefined`, which left the
+  // page rendering "Sem dados de pagamento" + the "Gerar opções de
+  // pagamento" button even when the row existed in the DB. Other
+  // joins on this query (commissions, transfers) do NOT have a
+  // UNIQUE on order_id, so those still come back as arrays — keep
+  // their `Array<...>[0]` shape. Only `payments` needs the
+  // both-shapes guard.
+  type PaymentRow = {
+    id: string
+    gross_amount: number
+    status: string
+    payment_method: string | null
+    reference_code: string | null
+    confirmed_at: string | null
+    notes: string | null
+    asaas_payment_id: string | null
+    asaas_invoice_url: string | null
+    asaas_pix_qr_code: string | null
+    asaas_pix_copy_paste: string | null
+    asaas_boleto_url: string | null
+    payment_link: string | null
+    payment_due_date: string | null
+  }
+  const paymentsRaw = order.payments as PaymentRow | PaymentRow[] | null | undefined
+  const payment: PaymentRow | null = Array.isArray(paymentsRaw)
+    ? (paymentsRaw[0] ?? null)
+    : (paymentsRaw ?? null)
 
   const commission =
     (

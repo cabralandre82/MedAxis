@@ -150,7 +150,14 @@ jobs:
             created_at timestamptz DEFAULT now(),
             updated_at timestamptz DEFAULT now(),
             last_sign_in_at timestamptz,
-            role text
+            role text,
+            -- Migration 060 references `auth.users.banned_until` in a
+            -- trigger predicate. Real Supabase ships this column as part
+            -- of GoTrue's auth schema; we mirror just the column shape
+            -- here so the WHEN(...) clause type-checks. Default NULL =
+            -- "not banned", which is also what migration 060's backfill
+            -- assumes.
+            banned_until timestamptz
           );
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
             LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
@@ -171,6 +178,14 @@ jobs:
           EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN
             CREATE ROLE service_role NOLOGIN BYPASSRLS;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          -- Migration 060 grants EXECUTE on a trigger function to
+          -- `supabase_auth_admin`. Real Supabase provisions this role
+          -- (it's the GoTrue worker) but we have to declare it here
+          -- so the GRANT statement parses. NOLOGIN — never used to
+          -- authenticate, only as a recipient of grants.
+          DO $$ BEGIN
+            CREATE ROLE supabase_auth_admin NOLOGIN;
           EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
           -- Realtime publication. Migration 034 calls

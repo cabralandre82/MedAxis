@@ -1,6 +1,12 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/db/admin'
-import { findOrCreateCustomer, createPayment, getPixQrCode, dueDateFromNow } from '@/lib/asaas'
+import {
+  findOrCreateCustomer,
+  createPayment,
+  getPixQrCode,
+  getPayment,
+  dueDateFromNow,
+} from '@/lib/asaas'
 import { createNotification } from '@/lib/notifications'
 import { logger } from '@/lib/logger'
 
@@ -149,13 +155,52 @@ export async function generateAsaasChargeForOrder(orderId: string): Promise<Asaa
         })
       }
     }
+
+    // Self-heal a missing boleto / invoice URL the same way we do
+    // for PIX. Asaas occasionally returns the payment with
+    // `bankSlipUrl: null` immediately after creation while the
+    // boleto PDF is still being typeset on their side; the row
+    // freezes there forever unless somebody re-fetches. Hitting
+    // GET /payments/{id} once in this branch closes that gap. The
+    // pre-2026-04-29 UI fallback "Boleto disponível em instantes.
+    // Tente atualizar a página." was the user-visible symptom of
+    // this same gap.
+    let boletoUrl = existingPayment.asaas_boleto_url
+    let invoiceUrl = existingPayment.asaas_invoice_url
+    if (!boletoUrl || !invoiceUrl) {
+      try {
+        const fresh = await getPayment(existingPayment.asaas_payment_id)
+        const updates: Record<string, string | null> = {}
+        if (!boletoUrl && fresh.bankSlipUrl) {
+          boletoUrl = fresh.bankSlipUrl
+          updates.asaas_boleto_url = fresh.bankSlipUrl
+        }
+        if (!invoiceUrl && fresh.invoiceUrl) {
+          invoiceUrl = fresh.invoiceUrl
+          updates.asaas_invoice_url = fresh.invoiceUrl
+          updates.payment_link = fresh.invoiceUrl
+        }
+        if (Object.keys(updates).length > 0) {
+          await admin.from('payments').update(updates).eq('id', existingPayment.id)
+        }
+      } catch (err) {
+        // Non-fatal — same rationale as the PIX branch above. PIX
+        // (if available) still lets the clinic pay.
+        logger.warn('[generateAsaasCharge] payment refresh failed on idempotent path', {
+          orderId,
+          asaasPaymentId: existingPayment.asaas_payment_id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
     return {
       ok: true,
       asaasPaymentId: existingPayment.asaas_payment_id,
-      invoiceUrl: existingPayment.asaas_invoice_url,
+      invoiceUrl,
       pixQrCode,
       pixCopyPaste,
-      boletoUrl: existingPayment.asaas_boleto_url,
+      boletoUrl,
       dueDate: existingPayment.payment_due_date ?? undefined,
     }
   }
