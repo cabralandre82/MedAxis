@@ -5,6 +5,7 @@ import { createNotification } from '@/lib/notifications'
 import { createAuditLog, AuditAction, AuditEntity } from '@/lib/audit'
 import { logger } from '@/lib/logger'
 import { addBusinessDays } from '@/lib/utils'
+import { generateAsaasChargeForOrder } from '@/lib/payments/asaas-charge'
 
 // ─── Review a single document (PHARMACY_ADMIN only) ──────────────────────────
 
@@ -171,6 +172,30 @@ export async function evaluateOrderDocuments(orderId: string, actorUserId: strin
       changed_by_user_id: actorUserId,
       reason: 'Documentação aprovada pela farmácia',
     })
+
+    // Auto-generate the Asaas charge so the clinic actually has a way
+    // to pay when they read the "Aguardando pagamento" notification.
+    // Before this hook landed (2026-04-29), the clinic was stuck on a
+    // dead-end UI ("Aguardando geração da cobrança pelo administrador")
+    // because only SUPER_ADMIN/PLATFORM_ADMIN could trigger the Asaas
+    // POST. Best-effort: a transient Asaas failure must NOT block the
+    // status transition — the clinic can manually retry from the order
+    // detail page (PaymentOptions now exposes a retry button to the
+    // clinic owner too). Failure is logged for ops visibility.
+    try {
+      const charge = await generateAsaasChargeForOrder(orderId)
+      if (!charge.ok) {
+        logger.error('[transitionDocStatus] auto-charge failed', {
+          orderId,
+          error: charge.error ?? null,
+        })
+      }
+    } catch (err) {
+      logger.error('[transitionDocStatus] auto-charge threw', {
+        orderId,
+        error: err,
+      })
+    }
 
     // Notify clinic
     await createNotification({

@@ -526,7 +526,7 @@ export function OrderDetail({ order, currentUser, prescriptionItems = [] }: Orde
                       <PaymentOptions
                         orderId={String(order.id)}
                         orderCode={String(order.code)}
-                        amount={Number(order.total_amount ?? 0) * 100}
+                        amount={Number(order.total_price ?? 0) * 100}
                         payment={
                           payment
                             ? {

@@ -95,22 +95,30 @@ export function PaymentOptions({
   }
 
   if (!hasPayment) {
-    if (!isAdmin) {
-      return (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          Aguardando a geração da cobrança pelo administrador.
-        </div>
-      )
-    }
+    // Anyone authenticated who has access to the order detail page may
+    // trigger charge generation: the API at /api/payments/asaas/create
+    // gates this on (a) platform admin OR (b) clinic admin of the
+    // order's clinic, AND `generateAsaasChargeForOrder` is idempotent,
+    // so worst case the clinic clicks twice and gets the same Asaas
+    // charge back. Replaces the pre-2026-04-29 dead-end branch where
+    // a clinic with status=AWAITING_PAYMENT had no UI to pay because
+    // only super_admins could press this button.
     return (
-      <Button onClick={generatePayment} disabled={isPending} className="gap-2">
-        {isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <CreditCard className="h-4 w-4" />
+      <div className="space-y-2">
+        <Button onClick={generatePayment} disabled={isPending} className="gap-2">
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <CreditCard className="h-4 w-4" />
+          )}
+          {isAdmin ? 'Gerar cobrança (PIX + Boleto + Cartão)' : 'Gerar opções de pagamento'}
+        </Button>
+        {!isAdmin && (
+          <p className="text-xs text-gray-500">
+            Clique para gerar PIX, boleto e link de cartão para este pedido.
+          </p>
         )}
-        Gerar cobrança (PIX + Boleto + Cartão)
-      </Button>
+      </div>
     )
   }
 
