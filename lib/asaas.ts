@@ -45,7 +45,25 @@ export async function findOrCreateCustomer(params: {
   )
   if (search.data.length > 0) return search.data[0]
 
-  // Create new
+  // Create new.
+  //
+  // notificationDisabled: true (changed 2026-04-29)
+  // ------------------------------------------------
+  // Asaas defaults to spamming the customer with cobrança/lembrete
+  // D-3/D-1/vencimento/recibo e-mails branded "Asaas". For a B2B
+  // marketplace this is wrong on three axes:
+  //   1. Branding — clinic sees Asaas e-mails, not Clinipharma.
+  //   2. PII — bounces (clinica@medaxis.com.br case 2026-04-29)
+  //      generate Asaas-side noise that we can't suppress per-tenant.
+  //   3. Redundancy — payment lives on our `/orders/[id]` page; the
+  //      `createNotification` + Resend pipeline already pushes a
+  //      Clinipharma-branded "pagamento disponível" message.
+  //
+  // We keep the e-mail field populated (helps human reconciliation
+  // in the Asaas dashboard) but `notificationDisabled: true` stops
+  // every outbound message from Asaas. Existing customers created
+  // before this commit are silenced via a one-shot PATCH (see
+  // `scripts/silence-asaas-notifications.ts`).
   return asaasFetch<AsaasCustomer>('/customers', {
     method: 'POST',
     body: JSON.stringify({
@@ -53,7 +71,7 @@ export async function findOrCreateCustomer(params: {
       cpfCnpj: params.cpfCnpj,
       email: params.email,
       phone: params.phone,
-      notificationDisabled: false,
+      notificationDisabled: true,
     }),
   })
 }
