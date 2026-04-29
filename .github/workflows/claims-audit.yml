@@ -107,7 +107,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Download audit artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: claims-audit-report
           path: .results/
