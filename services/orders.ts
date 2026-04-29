@@ -182,6 +182,18 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         return sum + (p?.price_current ?? 0) * item.quantity
       }, 0)
 
+      // Initial status — only force AWAITING_DOCUMENTS when at least
+      // one item legitimately requires a prescription. OTC products
+      // (e.g. Vitamina D3) skip the documents step and go straight to
+      // payment. The legacy hard-coded `'AWAITING_DOCUMENTS'` for
+      // every order was creating ghost "envie a receita" prompts on
+      // OTC carts and confusing operators.
+      // Pin: lib/prescription-rules.ts treats requires_prescription=
+      // false items as auto-satisfied; this status decision must
+      // agree with that or the OTC order would still get blocked at
+      // /api/orders/:id/advance.
+      const initialStatus = hasRxProduct ? 'AWAITING_DOCUMENTS' : 'AWAITING_PAYMENT'
+
       // Auto-detect active coupons — clinic coupons for CLINIC buyer, doctor coupons for DOCTOR buyer
       const couponMap = await getActiveCouponsForOrder(
         buyer_type === 'CLINIC' ? clinic_id : null,
@@ -207,6 +219,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           notes,
           createdByUserId: user.id,
           estimatedTotal,
+          initialStatus,
           items: items.map((item) => ({
             product_id: item.product_id,
             quantity: item.quantity,
@@ -243,7 +256,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
             delivery_address_id: buyer_type === 'DOCTOR' ? delivery_address_id : null,
             pharmacy_id,
             total_price: estimatedTotal,
-            order_status: 'AWAITING_DOCUMENTS',
+            order_status: initialStatus,
             payment_status: 'PENDING',
             transfer_status: 'NOT_READY',
             notes: notes ?? null,
@@ -281,9 +294,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         const { error: historyError } = await adminClient.from('order_status_history').insert({
           order_id: order.id,
           old_status: null,
-          new_status: 'AWAITING_DOCUMENTS',
+          new_status: initialStatus,
           changed_by_user_id: user.id,
-          reason: 'Pedido criado',
+          reason: hasRxProduct
+            ? 'Pedido criado — aguardando receita'
+            : 'Pedido criado — sem produtos sob receita',
         })
         if (historyError)
           logger.error('[createOrder] failed to insert status history', {

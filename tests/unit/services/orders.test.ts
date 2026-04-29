@@ -680,6 +680,140 @@ describe('createOrder — document upload advances status', () => {
   })
 })
 
+describe('createOrder — initial status depends on requires_prescription', () => {
+  // Pin: until 2026-04-29 every order landed in AWAITING_DOCUMENTS,
+  // even when the cart had only OTC items (e.g. Vitamina D3). The
+  // buyer was prompted for a prescription that never existed.
+  // The status decision is now `hasRxProduct ? 'AWAITING_DOCUMENTS' :
+  // 'AWAITING_PAYMENT'`. Both branches are pinned here.
+
+  beforeEach(async () => {
+    const { canPlaceOrder } = await import('@/lib/compliance')
+    vi.mocked(canPlaceOrder).mockResolvedValue({ allowed: true })
+  })
+
+  function setupAdminCapturingOrderInsert(
+    insertSpy: ReturnType<typeof vi.fn>,
+    historySpy: ReturnType<typeof vi.fn>
+  ) {
+    const admin = mockSupabaseAdmin()
+    const membershipQb = makeQueryBuilder({ clinic_id: CID }, null)
+
+    const orderInsertResult = makeQueryBuilder({ id: OID, code: 'ORD-100' }, null)
+    const orderInsertQb = {
+      insert: vi.fn().mockImplementation((row: unknown) => {
+        insertSpy(row)
+        return {
+          select: () => ({
+            single: () => Promise.resolve({ data: { id: OID, code: 'ORD-100' }, error: null }),
+          }),
+        }
+      }),
+    }
+
+    const historyQb = {
+      insert: vi.fn().mockImplementation((row: unknown) => {
+        historySpy(row)
+        return Promise.resolve({ error: null })
+      }),
+    }
+
+    const generic = makeQueryBuilder(null, null)
+
+    let call = 0
+    admin.from = vi.fn().mockImplementation((table: string) => {
+      call++
+      if (call === 1) return membershipQb
+      if (table === 'orders' && call === 2)
+        return orderInsertQb as unknown as typeof orderInsertResult
+      if (table === 'order_status_history') return historyQb as unknown as typeof generic
+      return generic
+    })
+    return admin
+  }
+
+  it('OTC-only cart starts in AWAITING_PAYMENT (skip docs step)', async () => {
+    const supabase = mockSupabaseClient()
+    const otcProduct = {
+      id: PID,
+      pharmacy_id: 'ph-1',
+      price_current: 96,
+      name: 'Vitamina D3 10000 UI',
+      estimated_deadline_days: 3,
+      active: true,
+      requires_prescription: false,
+    }
+    supabase.from = vi.fn().mockReturnValue(makeQueryBuilder([otcProduct], null))
+    vi.mocked(serverModule.createClient).mockResolvedValue(
+      supabase as ReturnType<typeof mockSupabaseClient>
+    )
+
+    const insertSpy = vi.fn()
+    const historySpy = vi.fn()
+    const admin = setupAdminCapturingOrderInsert(insertSpy, historySpy)
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await createOrder({
+      clinic_id: CID,
+      items: [{ product_id: PID, quantity: 1 }],
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ order_status: 'AWAITING_PAYMENT' })
+    )
+    expect(historySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        new_status: 'AWAITING_PAYMENT',
+        reason: expect.stringMatching(/sem produtos sob receita/i),
+      })
+    )
+  })
+
+  it('Rx product cart still starts in AWAITING_DOCUMENTS', async () => {
+    const supabase = mockSupabaseClient()
+    const rxProduct = {
+      id: PID,
+      pharmacy_id: 'ph-1',
+      price_current: 200,
+      name: 'Composto manipulado',
+      estimated_deadline_days: 5,
+      active: true,
+      requires_prescription: true,
+    }
+    supabase.from = vi.fn().mockReturnValue(makeQueryBuilder([rxProduct], null))
+    vi.mocked(serverModule.createClient).mockResolvedValue(
+      supabase as ReturnType<typeof mockSupabaseClient>
+    )
+
+    const insertSpy = vi.fn()
+    const historySpy = vi.fn()
+    const admin = setupAdminCapturingOrderInsert(insertSpy, historySpy)
+    vi.mocked(adminModule.createAdminClient).mockReturnValue(
+      admin as unknown as ReturnType<typeof adminModule.createAdminClient>
+    )
+
+    const result = await createOrder({
+      clinic_id: CID,
+      doctor_id: DID,
+      items: [{ product_id: PID, quantity: 1 }],
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ order_status: 'AWAITING_DOCUMENTS' })
+    )
+    expect(historySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        new_status: 'AWAITING_DOCUMENTS',
+        reason: expect.stringMatching(/aguardando receita/i),
+      })
+    )
+  })
+})
+
 describe('updateOrderStatus — history insert failure is non-blocking', () => {
   it('succeeds even when status history insert fails', async () => {
     vi.mocked(sessionModule.requireAuth).mockResolvedValue(adminMock)

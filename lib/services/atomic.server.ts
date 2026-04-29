@@ -283,6 +283,16 @@ export interface CreateOrderArgs {
   notes?: string | null
   createdByUserId: string
   estimatedTotal: number
+  /**
+   * Initial workflow status. Defaults to 'AWAITING_DOCUMENTS' for
+   * back-compat. Pass 'AWAITING_PAYMENT' when no item in the cart
+   * requires a prescription so the order skips the documents step.
+   * The TS caller (services/orders.ts) computes this from
+   * products.requires_prescription; the RPC trusts the caller and
+   * just persists the value (the doctor + compliance guards already
+   * ran client-side).
+   */
+  initialStatus?: 'AWAITING_DOCUMENTS' | 'AWAITING_PAYMENT'
   items: CreateOrderItem[]
 }
 
@@ -305,6 +315,7 @@ export async function createOrderAtomic(
       notes: args.notes ?? '',
       created_by_user_id: args.createdByUserId,
       estimated_total: args.estimatedTotal,
+      initial_status: args.initialStatus ?? 'AWAITING_DOCUMENTS',
       items: args.items.map((i) => ({
         product_id: i.product_id,
         quantity: i.quantity,
