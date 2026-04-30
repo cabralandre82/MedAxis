@@ -67,14 +67,33 @@ describe('computeUnitPrice', () => {
     const res = await computeUnitPrice({ productId: PRODUCT_ID, quantity: 1 })
     expect(res.error).toBeUndefined()
     expect(res.data?.final_unit_price_cents).toBe(150000)
+    // p_at is intentionally OMITTED when args.at is null/undefined.
+    // PostgREST forwards JSON null literally, which bypasses the SQL
+    // function's `DEFAULT now()` and produces a spurious
+    // `no_active_profile`. Smoke 2026-04-30 catch — see migration 078.
     expect(rpc).toHaveBeenCalledWith('compute_unit_price', {
       p_product_id: PRODUCT_ID,
       p_quantity: 1,
       p_clinic_id: null,
       p_doctor_id: null,
       p_coupon_id: null,
-      p_at: null,
     })
+  })
+
+  it('forwards p_at when caller provides it (PostgREST keeps explicit value)', async () => {
+    const rpc = mockRpc(vi.fn().mockResolvedValue({ data: { error: null }, error: null }))
+    await computeUnitPrice({ productId: PRODUCT_ID, quantity: 1, at: '2026-04-30T19:00:00Z' })
+    expect(rpc).toHaveBeenCalledWith(
+      'compute_unit_price',
+      expect.objectContaining({ p_at: '2026-04-30T19:00:00Z' })
+    )
+  })
+
+  it('OMITS p_at when caller passes null/undefined (regression guard for mig-078)', async () => {
+    const rpc = mockRpc(vi.fn().mockResolvedValue({ data: { error: null }, error: null }))
+    await computeUnitPrice({ productId: PRODUCT_ID, quantity: 1, at: null })
+    const args = rpc.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(args).not.toHaveProperty('p_at')
   })
 
   it('translates inline {error: no_active_profile} to a typed reason', async () => {
@@ -161,7 +180,6 @@ describe('resolveEffectiveFloor', () => {
       p_clinic_id: CLINIC_ID,
       p_doctor_id: null,
       p_tier_unit_cents: 130000,
-      p_at: null,
     })
   })
 })
@@ -317,7 +335,6 @@ describe('previewUnitPrice (hypothetical coupon)', () => {
       p_disc_type: 'PERCENT',
       p_disc_value: 30,
       p_max_disc_cents: null,
-      p_at: null,
     })
   })
 

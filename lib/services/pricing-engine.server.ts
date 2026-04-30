@@ -147,14 +147,22 @@ export async function computeUnitPrice(
     return { error: { reason: 'invalid_quantity', raw: args.quantity } }
   }
 
-  return callPricingRpc<PricingBreakdown>('compute_unit_price', {
+  // p_at is intentionally omitted when null/undefined: PostgREST
+  // forwards `null` literally and the SQL default (`now()`) is NOT
+  // applied, which causes `effective_from <= NULL` and a spurious
+  // `no_active_profile`. Smoke 2026-04-30 catch — see ADR-001 PR-E
+  // section. Same pattern applied below to resolveEffectiveFloor and
+  // previewUnitPriceWithHypothetical. Belt-and-braces: migration 078
+  // also coerces `COALESCE(p_at, now())` inside the SQL functions.
+  const params: Record<string, unknown> = {
     p_product_id: args.productId,
     p_quantity: args.quantity,
     p_clinic_id: args.clinicId ?? null,
     p_doctor_id: args.doctorId ?? null,
     p_coupon_id: args.couponId ?? null,
-    p_at: args.at ?? null,
-  })
+  }
+  if (args.at) params.p_at = args.at
+  return callPricingRpc<PricingBreakdown>('compute_unit_price', params)
 }
 
 export interface ResolveFloorArgs {
@@ -183,13 +191,14 @@ export interface FloorBreakdown {
 export async function resolveEffectiveFloor(
   args: ResolveFloorArgs
 ): Promise<{ data?: FloorBreakdown; error?: PricingEngineError }> {
-  return callPricingRpc<FloorBreakdown>('resolve_effective_floor', {
+  const params: Record<string, unknown> = {
     p_product_id: args.productId,
     p_clinic_id: args.clinicId ?? null,
     p_doctor_id: args.doctorId ?? null,
     p_tier_unit_cents: args.tierUnitCents,
-    p_at: args.at ?? null,
-  })
+  }
+  if (args.at) params.p_at = args.at
+  return callPricingRpc<FloorBreakdown>('resolve_effective_floor', params)
 }
 
 // ── Hypothetical-coupon preview (PR-C3 of ADR-001) ──────────────────────
@@ -246,7 +255,7 @@ export async function previewUnitPrice(
     }
   }
 
-  return callPricingRpc<PricingBreakdown>('preview_unit_price', {
+  const params: Record<string, unknown> = {
     p_product_id: args.productId,
     p_quantity: args.quantity,
     p_clinic_id: args.clinicId ?? null,
@@ -254,8 +263,9 @@ export async function previewUnitPrice(
     p_disc_type: h?.discountType ?? null,
     p_disc_value: h?.discountValue ?? null,
     p_max_disc_cents: h?.maxDiscountCents ?? null,
-    p_at: args.at ?? null,
-  })
+  }
+  if (args.at) params.p_at = args.at
+  return callPricingRpc<PricingBreakdown>('preview_unit_price', params)
 }
 
 // ── Matrix preview helper ────────────────────────────────────────────────
