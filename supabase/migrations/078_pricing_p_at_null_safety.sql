@@ -42,6 +42,16 @@
 --   - `public.compute_unit_price(uuid, int, uuid, uuid, uuid, timestamptz)`
 --   - `public.preview_unit_price(uuid, int, uuid, uuid, text, numeric, bigint, timestamptz)`
 --
+-- Bug paralelo descoberto durante o smoke (mesmo PR)
+-- --------------------------------------------------
+-- As migrations 071/077 liam `app_settings.value` (coluna que NÃO
+-- existe — o schema em produção usa `value_json` jsonb). Esse caminho
+-- nunca foi exercido até agora porque os defaults de profile (basis =
+-- FIXED_PER_UNIT) saltam o lookup. Para qualquer profile com basis
+-- TOTAL_PRICE ou PHARMACY_TRANSFER a função estoura. Como esta
+-- migration já está reescrevendo o corpo via CREATE OR REPLACE,
+-- aproveitamos para corrigir: `(value_json::text)::numeric`.
+--
 -- Idempotência
 -- ------------
 -- Tudo via CREATE OR REPLACE. Re-executar é no-op.
@@ -292,13 +302,13 @@ BEGIN
   IF v_profile.consultant_commission_basis = 'FIXED_PER_UNIT' THEN
     v_consultant_raw_cents := COALESCE(v_profile.consultant_commission_fixed_per_unit_cents, 0);
   ELSIF v_profile.consultant_commission_basis = 'PHARMACY_TRANSFER' THEN
-    SELECT (value::numeric)
+    SELECT (value_json::text)::numeric
       INTO v_consultant_rate
       FROM public.app_settings WHERE key = 'consultant_commission_rate' LIMIT 1;
     v_consultant_rate := COALESCE(v_consultant_rate, 5);
     v_consultant_raw_cents := (v_pharmacy_cost_cents * v_consultant_rate / 100.0)::bigint;
   ELSE
-    SELECT (value::numeric)
+    SELECT (value_json::text)::numeric
       INTO v_consultant_rate
       FROM public.app_settings WHERE key = 'consultant_commission_rate' LIMIT 1;
     v_consultant_rate := COALESCE(v_consultant_rate, 5);
@@ -438,13 +448,13 @@ BEGIN
   IF v_profile.consultant_commission_basis = 'FIXED_PER_UNIT' THEN
     v_consultant_raw_cents := COALESCE(v_profile.consultant_commission_fixed_per_unit_cents, 0);
   ELSIF v_profile.consultant_commission_basis = 'PHARMACY_TRANSFER' THEN
-    SELECT (value::numeric)
+    SELECT (value_json::text)::numeric
       INTO v_consultant_rate
       FROM public.app_settings WHERE key = 'consultant_commission_rate' LIMIT 1;
     v_consultant_rate := COALESCE(v_consultant_rate, 5);
     v_consultant_raw_cents := (v_pharmacy_cost_cents * v_consultant_rate / 100.0)::bigint;
   ELSE
-    SELECT (value::numeric)
+    SELECT (value_json::text)::numeric
       INTO v_consultant_rate
       FROM public.app_settings WHERE key = 'consultant_commission_rate' LIMIT 1;
     v_consultant_rate := COALESCE(v_consultant_rate, 5);
@@ -483,19 +493,23 @@ $$;
 
 -- ── Smoke ───────────────────────────────────────────────────────────────
 --
--- Cria um produto + profile + tier, chama compute_unit_price com
--- p_at=NULL e confirma que retorna o profile (e não no_active_profile).
--- Tudo dentro da transação da migration; a ROLLBACK conceitual é o
--- fato de que criamos numa savepoint dedicada e cancelamos.
+-- Reusa um produto existente (sem profile vivo) e anexa um pricing_profile
+-- temporário, justamente para evitar dependência das colunas NOT NULL de
+-- `products` (que mudam ao longo do tempo). Tudo é desfeito ao final.
+--
+-- O caso-chave: chamar `compute_unit_price(p, 1, NULL, NULL, NULL, NULL)`
+-- e exigir que retorne o breakdown. Antes da mig-078 retornava
+-- `{"error": "no_active_profile"}` mesmo com profile vivo, porque
+-- `effective_from <= NULL` ≡ NULL ≡ false.
 
 DO $smoke$
 DECLARE
-  v_admin_id uuid;
-  v_product_id uuid := gen_random_uuid();
+  v_admin_id   uuid;
+  v_product_id uuid;
   v_profile_id uuid;
-  v_result jsonb;
+  v_result     jsonb;
 BEGIN
-  -- Pegamos qualquer SUPER_ADMIN existente para FK do change_reason
+  -- Super-admin para FK em pricing_profiles.created_by_user_id.
   SELECT user_id INTO v_admin_id
     FROM public.user_roles
    WHERE role = 'SUPER_ADMIN'
@@ -506,9 +520,24 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Cria produto efêmero
-  INSERT INTO public.products (id, name, slug, sku, active, pricing_mode)
-  VALUES (v_product_id, 'mig078 smoke', 'mig078-smoke-' || v_product_id::text, 'SMOKE-' || left(v_product_id::text, 8), true, 'TIERED_PROFILE');
+  -- Produto ativo qualquer SEM pricing_profile vivo (para não conflitar
+  -- com SCD-2). Se não houver candidato, pulamos — não bloqueia migration.
+  SELECT p.id
+    INTO v_product_id
+    FROM public.products p
+   WHERE p.active = true
+     AND NOT EXISTS (
+       SELECT 1 FROM public.pricing_profiles pp
+        WHERE pp.product_id = p.id
+          AND pp.effective_from <= now()
+          AND (pp.effective_until IS NULL OR pp.effective_until > now())
+     )
+   LIMIT 1;
+
+  IF v_product_id IS NULL THEN
+    RAISE NOTICE 'mig078 smoke: skip (no product without active profile)';
+    RETURN;
+  END IF;
 
   INSERT INTO public.pricing_profiles (
     product_id, pharmacy_cost_unit_cents, platform_min_unit_cents,
@@ -520,32 +549,27 @@ BEGIN
   INSERT INTO public.pricing_profile_tiers (pricing_profile_id, min_quantity, max_quantity, unit_price_cents)
   VALUES (v_profile_id, 1, 100, 20000);
 
-  -- O ponto-chave: passar p_at=NULL explícito. Antes da mig-078 isso
-  -- retornava {"error": "no_active_profile"}.
+  -- Ponto-chave: passa p_at=NULL explícito.
   v_result := public.compute_unit_price(v_product_id, 1, NULL, NULL, NULL, NULL::timestamptz);
-
   IF v_result ? 'error' THEN
-    RAISE EXCEPTION 'mig078 smoke FAIL: compute_unit_price com p_at=NULL retornou %, esperava breakdown', v_result;
+    RAISE EXCEPTION 'mig078 smoke FAIL: compute_unit_price p_at=NULL retornou %, esperava breakdown', v_result;
   END IF;
-
   IF (v_result->>'final_unit_price_cents')::bigint <> 20000 THEN
     RAISE EXCEPTION 'mig078 smoke FAIL: final_unit_price_cents = %, esperava 20000', v_result->>'final_unit_price_cents';
   END IF;
 
-  -- Mesmo teste para preview_unit_price + resolve_effective_floor + resolve_pricing_profile.
   v_result := public.preview_unit_price(v_product_id, 1, NULL, NULL, NULL, NULL, NULL, NULL::timestamptz);
   IF v_result ? 'error' THEN
-    RAISE EXCEPTION 'mig078 smoke FAIL: preview_unit_price com p_at=NULL retornou %', v_result;
+    RAISE EXCEPTION 'mig078 smoke FAIL: preview_unit_price p_at=NULL retornou %', v_result;
   END IF;
 
   v_result := public.resolve_effective_floor(v_product_id, NULL, NULL, 20000::bigint, NULL::timestamptz);
   IF (v_result->>'source') <> 'product' THEN
-    RAISE EXCEPTION 'mig078 smoke FAIL: resolve_effective_floor com p_at=NULL source=%, esperava product', v_result->>'source';
+    RAISE EXCEPTION 'mig078 smoke FAIL: resolve_effective_floor p_at=NULL source=%, esperava product', v_result->>'source';
   END IF;
 
-  -- Cleanup do smoke
+  -- Cleanup: tiers caem por FK ON DELETE CASCADE.
   DELETE FROM public.pricing_profiles WHERE id = v_profile_id;
-  DELETE FROM public.products         WHERE id = v_product_id;
 
   RAISE NOTICE 'mig078 smoke OK: p_at=NULL agora resolve para now() em todas as 4 funções';
 END
