@@ -20,17 +20,6 @@ import { useTieredPricePreview } from '@/lib/orders/use-tiered-price-preview'
 const PROD_A = '11111111-1111-1111-1111-111111111111'
 const PROD_B = '22222222-2222-2222-2222-222222222222'
 
-function mockFetchOnce(
-  response: { ok: true; breakdown: Record<string, number> } | { ok: false; reason: string }
-) {
-  const fetchMock = vi.fn().mockResolvedValueOnce({
-    ok: true,
-    json: async () => response,
-  })
-  globalThis.fetch = fetchMock as typeof fetch
-  return fetchMock
-}
-
 function mockFetchHttp4xx(reason: string) {
   const fetchMock = vi.fn().mockResolvedValueOnce({
     ok: false,

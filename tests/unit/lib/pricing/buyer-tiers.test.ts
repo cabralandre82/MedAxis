@@ -23,6 +23,7 @@ import {
   formatTierRange,
   findTierForQuantity,
   getActiveBuyerTiers,
+  getMinTierUnitCentsByProductIds,
   type BuyerTierRow,
 } from '@/lib/pricing/buyer-tiers'
 
@@ -196,5 +197,92 @@ describe('getActiveBuyerTiers', () => {
     )
     const out = await getActiveBuyerTiers('prod-1')
     expect(out).toBeNull()
+  })
+})
+
+// ── getMinTierUnitCentsByProductIds — batched lookup for the catalog grid ──
+describe('getMinTierUnitCentsByProductIds', () => {
+  let lastSelectArgs: string[] = []
+
+  beforeEach(() => {
+    lastSelectArgs = []
+    vi.mocked(createAdminClient).mockReset()
+  })
+
+  function setupAdminBatch(profilesData: unknown, profilesError: unknown = null) {
+    const builder = {
+      select: vi.fn((cols: string) => {
+        lastSelectArgs.push(cols)
+        return builder
+      }),
+      in: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ data: profilesData, error: profilesError }),
+    }
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn(() => builder),
+    } as unknown as ReturnType<typeof createAdminClient>)
+  }
+
+  it('returns {} for empty input without hitting the DB', async () => {
+    const fromSpy = vi.fn()
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: fromSpy,
+    } as unknown as ReturnType<typeof createAdminClient>)
+    const out = await getMinTierUnitCentsByProductIds([])
+    expect(out).toEqual({})
+    expect(fromSpy).not.toHaveBeenCalled()
+  })
+
+  it('groups by product and returns the MIN unit_price_cents per product', async () => {
+    setupAdminBatch([
+      {
+        product_id: 'prod-A',
+        pricing_profile_tiers: [
+          { unit_price_cents: 150_000 },
+          { unit_price_cents: 130_000 },
+          { unit_price_cents: 120_000 },
+        ],
+      },
+      {
+        product_id: 'prod-B',
+        pricing_profile_tiers: [{ unit_price_cents: 80_000 }, { unit_price_cents: 70_000 }],
+      },
+    ])
+    const out = await getMinTierUnitCentsByProductIds(['prod-A', 'prod-B'])
+    expect(out).toEqual({ 'prod-A': 120_000, 'prod-B': 70_000 })
+  })
+
+  it('omits products with no active tiers from the result map', async () => {
+    setupAdminBatch([
+      { product_id: 'prod-A', pricing_profile_tiers: [{ unit_price_cents: 100_000 }] },
+      { product_id: 'prod-B', pricing_profile_tiers: [] }, // present but empty
+    ])
+    const out = await getMinTierUnitCentsByProductIds(['prod-A', 'prod-B', 'prod-C'])
+    expect(out).toEqual({ 'prod-A': 100_000 })
+    expect(out['prod-B']).toBeUndefined()
+    expect(out['prod-C']).toBeUndefined()
+  })
+
+  it('returns {} on DB error (graceful — caller falls back to FIXED card)', async () => {
+    setupAdminBatch(null, { code: 'PGRST', message: 'rls denied' })
+    const out = await getMinTierUnitCentsByProductIds(['prod-A'])
+    expect(out).toEqual({})
+  })
+
+  it('SELECT does NOT include sensitive columns (regression guard)', async () => {
+    setupAdminBatch([
+      { product_id: 'prod-A', pricing_profile_tiers: [{ unit_price_cents: 100_000 }] },
+    ])
+    await getMinTierUnitCentsByProductIds(['prod-A'])
+    // The single select call should ask for product_id +
+    // pricing_profile_tiers(unit_price_cents) only.
+    expect(lastSelectArgs.length).toBe(1)
+    const cols = lastSelectArgs[0]
+    expect(cols).toContain('product_id')
+    expect(cols).toContain('unit_price_cents')
+    expect(cols).not.toContain('pharmacy_cost')
+    expect(cols).not.toContain('platform_min')
+    expect(cols).not.toContain('consultant_')
+    expect(cols).not.toContain('*')
   })
 })

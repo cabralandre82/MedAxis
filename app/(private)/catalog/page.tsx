@@ -9,6 +9,7 @@ import { ButtonLink } from '@/components/ui/button-link'
 import { Plus } from 'lucide-react'
 import { Suspense } from 'react'
 import { resolveBuyerCouponPreview } from '@/lib/orders/buyer-coupon-context'
+import { getMinTierUnitCentsByProductIds } from '@/lib/pricing/buyer-tiers'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,32 +69,26 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
   }
   const { col: sortCol, asc: sortAsc } = orderMap[sort] ?? orderMap.featured
 
-  let query = supabase
-    .from('products')
-    .select(
-      `id, name, slug, concentration, presentation,
+  // PR-D3: also pull `pricing_mode` and `is_manipulated` so the grid
+  // can swap to "A partir de R$ X" + "Magistral" chip on TIERED
+  // products. Both are cheap booleans/enum on the same row.
+  const PRODUCT_COLUMNS = `id, name, slug, concentration, presentation,
        short_description, price_current, estimated_deadline_days,
-       active, status, featured,
+       active, status, featured, pricing_mode, is_manipulated,
        product_categories (id, name, slug),
        pharmacies (id, trade_name),
-       product_images (id, public_url, alt_text, sort_order)`,
-      { count: 'exact' }
-    )
+       product_images (id, public_url, alt_text, sort_order)`
+
+  let query = supabase
+    .from('products')
+    .select(PRODUCT_COLUMNS, { count: 'exact' })
     .in('status', ['active', 'unavailable'])
 
   // Pharmacy admins see only their own products (all statuses)
   if (isPharmacy && pharmacyId) {
     query = supabase
       .from('products')
-      .select(
-        `id, name, slug, concentration, presentation,
-         short_description, price_current, estimated_deadline_days,
-         active, status, featured,
-         product_categories (id, name, slug),
-         pharmacies (id, trade_name),
-         product_images (id, public_url, alt_text, sort_order)`,
-        { count: 'exact' }
-      )
+      .select(PRODUCT_COLUMNS, { count: 'exact' })
       .eq('pharmacy_id', pharmacyId)
   }
 
@@ -122,19 +117,42 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
     supabase.from('pharmacies').select('id, trade_name').eq('status', 'ACTIVE').order('trade_name'),
   ])
 
-  // Buyer-side coupon preview — clinic or doctor sees a "with coupon"
-  // chip on each card so they don't have to place an order to learn
-  // whether the coupon is wired up. Pharmacies never see this.
-  // (regression-audit-2026-04-28 item #1)
-  //
-  // Buyer resolution + RPC call live in `lib/orders/buyer-coupon-context.ts`
-  // so /catalog, /catalog/[slug] and /orders/new all use the SAME
-  // discount preview. (Same fix, three surfaces — see the 2026-04-28
-  // follow-up note in regression-audit.)
-  const couponPreviewByProduct = await resolveBuyerCouponPreview(
-    currentUser,
-    (products ?? []).map((p) => String((p as { id: string }).id))
-  )
+  const productIds = (products ?? []).map((p) => String((p as { id: string }).id))
+
+  // PR-D3: batch lookup the MIN tier unit price for each TIERED
+  // product on the page. We only ask for products that need it —
+  // FIXED rows skip the RPC.
+  const tieredProductIds = (products ?? [])
+    .filter((p) => (p as { pricing_mode?: string }).pricing_mode === 'TIERED_PROFILE')
+    .map((p) => String((p as { id: string }).id))
+
+  const [couponPreviewByProduct, minTierByProduct] = await Promise.all([
+    // Buyer-side coupon preview — clinic or doctor sees a "with coupon"
+    // chip on each card so they don't have to place an order to learn
+    // whether the coupon is wired up. Pharmacies never see this.
+    // (regression-audit-2026-04-28 item #1)
+    //
+    // Buyer resolution + RPC call live in `lib/orders/buyer-coupon-context.ts`
+    // so /catalog, /catalog/[slug] and /orders/new all use the SAME
+    // discount preview. (Same fix, three surfaces — see the 2026-04-28
+    // follow-up note in regression-audit.)
+    resolveBuyerCouponPreview(currentUser, productIds),
+    tieredProductIds.length > 0
+      ? getMinTierUnitCentsByProductIds(tieredProductIds)
+      : Promise.resolve<Record<string, number>>({}),
+  ])
+
+  // Stitch min tier into each product. We mutate a shallow clone so
+  // the typed cast below stays honest — we don't reach into the
+  // Supabase result type, we re-shape it into ProductCard.
+  const cards = (products ?? []).map((p) => {
+    const id = String((p as { id: string }).id)
+    const min = minTierByProduct[id]
+    if (typeof min === 'number') {
+      return { ...(p as object), min_tier_unit_cents: min }
+    }
+    return p
+  })
 
   if (isPharmacy) {
     return (
@@ -152,7 +170,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
           </ButtonLink>
         </div>
 
-        <CatalogGrid products={(products ?? []) as unknown as ProductCard[]} pharmacyMode />
+        <CatalogGrid products={cards as unknown as ProductCard[]} pharmacyMode />
 
         <PaginationWrapper total={count ?? 0} pageSize={PAGE_SIZE} currentPage={page} />
       </div>
@@ -180,7 +198,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
       </Suspense>
 
       <CatalogGrid
-        products={(products ?? []) as unknown as ProductCard[]}
+        products={cards as unknown as ProductCard[]}
         couponPreviewByProduct={couponPreviewByProduct}
       />
 

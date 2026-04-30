@@ -6,9 +6,10 @@ import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ButtonLink } from '@/components/ui/button-link'
 import { Button } from '@/components/ui/button'
-import { Clock, Package, Star, Bell, Tag } from 'lucide-react'
+import { Clock, Package, Star, Bell, Tag, Pill } from 'lucide-react'
 import { InterestModal } from './interest-modal'
 import { previewDiscountedUnitPrice, type CatalogCouponPreview } from '@/lib/coupons/preview'
+import type { PricingMode } from '@/types'
 
 export interface ProductCard {
   id: string
@@ -21,6 +22,19 @@ export interface ProductCard {
   estimated_deadline_days: number
   featured: boolean
   status: 'active' | 'unavailable' | 'inactive'
+  /** PR-D3: when 'TIERED_PROFILE', the card swaps to "a partir de"
+   *  copy and shows a "magistral" chip when is_manipulated=true. */
+  pricing_mode?: PricingMode
+  /** PR-D3: drives the "Magistral" chip and softer copy
+   *  (RDC 67/2007). */
+  is_manipulated?: boolean
+  /**
+   * PR-D3: minimum unit price across active tiers, IN CENTS. Used
+   * for "A partir de R$ X" on TIERED cards. Optional — a TIERED
+   * product without an active profile (super-admin oversight)
+   * falls back to `price_current`.
+   */
+  min_tier_unit_cents?: number
   product_categories: { id: string; name: string; slug: string } | null
   pharmacies: { id: string; trade_name: string } | null
   product_images: {
@@ -89,6 +103,21 @@ function ProductCard({
   const primaryImage = product.product_images
     ?.sort((a, b) => a.sort_order - b.sort_order)
     .find((img) => img.public_url)
+
+  // PR-D3: TIERED magistral surface.
+  // - "A partir de R$ X" (the MIN tier unit price) replaces the
+  //   single bold price. Honest copy: the buyer can pay this price
+  //   IF they pick the most discounted bracket.
+  // - Coupon chip becomes informational ("Cupom XYZ disponível")
+  //   instead of a discounted number. The actual reduction depends
+  //   on qty + tier + INV-2 cap and is computed live on the detail
+  //   page — promising a fixed discount on the grid would be ghost
+  //   money. The chip still tells the buyer "your coupon will work
+  //   here" so they don't worry it was forgotten.
+  const isTieredCard =
+    !pharmacyMode &&
+    product.pricing_mode === 'TIERED_PROFILE' &&
+    typeof product.min_tier_unit_cents === 'number'
 
   return (
     <>
@@ -160,7 +189,42 @@ function ProductCard({
           <div className="space-y-2 border-t border-gray-100 pt-3">
             {!unavailable && (
               <div className="space-y-1">
-                {coupon ? (
+                {isTieredCard ? (
+                  <>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                        A partir de
+                      </span>
+                      <span className="text-xl font-bold text-[hsl(213,75%,24%)]">
+                        {formatCurrency(product.min_tier_unit_cents! / 100)}
+                      </span>
+                      <span className="text-xs text-gray-500">/un</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {product.is_manipulated && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-800 ring-1 ring-blue-100"
+                          title="Preparado magistral conforme prescrição médica"
+                        >
+                          <Pill className="h-2.5 w-2.5" aria-hidden="true" />
+                          Magistral
+                        </span>
+                      )}
+                      <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 ring-1 ring-purple-100">
+                        Preço por quantidade
+                      </span>
+                      {coupon && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+                          title={`Cupom ${coupon.code} aplicável — economia varia conforme quantidade`}
+                        >
+                          <Tag className="h-2.5 w-2.5" aria-hidden="true" />
+                          Cupom {coupon.code} disponível
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : coupon ? (
                   // Buyer has an active coupon for this product — show
                   // the discounted unit + a chip with the coupon code so
                   // they can verify it before placing the order.
