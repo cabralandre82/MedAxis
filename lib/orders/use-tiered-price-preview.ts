@@ -106,6 +106,13 @@ export function useTieredPricePreview(items: ItemKey[], scope: Scope = {}): Tier
   const cacheRef = useRef<Record<string, CacheValue>>({})
   cacheRef.current = cache
 
+  // Pre-compute the effect's dependency string here — keeping the
+  // `.join` directly inside the deps array trips the eslint
+  // react-hooks/exhaustive-deps complex-expression warning.
+  const itemsDigest = items.map((i) => `${i.productId}:${i.quantity}:${i.couponId ?? ''}`).join(',')
+  const scopeClinic = scope.clinicId ?? ''
+  const scopeDoctor = scope.doctorId ?? ''
+
   useEffect(() => {
     let cancelled = false
     const requested = new Set<string>()
@@ -191,13 +198,12 @@ export function useTieredPricePreview(items: ItemKey[], scope: Scope = {}): Tier
       // scrubs 1→2→3→2 should hit cache on the way back). Aborting on
       // page unmount happens via cancelled flag above.
     }
+    // `items` is intentionally excluded from deps: itemsDigest is a
+    // stable string snapshot of the same data and is what we actually
+    // diff against. Including the array would re-run the effect on
+    // every render even when contents are identical.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    // Stringify the requested items for stable deps. Scope fields too.
-    items.map((i) => `${i.productId}:${i.quantity}:${i.couponId ?? ''}`).join(','),
-    scope.clinicId ?? '',
-    scope.doctorId ?? '',
-  ])
+  }, [itemsDigest, scopeClinic, scopeDoctor])
 
   return {
     get(productId: string, quantity: number, couponId?: string | null) {
