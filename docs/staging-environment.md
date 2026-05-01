@@ -135,11 +135,35 @@ git push origin staging
 
 - [x] Projeto Supabase `clinipharma-staging` criado ✅ (2026-04-16) — `ghjexiyrqdtqhkolsyaw`
 - [x] Migrations `001–042` aplicadas em staging ✅ (2026-04-16)
+- [x] Migrations `043–081` aplicadas em staging ✅ (2026-05-01) — schema agora 100% sincronizado com produção (81 migrations, 75 tabelas em `public`)
 - [x] Seed de dados de teste executado ✅ (2026-04-16) — 5 usuários criados (senha: `Clinipharma@2026`)
 - [x] Branch `staging` criada no repositório ✅ (2026-04-16)
 - [x] Variáveis de ambiente de staging adicionadas no Vercel (scope Preview, branch: staging) ✅ (2026-04-16)
-- [ ] Deploy automático branch `staging` configurado no Vercel (ação manual — ver abaixo)
-- [ ] Domínio `staging.clinipharma.com.br` configurado (opcional)
+- [x] Deploy automático branch `staging` configurado no Vercel ✅ (2026-04-17)
+- [x] Domínio `staging.clinipharma.com.br` configurado ✅ (2026-04-17)
+
+### Notas de aplicação 2026-05-01
+
+- O pooler Supabase (`aws-1-sa-east-1.pooler.supabase.com`) suporta tanto modo
+  transaction (`6543`) quanto session (`5432`). Para `supabase db push`, ambos
+  retornam `cannot insert multiple commands into a prepared statement (42601)`
+  porque a CLI usa prepared statements e o pgbouncer rejeita statements
+  multi-query (mesmo em session mode).
+- **Workaround documentado**: aplicar cada migration individualmente via
+  `psql -f` direto (sem prepared statements), depois marcar manualmente em
+  `supabase_migrations.schema_migrations`. O bloco abaixo automatiza:
+
+  ```bash
+  DB_URL="postgres://postgres.ghjexiyrqdtqhkolsyaw:<senha>@aws-1-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
+  for VER in $(seq -f "%03g" <inicio> <fim>); do
+    FILE=$(ls supabase/migrations/${VER}_*.sql 2>/dev/null | head -1) || continue
+    NAME=$(basename "$FILE" .sql)
+    PGPASSWORD='<senha>' psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$FILE" \
+      && PGPASSWORD='<senha>' psql "$DB_URL" -At -c \
+         "INSERT INTO supabase_migrations.schema_migrations(version, name) \
+          VALUES ('$VER', '$NAME') ON CONFLICT DO NOTHING;"
+  done
+  ```
 
 ## Política de Promção
 
