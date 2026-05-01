@@ -174,8 +174,21 @@ export async function savePricingProfile(
 ): Promise<SavePricingProfileResult> {
   try {
     const actor = await requireRole(['SUPER_ADMIN'])
+    // Diagnostic info — when a support request says "I clicked save and
+    // nothing happened" this single line in the Vercel runtime log
+    // confirms whether the action was even reached. Cheap (one line per
+    // submit, never per request) and safe (no PII, no $ values logged).
+    logger.info('[pricing] savePricingProfile invoked', {
+      productId,
+      actorId: actor.id,
+      tierCount: Array.isArray(input?.tiers) ? input.tiers.length : 0,
+    })
     const parsed = pricingProfileSchema.safeParse(input)
     if (!parsed.success) {
+      logger.warn('[pricing] savePricingProfile validation failed', {
+        productId,
+        issue: parsed.error.issues[0]?.message,
+      })
       return { error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
     }
 

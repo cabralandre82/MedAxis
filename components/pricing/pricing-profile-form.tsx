@@ -21,10 +21,10 @@
  *   erro e o form fica vivo para correção.
  */
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -76,6 +76,13 @@ function brlToCents(brl: string): number | null {
 export function PricingProfileForm({ productId, currentProfile, currentTiers, cancelHref }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  // In-form feedback message — survives even if the Sonner toast layer
+  // is blocked (ad-blocker, CSP report-only quirk, hydration-deferred
+  // portal). aria-live polite so screen-readers announce it on change.
+  const [feedback, setFeedback] = useState<{ kind: 'error' | 'success'; message: string } | null>(
+    null
+  )
+  const reasonRef = useRef<HTMLTextAreaElement | null>(null)
 
   const [pharmacyCostBrl, setPharmacyCostBrl] = useState(
     centsToBrl(currentProfile?.pharmacy_cost_unit_cents ?? null)
@@ -226,23 +233,65 @@ export function PricingProfileForm({ productId, currentProfile, currentTiers, ca
     }
   }
 
+  function showError(message: string) {
+    setFeedback({ kind: 'error', message })
+    // Best-effort toast — never the sole feedback channel.
+    try {
+      toast.error(message)
+    } catch {
+      // Sonner unavailable → in-form banner already covers it.
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setFeedback(null)
+    // Diagnostic breadcrumb — leaves a trail in the browser console
+    // when an operator reports "I clicked and nothing happened". Keeps
+    // a stable prefix so it's grep-able in support sessions.
+    if (typeof window !== 'undefined') {
+      console.info('[pricing-form] submit clicked', {
+        productId,
+        hasReason: reason.trim().length > 0,
+        tierCount: tiers.length,
+      })
+    }
     const v = validate()
     if (!v.ok) {
-      toast.error(v.message)
+      showError(v.message)
+      // Most common silent-fail path: empty/invalid `reason`. Bring it
+      // into view + focus so the operator immediately sees what's
+      // missing instead of "nothing happened".
+      if (/motivo/i.test(v.message) && reasonRef.current) {
+        reasonRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        reasonRef.current.focus()
+      }
       return
     }
 
     startTransition(async () => {
-      const res = await savePricingProfile(productId, v.data)
-      if (res.error) {
-        toast.error(res.error)
-        return
+      try {
+        const res = await savePricingProfile(productId, v.data)
+        if (res.error) {
+          showError(res.error)
+          return
+        }
+        setFeedback({ kind: 'success', message: 'Pricing profile salvo (nova versão publicada)' })
+        try {
+          toast.success('Pricing profile salvo (nova versão publicada)')
+        } catch {
+          /* ignore — banner is already shown */
+        }
+        router.push(`/products/${productId}/pricing`)
+        router.refresh()
+      } catch (err) {
+        // Network failure / Server Action transport error / runtime
+        // exception — without this catch the useTransition swallowed
+        // the error silently and the operator saw no feedback.
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[pricing-form] savePricingProfile threw', { err: msg })
+        showError(`Falha ao salvar: ${msg}. Tente novamente em instantes.`)
       }
-      toast.success('Pricing profile salvo (nova versão publicada)')
-      router.push(`/products/${productId}/pricing`)
-      router.refresh()
     })
   }
 
@@ -408,6 +457,7 @@ export function PricingProfileForm({ productId, currentProfile, currentTiers, ca
       <div className="space-y-2">
         <Label htmlFor="reason">Motivo desta versão *</Label>
         <Textarea
+          ref={reasonRef}
           id="reason"
           rows={3}
           placeholder="Ex.: aumento do custo da farmácia em 20%, repassado para os tiers."
@@ -416,10 +466,32 @@ export function PricingProfileForm({ productId, currentProfile, currentTiers, ca
         />
       </div>
 
+      {/* In-form feedback banner — primary feedback channel.
+          aria-live=polite so screen readers announce, role=status so
+          assistive tech treats as advisory. Survives Sonner being
+          blocked by an extension or CSP regression. */}
+      {feedback && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            feedback.kind === 'error'
+              ? 'flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800'
+              : 'flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800'
+          }
+          data-testid="pricing-form-feedback"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <span>{feedback.message}</span>
+        </div>
+      )}
+
       {/* Sticky action bar — sempre visível no fim do viewport para que
           o operador nunca precise rolar até o fim do form pra encontrar
-          o botão de salvar. */}
-      <div className="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 border-t bg-white/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+          o botão de salvar. z-10 garante que fica acima de qualquer
+          conteúdo que rendere abaixo (sticky em flow normal não cria
+          stacking context por si só). */}
+      <div className="sticky bottom-0 z-10 -mx-6 flex items-center justify-between gap-3 border-t bg-white/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <p className="hidden text-xs text-slate-500 sm:block">
           Salvar publica uma <strong>nova versão</strong> deste profile. A versão atual fica
           preservada como histórico (SCD-2).
@@ -433,7 +505,7 @@ export function PricingProfileForm({ productId, currentProfile, currentTiers, ca
           >
             Cancelar
           </Button>
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending} data-testid="pricing-form-submit">
             {pending ? 'Salvando...' : 'Salvar e publicar nova versão'}
           </Button>
         </div>
