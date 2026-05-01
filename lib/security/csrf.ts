@@ -81,6 +81,11 @@ const CSRF_EXEMPT_PREFIXES = [
   // violated the policy). They have their own bounded payload size
   // and per-IP rate limiter inside the route handler.
   '/api/csp-report',
+  // Wave 12 — backup ledger ingest. Called by the GitHub Actions
+  // workflows (offsite-backup, restore-drill) from runners that do
+  // not share an origin with the platform and authenticate via
+  // BACKUP_LEDGER_SECRET as Bearer (see app/api/backups/record).
+  '/api/backups/record',
 ]
 
 export interface CsrfDecision {

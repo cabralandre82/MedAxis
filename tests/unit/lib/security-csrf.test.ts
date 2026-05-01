@@ -48,6 +48,10 @@ describe('checkCsrf — exempt paths', () => {
     '/api/cron/scheduler',
     '/api/tracking',
     '/api/health',
+    '/api/csp-report',
+    // Wave 12: backup ledger ingest. Server-to-server from GitHub
+    // Actions runners — no shared cookie origin, auth via Bearer.
+    '/api/backups/record',
   ]
   it.each(cases)('allows POST to %s without Origin', (p) => {
     const req = makeReq(`https://app.example.com${p}`, { method: 'POST' })
