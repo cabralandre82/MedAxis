@@ -479,6 +479,73 @@ describe('previewUnitPrice (hypothetical coupon)', () => {
     expect(res.error?.reason).toBe('rpc_unavailable')
     expect(rpc).not.toHaveBeenCalled()
   })
+
+  // ── edge cases agressivos (audit complementar pós-deploy ADR-002) ─────
+  it('rejeita quantity negativa, zero e NaN', async () => {
+    const rpc = mockRpc(vi.fn())
+    for (const q of [0, -1, -100, NaN, Infinity, -Infinity]) {
+      const res = await previewUnitPrice({ productId: PRODUCT_ID, quantity: q })
+      expect(res.error?.reason).toBe('invalid_quantity')
+    }
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('rejeita productId vazio', async () => {
+    const rpc = mockRpc(vi.fn())
+    const res = await previewUnitPrice({ productId: '', quantity: 1 })
+    expect(res.error?.reason).toBe('rpc_unavailable')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('PERCENT com valor > 100 é rejeitado (cap garantido pela trigger, mas UX mata cedo)', async () => {
+    const rpc = mockRpc(vi.fn())
+    const res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 1,
+      hypothetical: { discountType: 'PERCENT', discountValue: 101 },
+    })
+    expect(res.error?.reason).toBe('rpc_unavailable')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('TIER_UPGRADE rejeita steps NaN, negativo, fracionário', async () => {
+    const rpc = mockRpc(vi.fn())
+    for (const steps of [0, -1, 1.5, NaN]) {
+      const res = await previewUnitPrice({
+        productId: PRODUCT_ID,
+        quantity: 1,
+        hypothetical: { discountType: 'TIER_UPGRADE', discountValue: 0, tierPromotionSteps: steps },
+      })
+      expect(res.error?.reason).toBe('rpc_unavailable')
+    }
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('MIN_QTY_PERCENT rejeita minQuantity NaN, negativo, fracionário', async () => {
+    const rpc = mockRpc(vi.fn())
+    for (const minQ of [-1, 1.5, NaN]) {
+      const res = await previewUnitPrice({
+        productId: PRODUCT_ID,
+        quantity: 5,
+        hypothetical: { discountType: 'MIN_QTY_PERCENT', discountValue: 10, minQuantity: minQ },
+      })
+      expect(res.error?.reason).toBe('rpc_unavailable')
+    }
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('FIRST_UNIT_DISCOUNT rejeita discountValue zero ou negativo', async () => {
+    const rpc = mockRpc(vi.fn())
+    for (const v of [0, -10]) {
+      const res = await previewUnitPrice({
+        productId: PRODUCT_ID,
+        quantity: 1,
+        hypothetical: { discountType: 'FIRST_UNIT_DISCOUNT', discountValue: v },
+      })
+      expect(res.error?.reason).toBe('rpc_unavailable')
+    }
+    expect(rpc).not.toHaveBeenCalled()
+  })
 })
 
 // ── buildCouponImpactMatrix (PR-C3) ──────────────────────────────────────

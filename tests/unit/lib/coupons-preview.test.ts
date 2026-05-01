@@ -85,4 +85,39 @@ describe('previewDiscountedUnitPrice', () => {
       })
     ).toEqual({ discountedUnit: 99.5, perUnitDiscount: 0 })
   })
+
+  // ── ADR-002 — tipos novos não calculam no catálogo ─────────────────────
+  // Esses dependem de quantidade/tier e o catálogo (grid público) não
+  // sabe quanto o usuário vai comprar. O helper retorna 0 por contrato
+  // e a UI exibe apenas o badge "tem cupom"; o cálculo correto vive em
+  // `compute_unit_price` (mig-079) e roda no checkout. Esse teste
+  // congela esse contrato — se um dia mudarmos a estratégia, os testes
+  // do catálogo grid também precisam atualizar.
+  describe('ADR-002 — quantity-dependent types return 0 (badge-only)', () => {
+    it.each([
+      ['FIRST_UNIT_DISCOUNT', 100],
+      ['TIER_UPGRADE', 0],
+      ['MIN_QTY_PERCENT', 10],
+    ] as const)('%s returns no per-unit discount in the catalog grid', (type, value) => {
+      expect(
+        previewDiscountedUnitPrice(150, {
+          discount_type: type,
+          discount_value: value,
+          max_discount_amount: null,
+        })
+      ).toEqual({ discountedUnit: 150, perUnitDiscount: 0 })
+    })
+
+    it('respects max_discount_amount even though the underlying discount is 0', () => {
+      // Defensive: setting max_discount_amount on a TIER_UPGRADE coupon
+      // should not produce a negative discount or otherwise flip the math.
+      expect(
+        previewDiscountedUnitPrice(150, {
+          discount_type: 'TIER_UPGRADE',
+          discount_value: 0,
+          max_discount_amount: 50,
+        })
+      ).toEqual({ discountedUnit: 150, perUnitDiscount: 0 })
+    })
+  })
 })

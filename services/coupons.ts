@@ -149,6 +149,31 @@ export async function createCoupon(
     const targetField = clinic_id ? 'clinic_id' : 'doctor_id'
     const targetId = clinic_id ?? doctor_id!
 
+    // ADR-002 — guard de compatibilidade com pricing_mode.
+    //
+    // Os 3 tipos novos (FIRST_UNIT_DISCOUNT, TIER_UPGRADE, MIN_QTY_PERCENT)
+    // só são tratados pela engine TIERED (compute_unit_price). O branch
+    // legacy de freeze_order_item_price (pricing_mode='FIXED') só conhece
+    // PERCENT/FIXED; deixar passar um tipo novo aqui causaria desconto
+    // calculado errado no congelamento do pedido. Ver migração 080 para
+    // a defesa-em-profundidade no banco.
+    const NEW_TYPES = ['FIRST_UNIT_DISCOUNT', 'TIER_UPGRADE', 'MIN_QTY_PERCENT'] as const
+    if ((NEW_TYPES as readonly string[]).includes(parsed.data.discount_type)) {
+      const { data: prod, error: prodErr } = await admin
+        .from('products')
+        .select('pricing_mode, name')
+        .eq('id', parsed.data.product_id)
+        .maybeSingle()
+      if (prodErr || !prod) {
+        return { error: 'Produto não encontrado' }
+      }
+      if (prod.pricing_mode !== 'TIERED_PROFILE') {
+        return {
+          error: `O cupom do tipo ${parsed.data.discount_type} só pode ser aplicado a produtos com preço por escala (TIERED). O produto ${prod.name} ainda está com preço fixo — converta-o antes ou escolha PERCENT/FIXED.`,
+        }
+      }
+    }
+
     // Verifica duplicidade por target+product
     const existingQuery = admin
       .from('coupons')
