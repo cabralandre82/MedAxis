@@ -159,6 +159,24 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
   // ── deactivate state ──────────────────────────────────────────────────────
   const [deactivating, setDeactivating] = useState<string | null>(null)
 
+  // ── ADR-003: replace-existing confirmation state ──────────────────────────
+  // Quando o backend devolver 409 com `conflict.existing_coupon`,
+  // armazenamos o payload aqui para exibir o modal de confirmação. O
+  // submit do modal re-chama a API com `replace_existing: true`.
+  type ExistingCouponConflict = {
+    id: string
+    code: string
+    discount_type: DiscountType
+    discount_value: number
+    min_quantity: number
+    tier_promotion_steps: number
+    valid_until: string | null
+  }
+  const [pendingReplacement, setPendingReplacement] = useState<{
+    existing: ExistingCouponConflict
+    payload: Record<string, unknown>
+  } | null>(null)
+
   // ── derived list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     let list = coupons
@@ -261,24 +279,67 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
             : undefined,
         valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
       }
-      const res = await fetch('/api/admin/coupons', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setFormError(data.error ?? 'Erro ao criar cupom')
-      } else {
-        setShowForm(false)
-        resetForm()
-        router.refresh()
-      }
+      await submitCouponPayload(payload, false)
     } catch {
       setFormError('Erro de conexão')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // ADR-003 — submit unificado: a primeira chamada vai sem
+  // `replace_existing`; se o backend devolver 409, armazenamos o
+  // conflito e abrimos o modal. A confirmação re-chama com
+  // `replace_existing: true` (`isReplacement=true` aqui).
+  async function submitCouponPayload(
+    payload: Record<string, unknown>,
+    isReplacement: boolean
+  ): Promise<void> {
+    const finalPayload = isReplacement ? { ...payload, replace_existing: true } : payload
+    const res = await fetch('/api/admin/coupons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(finalPayload),
+    })
+    const data = await res.json()
+
+    if (res.status === 409 && data?.conflict?.existing_coupon) {
+      // Não é erro definitivo — pede confirmação ao operador. Não
+      // poluímos formError pra não confundir; apenas abre o modal.
+      setPendingReplacement({
+        existing: data.conflict.existing_coupon as ExistingCouponConflict,
+        payload,
+      })
+      return
+    }
+
+    if (!res.ok) {
+      setFormError(data.error ?? 'Erro ao criar cupom')
+      return
+    }
+
+    // Sucesso (criação simples ou substituição confirmada).
+    setShowForm(false)
+    setPendingReplacement(null)
+    resetForm()
+    router.refresh()
+  }
+
+  async function confirmReplacement(): Promise<void> {
+    if (!pendingReplacement) return
+    setSubmitting(true)
+    setFormError(null)
+    try {
+      await submitCouponPayload(pendingReplacement.payload, true)
+    } catch {
+      setFormError('Erro de conexão durante a substituição')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function cancelReplacement(): void {
+    setPendingReplacement(null)
   }
 
   // ── deactivate ────────────────────────────────────────────────────────────
@@ -771,6 +832,94 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
           </div>
         )}
       </div>
+
+      {/*
+        ADR-003 — modal de substituição.
+        Aparece quando o backend retorna 409 com `conflict.existing_coupon`.
+        O operador vê exatamente qual cupom será desativado, com tipo e valor,
+        e confirma explicitamente a substituição. Cancelar retorna ao formulário
+        sem mexer em nada.
+      */}
+      {pendingReplacement && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-3 flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" />
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">
+                  Substituir cupom existente?
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Esta clínica/médico já tem um cupom ativo neste produto. Continuar irá{' '}
+                  <strong>desativar o cupom anterior</strong> e criar o novo. O destinatário será
+                  notificado da troca. Pedidos já em andamento não são afetados (o preço fica
+                  congelado no pedido).
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs">
+              <div className="font-medium text-gray-700">Cupom a ser desativado:</div>
+              <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-gray-600">
+                <div>
+                  <span className="text-gray-500">Código:</span>{' '}
+                  <code className="font-mono">{pendingReplacement.existing.code}</code>
+                </div>
+                <div>
+                  <span className="text-gray-500">Tipo:</span>{' '}
+                  {DISCOUNT_TYPE_LABEL[pendingReplacement.existing.discount_type as DiscountType] ??
+                    pendingReplacement.existing.discount_type}
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500">Desconto:</span>{' '}
+                  {(() => {
+                    const e = pendingReplacement.existing
+                    if (e.discount_type === 'PERCENT') return `${e.discount_value}%`
+                    if (e.discount_type === 'FIXED') return `R$ ${e.discount_value.toFixed(2)}`
+                    if (e.discount_type === 'FIRST_UNIT_DISCOUNT')
+                      return `R$ ${e.discount_value.toFixed(2)} na 1ª unidade`
+                    if (e.discount_type === 'TIER_UPGRADE')
+                      return `+${e.tier_promotion_steps} tier(s)`
+                    if (e.discount_type === 'MIN_QTY_PERCENT')
+                      return `${e.discount_value}% se qty ≥ ${e.min_quantity}`
+                    return `${e.discount_value}`
+                  })()}
+                </div>
+                {pendingReplacement.existing.valid_until && (
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Válido até:</span>{' '}
+                    {formatDate(pendingReplacement.existing.valid_until)}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelReplacement}
+                disabled={submitting}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmReplacement}
+                disabled={submitting}
+                className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Substituir cupom
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

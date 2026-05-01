@@ -52,7 +52,23 @@ export async function POST(req: NextRequest) {
   }
 
   const result = await createCoupon(body as Parameters<typeof createCoupon>[0])
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 422 })
+  if (result.error) {
+    // ADR-003 — quando há cupom ativo prévio E o caller não pediu
+    // substituição, devolvemos 409 Conflict + payload do cupom existente
+    // para a UI poder exibir um modal de confirmação. Demais erros (Zod,
+    // RBAC, RPC) seguem como 422.
+    if (result.conflict) {
+      return NextResponse.json({ error: result.error, conflict: result.conflict }, { status: 409 })
+    }
+    return NextResponse.json({ error: result.error }, { status: 422 })
+  }
 
-  return NextResponse.json({ coupon: result.coupon }, { status: 201 })
+  return NextResponse.json(
+    {
+      coupon: result.coupon,
+      replaced_coupon_ids: result.replaced_coupon_ids,
+      replaced_coupon_codes: result.replaced_coupon_codes,
+    },
+    { status: 201 }
+  )
 }

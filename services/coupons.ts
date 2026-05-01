@@ -53,6 +53,19 @@ const createCouponSchema = z
     tier_promotion_steps: z.number().int().min(0).max(10).optional(),
     valid_from: z.string().datetime().optional(),
     valid_until: z.string().datetime().nullable().optional(),
+    /**
+     * ADR-003 — opt-in para o caminho de substituição atômica.
+     *
+     * Quando `false` (default), createCoupon retorna conflito 409-style
+     * se já houver outro cupom ativo para o mesmo (target × produto).
+     * A UI usa esse conflito para pedir confirmação ao operador.
+     *
+     * Quando `true`, createCoupon chama a RPC `replace_active_coupon`,
+     * que desativa o ativo anterior e cria o novo na mesma transação.
+     * Notificação ao destinatário e audit log são emitidos para os
+     * dois lados (desativação + criação).
+     */
+    replace_existing: z.boolean().optional(),
   })
   .refine((d) => d.clinic_id || d.doctor_id, {
     message: 'Informe a clínica ou o médico destinatário do cupom',
@@ -135,9 +148,36 @@ export interface CouponRow {
 
 // ─── admin: criar cupom ───────────────────────────────────────────────────────
 
-export async function createCoupon(
-  input: CreateCouponInput
-): Promise<{ coupon?: CouponRow; error?: string }> {
+/**
+ * ADR-003 — payload que descreve o cupom existente quando há conflito
+ * de unicidade. A UI consome este payload para exibir o modal de
+ * confirmação ("Já existe um cupom X. Substituir?").
+ */
+export interface ExistingCouponConflict {
+  id: string
+  code: string
+  discount_type: CatalogCouponDiscountType
+  discount_value: number
+  min_quantity: number
+  tier_promotion_steps: number
+  valid_until: string | null
+}
+
+export interface CreateCouponResult {
+  coupon?: CouponRow
+  error?: string
+  /**
+   * Presente apenas quando há cupom ativo prévio para (target × produto)
+   * E `replace_existing` veio false/ausente. A UI pede confirmação e
+   * re-submete com `replace_existing: true`.
+   */
+  conflict?: { existing_coupon: ExistingCouponConflict }
+  /** Presente quando o caminho de substituição rodou com sucesso. */
+  replaced_coupon_ids?: string[]
+  replaced_coupon_codes?: string[]
+}
+
+export async function createCoupon(input: CreateCouponInput): Promise<CreateCouponResult> {
   try {
     const actor = await requireRole(['SUPER_ADMIN', 'PLATFORM_ADMIN'])
     const parsed = createCouponSchema.safeParse(input)
@@ -174,10 +214,16 @@ export async function createCoupon(
       }
     }
 
-    // Verifica duplicidade por target+product
+    // ADR-003 — Verifica duplicidade por target+product.
+    //
+    // O partial unique index garante que existe no máximo 1, mas
+    // selecionamos com colunas suficientes para construir um payload de
+    // confirmação útil para a UI quando precisarmos pedir override.
     const existingQuery = admin
       .from('coupons')
-      .select('id')
+      .select(
+        'id, code, discount_type, discount_value, min_quantity, tier_promotion_steps, valid_until'
+      )
       .eq('product_id', parsed.data.product_id)
       .eq('active', true)
 
@@ -186,39 +232,93 @@ export async function createCoupon(
 
     const { data: existing } = await existingQuery.maybeSingle()
 
-    if (existing) {
+    if (existing && !parsed.data.replace_existing) {
       const who = clinic_id ? 'esta clínica' : 'este médico'
+      // Mantemos `error` preenchido para compat com chamadores antigos
+      // que esperam só { error }. Adicionamos `conflict` para a UI nova
+      // (admin-coupon-panel) abrir o modal "substituir cupom existente?".
       return {
-        error: `Já existe um cupom ativo para ${who} e produto. Desative-o antes de criar um novo.`,
+        error: `Já existe um cupom ativo para ${who} e produto. Confirme a substituição para continuar.`,
+        conflict: {
+          existing_coupon: {
+            id: String(existing.id),
+            code: String(existing.code),
+            discount_type: existing.discount_type as CatalogCouponDiscountType,
+            discount_value: Number(existing.discount_value),
+            min_quantity: Number(existing.min_quantity ?? 1),
+            tier_promotion_steps: Number(existing.tier_promotion_steps ?? 0),
+            valid_until: (existing.valid_until ?? null) as string | null,
+          },
+        },
       }
     }
 
     const code = generateCouponCode()
+    let coupon: CouponRow | null = null
+    let replacedCouponIds: string[] = []
+    let replacedCouponCodes: string[] = []
 
-    const { data: coupon, error: insertError } = await admin
-      .from('coupons')
-      .insert({
-        code,
-        product_id: parsed.data.product_id,
-        clinic_id: clinic_id ?? null,
-        doctor_id: doctor_id ?? null,
-        discount_type: parsed.data.discount_type,
-        discount_value: parsed.data.discount_value,
-        max_discount_amount: parsed.data.max_discount_amount ?? null,
-        // ADR-002: defaults preservam comportamento legacy de cupons
-        // PERCENT/FIXED. min_quantity=1 → sem gate; tier_promotion_steps=0 →
-        // sem upgrade.
-        min_quantity: parsed.data.min_quantity ?? 1,
-        tier_promotion_steps: parsed.data.tier_promotion_steps ?? 0,
-        valid_from: parsed.data.valid_from ?? new Date().toISOString(),
-        valid_until: parsed.data.valid_until ?? null,
-        created_by_user_id: actor.id,
+    if (existing && parsed.data.replace_existing) {
+      // Caminho atômico via RPC — desativa o ativo anterior e cria o
+      // novo na MESMA transação. Sem janela onde 0 ou 2 cupons fiquem
+      // ativos para o (target × produto) — protege o partial unique
+      // index e a leitura do catálogo.
+      const { data: rpcData, error: rpcError } = await admin.rpc('replace_active_coupon', {
+        p_product_id: parsed.data.product_id,
+        p_clinic_id: clinic_id ?? null,
+        p_doctor_id: doctor_id ?? null,
+        p_code: code,
+        p_discount_type: parsed.data.discount_type,
+        p_discount_value: parsed.data.discount_value,
+        p_max_discount_amount: parsed.data.max_discount_amount ?? null,
+        p_min_quantity: parsed.data.min_quantity ?? 1,
+        p_tier_promotion_steps: parsed.data.tier_promotion_steps ?? 0,
+        p_valid_from: parsed.data.valid_from ?? new Date().toISOString(),
+        p_valid_until: parsed.data.valid_until ?? null,
+        p_created_by_user_id: actor.id,
       })
-      .select()
-      .single()
 
-    if (insertError || !coupon) {
-      logger.error('[coupons/create] insert failed', { error: insertError })
+      if (rpcError || !rpcData) {
+        logger.error('[coupons/create] replace rpc failed', { error: rpcError })
+        return { error: 'Erro ao substituir cupom existente' }
+      }
+
+      const payload = rpcData as {
+        new_coupon: CouponRow
+        replaced_ids: string[] | null
+        replaced_codes: string[] | null
+      }
+      coupon = payload.new_coupon
+      replacedCouponIds = payload.replaced_ids ?? []
+      replacedCouponCodes = payload.replaced_codes ?? []
+    } else {
+      const { data: inserted, error: insertError } = await admin
+        .from('coupons')
+        .insert({
+          code,
+          product_id: parsed.data.product_id,
+          clinic_id: clinic_id ?? null,
+          doctor_id: doctor_id ?? null,
+          discount_type: parsed.data.discount_type,
+          discount_value: parsed.data.discount_value,
+          max_discount_amount: parsed.data.max_discount_amount ?? null,
+          min_quantity: parsed.data.min_quantity ?? 1,
+          tier_promotion_steps: parsed.data.tier_promotion_steps ?? 0,
+          valid_from: parsed.data.valid_from ?? new Date().toISOString(),
+          valid_until: parsed.data.valid_until ?? null,
+          created_by_user_id: actor.id,
+        })
+        .select()
+        .single()
+
+      if (insertError || !inserted) {
+        logger.error('[coupons/create] insert failed', { error: insertError })
+        return { error: 'Erro ao criar cupom' }
+      }
+      coupon = inserted as CouponRow
+    }
+
+    if (!coupon) {
       return { error: 'Erro ao criar cupom' }
     }
 
@@ -248,8 +348,15 @@ export async function createCoupon(
       }
     })()
 
+    // ADR-003 — quando é replacement, a body inclui menção explícita ao
+    // cupom anterior. Isso evita que o destinatário pense que o sistema
+    // duplicou descontos ou que o cupom antigo continua valendo.
+    const replacementSuffix =
+      replacedCouponCodes.length > 0
+        ? ` (substitui o cupom anterior ${replacedCouponCodes.join(', ')})`
+        : ''
+
     if (clinic_id) {
-      // Notifica membros da clínica
       const { data: members } = await admin
         .from('clinic_members')
         .select('user_id')
@@ -259,12 +366,11 @@ export async function createCoupon(
           userId: member.user_id,
           type: 'COUPON_ASSIGNED',
           title: `Cupom de desconto disponível`,
-          body: `Você recebeu um cupom de ${discountLabel} de desconto no produto ${product?.name ?? '—'}. Código: ${code}`,
+          body: `Você recebeu um cupom de ${discountLabel} de desconto no produto ${product?.name ?? '—'}. Código: ${code}${replacementSuffix}`,
           link: '/coupons',
         })
       }
     } else if (doctor_id) {
-      // Notifica o médico diretamente (via user_id)
       const { data: doc } = await admin
         .from('doctors')
         .select('user_id')
@@ -275,13 +381,12 @@ export async function createCoupon(
           userId: doc.user_id,
           type: 'COUPON_ASSIGNED',
           title: `Cupom de desconto disponível`,
-          body: `Você recebeu um cupom de ${discountLabel} no produto ${product?.name ?? '—'}. Código: ${code}`,
+          body: `Você recebeu um cupom de ${discountLabel} no produto ${product?.name ?? '—'}. Código: ${code}${replacementSuffix}`,
           link: '/coupons',
         })
       }
     }
 
-    // Busca nome do destinatário para audit log
     let targetName: string | undefined
     if (clinic_id) {
       const { data: clinic } = await admin
@@ -312,11 +417,37 @@ export async function createCoupon(
         product: product?.name,
         discount_type: parsed.data.discount_type,
         discount_value: parsed.data.discount_value,
+        // ADR-003: rastreia o "novo apaga antigo" no histórico.
+        replaced_coupon_ids: replacedCouponIds.length > 0 ? replacedCouponIds : undefined,
+        replaced_coupon_codes: replacedCouponCodes.length > 0 ? replacedCouponCodes : undefined,
       },
     })
 
+    // ADR-003: também grava UPDATE em cada cupom desativado, para que o
+    // audit_logs de cada cupom tenha o registro do motivo da desativação
+    // (substituição) — útil em DSAR e investigação.
+    for (let i = 0; i < replacedCouponIds.length; i++) {
+      await createAuditLog({
+        actorUserId: actor.id,
+        actorRole: actor.roles[0],
+        entityType: AuditEntity.ORDER,
+        entityId: replacedCouponIds[i],
+        action: AuditAction.UPDATE,
+        newValues: {
+          active: false,
+          deactivation_reason: 'replaced',
+          replaced_by_coupon_id: coupon.id,
+          replaced_by_coupon_code: code,
+        },
+      })
+    }
+
     revalidateTag('coupons')
-    return { coupon: coupon as CouponRow }
+    return {
+      coupon: coupon as CouponRow,
+      replaced_coupon_ids: replacedCouponIds.length > 0 ? replacedCouponIds : undefined,
+      replaced_coupon_codes: replacedCouponCodes.length > 0 ? replacedCouponCodes : undefined,
+    }
   } catch (err) {
     logger.error('[coupons/create] unexpected', { err })
     if (err instanceof Error && err.message === 'FORBIDDEN') return { error: 'Sem permissão' }

@@ -15,7 +15,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── mocks ──────────────────────────────────────────────────────────────
 const adminFromMock = vi.fn()
-const adminClientMock = { from: adminFromMock }
+const adminRpcMock = vi.fn()
+const adminClientMock = { from: adminFromMock, rpc: adminRpcMock }
 
 vi.mock('@/lib/db/admin', () => ({
   createAdminClient: () => adminClientMock,
@@ -26,7 +27,7 @@ vi.mock('@/lib/rbac', () => ({
 }))
 vi.mock('@/lib/audit', () => ({
   createAuditLog: vi.fn(),
-  AuditAction: { CREATE: 'CREATE' },
+  AuditAction: { CREATE: 'CREATE', UPDATE: 'UPDATE' },
   AuditEntity: { ORDER: 'ORDER' },
 }))
 vi.mock('@/lib/notifications', () => ({ createNotification: vi.fn() }))
@@ -250,5 +251,231 @@ describe('TC-COUP-GUARD-01 — pricing_mode guard em createCoupon', () => {
     })
 
     expect(result.error).toMatch(/Produto não encontrado/)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// TC-COUP-REPLACE-01 — política "novo apaga antigo" (ADR-003)
+// ─────────────────────────────────────────────────────────────────────────
+describe('TC-COUP-REPLACE-01 — replace_existing em createCoupon', () => {
+  it('com cupom prévio E replace_existing=false devolve conflict (não cria nada)', async () => {
+    const existingQB = makeQB({
+      data: {
+        id: 'old-coupon-id',
+        code: 'OLD',
+        discount_type: 'PERCENT',
+        discount_value: 5,
+        min_quantity: 1,
+        tier_promotion_steps: 0,
+        valid_until: null,
+      },
+      error: null,
+    })
+    const insertNotCalledQB: Record<string, unknown> = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    adminFromMock.mockImplementation((table: string) => {
+      if (table === 'coupons') return existingQB
+      if (table === 'products') return insertNotCalledQB
+      throw new Error(`unexpected table: ${table}`)
+    })
+
+    const { createCoupon } = await import('@/services/coupons')
+    const result = await createCoupon({
+      product_id: PROD_ID,
+      clinic_id: CLINIC_ID,
+      discount_type: 'PERCENT',
+      discount_value: 7,
+    })
+
+    expect(result.error).toMatch(/Confirme a substituição/)
+    expect(result.conflict?.existing_coupon.id).toBe('old-coupon-id')
+    expect(result.conflict?.existing_coupon.code).toBe('OLD')
+    expect(result.conflict?.existing_coupon.discount_type).toBe('PERCENT')
+    expect(result.coupon).toBeUndefined()
+    // RPC NÃO é chamada nesse caminho
+    expect(adminRpcMock).not.toHaveBeenCalled()
+    // INSERT direto também não
+    expect(insertNotCalledQB.insert).not.toHaveBeenCalled()
+  })
+
+  it('com cupom prévio E replace_existing=true chama RPC e retorna replaced_*', async () => {
+    const existingQB = makeQB({
+      data: {
+        id: 'old-coupon-id',
+        code: 'OLD',
+        discount_type: 'PERCENT',
+        discount_value: 5,
+        min_quantity: 1,
+        tier_promotion_steps: 0,
+        valid_until: null,
+      },
+      error: null,
+    })
+    const productNameQB = makeQB({ data: { name: 'Produto X' }, error: null })
+    const clinicMembersQB: Record<string, unknown> = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    const clinicTradeQB = makeQB({ data: { trade_name: 'Clínica X' }, error: null })
+
+    adminFromMock.mockImplementation((table: string) => {
+      if (table === 'coupons') return existingQB
+      if (table === 'products') return productNameQB
+      if (table === 'clinic_members') return clinicMembersQB
+      if (table === 'clinics') return clinicTradeQB
+      throw new Error(`unexpected table: ${table}`)
+    })
+
+    adminRpcMock.mockResolvedValue({
+      data: {
+        new_coupon: {
+          id: 'new-coupon-id',
+          code: 'NEW-CODE',
+          product_id: PROD_ID,
+          clinic_id: CLINIC_ID,
+          doctor_id: null,
+          discount_type: 'PERCENT',
+          discount_value: 7,
+          max_discount_amount: null,
+          valid_from: new Date().toISOString(),
+          valid_until: null,
+          activated_at: null,
+          active: true,
+          created_by_user_id: 'actor-id',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          used_count: 0,
+          min_quantity: 1,
+          tier_promotion_steps: 0,
+        },
+        replaced_ids: ['old-coupon-id'],
+        replaced_codes: ['OLD'],
+      },
+      error: null,
+    })
+
+    const { createCoupon } = await import('@/services/coupons')
+    const result = await createCoupon({
+      product_id: PROD_ID,
+      clinic_id: CLINIC_ID,
+      discount_type: 'PERCENT',
+      discount_value: 7,
+      replace_existing: true,
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.coupon?.id).toBe('new-coupon-id')
+    expect(result.replaced_coupon_ids).toEqual(['old-coupon-id'])
+    expect(result.replaced_coupon_codes).toEqual(['OLD'])
+    expect(adminRpcMock).toHaveBeenCalledWith(
+      'replace_active_coupon',
+      expect.objectContaining({
+        p_product_id: PROD_ID,
+        p_clinic_id: CLINIC_ID,
+        p_doctor_id: null,
+        p_discount_type: 'PERCENT',
+        p_discount_value: 7,
+      })
+    )
+  })
+
+  it('replace_existing=true MAS sem cupom prévio: cai no INSERT direto (não usa RPC)', async () => {
+    const existingQB = makeQB({ data: null, error: null })
+    const insertQB: Record<string, unknown> = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: 'fresh-id',
+          code: 'X',
+          product_id: PROD_ID,
+          clinic_id: CLINIC_ID,
+          doctor_id: null,
+          discount_type: 'PERCENT',
+          discount_value: 7,
+          max_discount_amount: null,
+          valid_from: new Date().toISOString(),
+          valid_until: null,
+          activated_at: null,
+          active: true,
+          created_by_user_id: 'actor-id',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          used_count: 0,
+          min_quantity: 1,
+          tier_promotion_steps: 0,
+        },
+        error: null,
+      }),
+    }
+    const productNameQB = makeQB({ data: { name: 'Produto X' }, error: null })
+    const clinicMembersQB: Record<string, unknown> = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    const clinicTradeQB = makeQB({ data: { trade_name: 'Clínica X' }, error: null })
+
+    let couponsCallIndex = 0
+    adminFromMock.mockImplementation((table: string) => {
+      if (table === 'coupons') {
+        couponsCallIndex += 1
+        return couponsCallIndex === 1 ? existingQB : insertQB
+      }
+      if (table === 'products') return productNameQB
+      if (table === 'clinic_members') return clinicMembersQB
+      if (table === 'clinics') return clinicTradeQB
+      throw new Error(`unexpected table: ${table}`)
+    })
+
+    const { createCoupon } = await import('@/services/coupons')
+    const result = await createCoupon({
+      product_id: PROD_ID,
+      clinic_id: CLINIC_ID,
+      discount_type: 'PERCENT',
+      discount_value: 7,
+      replace_existing: true,
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.coupon?.id).toBe('fresh-id')
+    expect(result.replaced_coupon_ids).toBeUndefined()
+    // RPC não foi chamada — caminho normal
+    expect(adminRpcMock).not.toHaveBeenCalled()
+    expect(insertQB.insert).toHaveBeenCalled()
+  })
+
+  it('RPC retorna erro: createCoupon devolve mensagem de erro amigável', async () => {
+    const existingQB = makeQB({
+      data: {
+        id: 'old-coupon-id',
+        code: 'OLD',
+        discount_type: 'PERCENT',
+        discount_value: 5,
+        min_quantity: 1,
+        tier_promotion_steps: 0,
+        valid_until: null,
+      },
+      error: null,
+    })
+    adminFromMock.mockImplementation((table: string) => {
+      if (table === 'coupons') return existingQB
+      throw new Error(`unexpected table: ${table}`)
+    })
+    adminRpcMock.mockResolvedValue({ data: null, error: { message: 'rpc explodiu' } })
+
+    const { createCoupon } = await import('@/services/coupons')
+    const result = await createCoupon({
+      product_id: PROD_ID,
+      clinic_id: CLINIC_ID,
+      discount_type: 'PERCENT',
+      discount_value: 7,
+      replace_existing: true,
+    })
+
+    expect(result.error).toMatch(/substituir cupom existente/i)
+    expect(result.coupon).toBeUndefined()
   })
 })
