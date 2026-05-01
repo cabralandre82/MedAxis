@@ -47,20 +47,81 @@ function readArray(v: string | string[] | undefined): string[] {
   return Array.isArray(v) ? v : [v]
 }
 
-function parseHyp(s: string): {
-  type: 'PERCENT' | 'FIXED'
+type HypType = 'PERCENT' | 'FIXED' | 'FIRST_UNIT_DISCOUNT' | 'TIER_UPGRADE' | 'MIN_QTY_PERCENT'
+
+const HYP_TYPES: HypType[] = [
+  'PERCENT',
+  'FIXED',
+  'FIRST_UNIT_DISCOUNT',
+  'TIER_UPGRADE',
+  'MIN_QTY_PERCENT',
+]
+
+interface ParsedHyp {
+  type: HypType
   value: number
-} | null {
-  const [type, valueStr] = s.split(':')
-  if (type !== 'PERCENT' && type !== 'FIXED') return null
-  const v = Number((valueStr ?? '').replace(',', '.'))
-  if (!Number.isFinite(v) || v <= 0) return null
-  if (type === 'PERCENT' && v > 100) return null
-  return { type: type as 'PERCENT' | 'FIXED', value: v }
+  /** TIER_UPGRADE: tiers acima (1..10). */
+  tierSteps?: number
+  /** MIN_QTY_PERCENT: quantidade mínima (>= 2). */
+  minQty?: number
 }
 
-function discountLabel(type: string, value: number): string {
+function parseHyp(s: string): ParsedHyp | null {
+  const parts = s.split(':')
+  const type = parts[0]
+  if (!type || !(HYP_TYPES as string[]).includes(type)) return null
+  const t = type as HypType
+
+  // Sintaxe URL: TIPO:VALOR[:EXTRA]. Parser idêntico ao do filtro UI
+  // (lib/components/pricing/coupon-matrix-filters.tsx).
+  const valueRaw = (parts[1] ?? '').replace(',', '.')
+  const valueNum = Number(valueRaw)
+
+  if (t === 'TIER_UPGRADE') {
+    const steps = Number(parts[2] ?? '')
+    if (!Number.isInteger(steps) || steps < 1 || steps > 10) return null
+    // discountValue não é usado pela RPC em TIER_UPGRADE; passamos 0
+    // por convenção (compute_unit_price ignora).
+    return { type: t, value: 0, tierSteps: steps }
+  }
+
+  if (!Number.isFinite(valueNum) || valueNum <= 0) return null
+
+  if (t === 'PERCENT' || t === 'MIN_QTY_PERCENT') {
+    if (valueNum > 100) return null
+  }
+
+  if (t === 'MIN_QTY_PERCENT') {
+    const minQty = Number(parts[2] ?? '')
+    if (!Number.isInteger(minQty) || minQty < 2) return null
+    return { type: t, value: valueNum, minQty }
+  }
+
+  return { type: t, value: valueNum }
+}
+
+function discountLabel(h: ParsedHyp): string {
+  switch (h.type) {
+    case 'PERCENT':
+      return `${h.value}%`
+    case 'FIXED':
+      return `R$ ${h.value.toFixed(2).replace('.', ',')}/u`
+    case 'FIRST_UNIT_DISCOUNT':
+      return `R$ ${h.value.toFixed(2).replace('.', ',')} na 1ª`
+    case 'TIER_UPGRADE':
+      return `+${h.tierSteps ?? '?'} tier${(h.tierSteps ?? 0) > 1 ? 's' : ''}`
+    case 'MIN_QTY_PERCENT':
+      return `${h.value}% (qty≥${h.minQty ?? '?'})`
+  }
+}
+
+/** Versão "leve" para cupons existentes que ainda não carregam os campos
+ *  novos (PERCENT / FIXED legacy). */
+function existingDiscountLabel(type: string, value: number): string {
   if (type === 'PERCENT') return `${value}%`
+  if (type === 'FIRST_UNIT_DISCOUNT') return `R$ ${value.toFixed(2).replace('.', ',')} na 1ª`
+  if (type === 'MIN_QTY_PERCENT') return `${value}%`
+  if (type === 'TIER_UPGRADE') return `upgrade tier`
   return `R$ ${value.toFixed(2).replace('.', ',')}/u`
 }
 
@@ -128,7 +189,7 @@ export default async function CouponMatrixPage({ params, searchParams }: PagePro
       code: string
       clinic_id: string | null
       doctor_id: string | null
-      discount_type: 'PERCENT' | 'FIXED'
+      discount_type: string
       discount_value: number
     }>) ?? []
   ).map((c) => ({
@@ -137,7 +198,7 @@ export default async function CouponMatrixPage({ params, searchParams }: PagePro
     buyer_label: c.clinic_id
       ? (clinicMap.get(c.clinic_id) ?? '(clínica)')
       : (doctorMap.get(c.doctor_id ?? '') ?? '(médico)'),
-    discount_label: discountLabel(c.discount_type, c.discount_value),
+    discount_label: existingDiscountLabel(c.discount_type, c.discount_value),
     discount_type: c.discount_type,
     discount_value: c.discount_value,
   }))
@@ -147,9 +208,11 @@ export default async function CouponMatrixPage({ params, searchParams }: PagePro
   for (const h of hyps) {
     variants.push({
       kind: 'hypothetical',
-      label: `Hipotético ${discountLabel(h.type, h.value)}`,
+      label: `Hipotético ${discountLabel(h)}`,
       discountType: h.type,
       discountValue: h.value,
+      tierPromotionSteps: h.tierSteps,
+      minQuantity: h.minQty,
     })
   }
   for (const cid of existingCouponIds) {
@@ -215,14 +278,15 @@ export default async function CouponMatrixPage({ params, searchParams }: PagePro
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
         <p className="font-medium text-slate-700">Tipos de cupom suportados</p>
         <p className="mt-1">
-          A matriz hoje simula apenas <strong>desconto percentual</strong> e{' '}
-          <strong>desconto fixo por unidade</strong> — os mesmos tipos que a plataforma cria em{' '}
+          A matriz simula os <strong>5 tipos</strong> que a plataforma cria em{' '}
           <Link href="/coupons" className="underline">
             /coupons
           </Link>
-          . Outros formatos (upgrade de tier, desconto só na 1ª unidade, % condicionado a quantidade
-          mínima) estão no roadmap como ADR-002 e ainda não estão implementados — não é possível
-          criá-los e portanto não aparecem aqui.
+          : <strong>percentual</strong>, <strong>fixo por unidade</strong>,{' '}
+          <strong>desconto só na 1ª unidade</strong>, <strong>upgrade de tier</strong> (paga preço
+          do tier N posições acima) e <strong>% condicionado a quantidade mínima</strong>. Os caps
+          INV-2 (cupom não pode levar abaixo do piso) e INV-4 (consultor ≤ comissão da plataforma)
+          são aplicados em todos eles, então o que você vê aqui é o que será cobrado/repassado.
         </p>
       </div>
 

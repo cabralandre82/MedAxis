@@ -379,6 +379,106 @@ describe('previewUnitPrice (hypothetical coupon)', () => {
     expect(res.error?.reason).toBe('rpc_unavailable')
     expect(rpc).not.toHaveBeenCalled()
   })
+
+  // ── ADR-002: 3 novos tipos ─────────────────────────────────────────────
+
+  it('FIRST_UNIT_DISCOUNT — encaminha para o RPC com p_disc_type correto', async () => {
+    const rpc = mockRpc(vi.fn().mockResolvedValue({ data: HAPPY_PREVIEW, error: null }))
+    const res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 1,
+      hypothetical: { discountType: 'FIRST_UNIT_DISCOUNT', discountValue: 100 },
+    })
+    expect(res.error).toBeUndefined()
+    const args = rpc.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(args.p_disc_type).toBe('FIRST_UNIT_DISCOUNT')
+    expect(args.p_disc_value).toBe(100)
+    // Não deve mandar os parâmetros que pertencem a outros tipos.
+    expect(args.p_min_quantity).toBeUndefined()
+    expect(args.p_tier_promotion_steps).toBeUndefined()
+  })
+
+  it('TIER_UPGRADE — exige tierPromotionSteps em [1..10]', async () => {
+    const rpc = mockRpc(vi.fn())
+    // Sem steps → rejeita
+    let res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 1,
+      hypothetical: { discountType: 'TIER_UPGRADE', discountValue: 0 },
+    })
+    expect(res.error?.reason).toBe('rpc_unavailable')
+    expect(rpc).not.toHaveBeenCalled()
+
+    // Acima do limite → rejeita
+    res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 1,
+      hypothetical: { discountType: 'TIER_UPGRADE', discountValue: 0, tierPromotionSteps: 11 },
+    })
+    expect(res.error?.reason).toBe('rpc_unavailable')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('TIER_UPGRADE — encaminha p_tier_promotion_steps', async () => {
+    const rpc = mockRpc(vi.fn().mockResolvedValue({ data: HAPPY_PREVIEW, error: null }))
+    const res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 2,
+      hypothetical: { discountType: 'TIER_UPGRADE', discountValue: 0, tierPromotionSteps: 3 },
+    })
+    expect(res.error).toBeUndefined()
+    const args = rpc.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(args.p_disc_type).toBe('TIER_UPGRADE')
+    expect(args.p_tier_promotion_steps).toBe(3)
+    expect(args.p_min_quantity).toBeUndefined()
+  })
+
+  it('MIN_QTY_PERCENT — exige minQuantity >= 2', async () => {
+    const rpc = mockRpc(vi.fn())
+    const res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 5,
+      hypothetical: { discountType: 'MIN_QTY_PERCENT', discountValue: 10, minQuantity: 1 },
+    })
+    expect(res.error?.reason).toBe('rpc_unavailable')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('MIN_QTY_PERCENT — encaminha p_min_quantity e cap percentual de 100', async () => {
+    const rpc = mockRpc(vi.fn().mockResolvedValue({ data: HAPPY_PREVIEW, error: null }))
+    const res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 5,
+      hypothetical: { discountType: 'MIN_QTY_PERCENT', discountValue: 15, minQuantity: 3 },
+    })
+    expect(res.error).toBeUndefined()
+    const args = rpc.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(args.p_disc_type).toBe('MIN_QTY_PERCENT')
+    expect(args.p_disc_value).toBe(15)
+    expect(args.p_min_quantity).toBe(3)
+    expect(args.p_tier_promotion_steps).toBeUndefined()
+
+    // > 100% deve ser rejeitado
+    rpc.mockClear()
+    const res2 = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 5,
+      hypothetical: { discountType: 'MIN_QTY_PERCENT', discountValue: 150, minQuantity: 3 },
+    })
+    expect(res2.error?.reason).toBe('rpc_unavailable')
+  })
+
+  it('rejeita discountType desconhecido', async () => {
+    const rpc = mockRpc(vi.fn())
+    const res = await previewUnitPrice({
+      productId: PRODUCT_ID,
+      quantity: 1,
+      // @ts-expect-error testando entrada inválida em runtime
+      hypothetical: { discountType: 'BOGUS', discountValue: 10 },
+    })
+    expect(res.error?.reason).toBe('rpc_unavailable')
+    expect(rpc).not.toHaveBeenCalled()
+  })
 })
 
 // ── buildCouponImpactMatrix (PR-C3) ──────────────────────────────────────

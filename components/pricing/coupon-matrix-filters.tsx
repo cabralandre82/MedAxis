@@ -11,9 +11,21 @@
  *      página é um Server Component que lê searchParams. Mudar
  *      filtros = navegar para nova URL = re-render server-side.
  *
- * Suporta múltiplos cupons hipotéticos via parametros repetidos
- * `hyp` no formato 'PERCENT:30' ou 'FIXED:200'. UI permite até 4
- * variantes hipotéticas para a matriz não estourar 8 colunas.
+ * Suporta múltiplos cupons hipotéticos via parametros repetidos `hyp`.
+ * Formato URL (5 tipos, ADR-002):
+ *
+ *   PERCENT:30                         → percentual (legacy)
+ *   FIXED:200                          → R$ por unidade (legacy)
+ *   FIRST_UNIT_DISCOUNT:100            → R$ off, só na 1ª unidade
+ *   TIER_UPGRADE::3                    → promove 3 tiers (value vazio, steps=3)
+ *   MIN_QTY_PERCENT:10:5               → 10% se qty >= 5
+ *
+ * Sintaxe: `TYPE:VALUE[:EXTRA]` onde EXTRA é
+ *   - `tierPromotionSteps` para TIER_UPGRADE (e VALUE vazio)
+ *   - `minQuantity` para MIN_QTY_PERCENT
+ *
+ * UI permite até 4 variantes hipotéticas para a matriz não estourar
+ * 8 colunas.
  */
 
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -50,10 +62,33 @@ interface Props {
   existingCoupons: ExistingCouponOption[]
 }
 
+type HypType = 'PERCENT' | 'FIXED' | 'FIRST_UNIT_DISCOUNT' | 'TIER_UPGRADE' | 'MIN_QTY_PERCENT'
+
+const HYP_TYPES: HypType[] = [
+  'PERCENT',
+  'FIXED',
+  'FIRST_UNIT_DISCOUNT',
+  'TIER_UPGRADE',
+  'MIN_QTY_PERCENT',
+]
+
+const HYP_LABEL: Record<HypType, string> = {
+  PERCENT: 'Percentual',
+  FIXED: 'Valor fixo',
+  FIRST_UNIT_DISCOUNT: '1ª unidade',
+  TIER_UPGRADE: 'Upgrade de tier',
+  MIN_QTY_PERCENT: '% se qty mín',
+}
+
 interface HypotheticalDraft {
   uid: string
-  type: 'PERCENT' | 'FIXED'
+  type: HypType
+  /** Valor principal — % para PERCENT/MIN_QTY_PERCENT, R$ para FIXED/FIRST_UNIT, ignorado para TIER_UPGRADE. */
   value: string
+  /** TIER_UPGRADE: quantos tiers promover (1..10). */
+  tierSteps: string
+  /** MIN_QTY_PERCENT: quantidade mínima para o cupom valer (>= 2). */
+  minQty: string
 }
 
 let _hypUidCounter = 0
@@ -62,17 +97,25 @@ function hypUid(): string {
   return `hyp-${_hypUidCounter}-${Date.now()}`
 }
 
+function isHypType(s: string): s is HypType {
+  return (HYP_TYPES as string[]).includes(s)
+}
+
 function parseHypsFromQuery(qs: URLSearchParams): HypotheticalDraft[] {
   const hyps = qs.getAll('hyp')
   return hyps
     .map((h) => {
-      const [type, valueStr] = h.split(':')
-      if (type !== 'PERCENT' && type !== 'FIXED') return null
-      if (!valueStr) return null
+      const parts = h.split(':')
+      const type = parts[0]
+      if (!type || !isHypType(type)) return null
+      // Cada tipo tem seu próprio formato; defaults preservam o slot
+      // mesmo se o operador editar manualmente a URL.
       return {
         uid: hypUid(),
-        type: type as 'PERCENT' | 'FIXED',
-        value: valueStr,
+        type,
+        value: parts[1] ?? '',
+        tierSteps: type === 'TIER_UPGRADE' ? (parts[2] ?? '') : '',
+        minQty: type === 'MIN_QTY_PERCENT' ? (parts[2] ?? '') : '',
       }
     })
     .filter((h): h is HypotheticalDraft => h !== null)
@@ -91,10 +134,36 @@ export function CouponMatrixFilters({ productId, clinics, doctors, existingCoupo
 
   const initialHyps = parseHypsFromQuery(new URLSearchParams(sp.toString()))
   const [hyps, setHyps] = useState<HypotheticalDraft[]>(
-    initialHyps.length > 0 ? initialHyps : [{ uid: hypUid(), type: 'PERCENT', value: '30' }]
+    initialHyps.length > 0
+      ? initialHyps
+      : [{ uid: hypUid(), type: 'PERCENT', value: '30', tierSteps: '', minQty: '' }]
   )
 
   const [selectedExistingIds, setSelectedExistingIds] = useState<string[]>(sp.getAll('coupon_id'))
+
+  function serializeHyp(h: HypotheticalDraft): string | null {
+    const value = h.value.trim().replace(',', '.')
+    switch (h.type) {
+      case 'PERCENT':
+      case 'FIXED':
+      case 'FIRST_UNIT_DISCOUNT':
+        return value ? `${h.type}:${value}` : null
+      case 'TIER_UPGRADE': {
+        const steps = h.tierSteps.trim()
+        if (!steps) return null
+        // Mantemos o `value` vazio no slot 1 para preservar a sintaxe
+        // posicional `TIPO:VALOR:EXTRA` — assim o parser não muda.
+        return `TIER_UPGRADE::${steps}`
+      }
+      case 'MIN_QTY_PERCENT': {
+        const minQty = h.minQty.trim()
+        if (!value || !minQty) return null
+        return `MIN_QTY_PERCENT:${value}:${minQty}`
+      }
+      default:
+        return null
+    }
+  }
 
   function applyFilters() {
     const params = new URLSearchParams()
@@ -104,9 +173,8 @@ export function CouponMatrixFilters({ productId, clinics, doctors, existingCoupo
     }
     params.set('max_qty', maxQty)
     for (const h of hyps) {
-      const v = h.value.trim()
-      if (!v) continue
-      params.append('hyp', `${h.type}:${v.replace(',', '.')}`)
+      const serialized = serializeHyp(h)
+      if (serialized) params.append('hyp', serialized)
     }
     for (const id of selectedExistingIds) {
       params.append('coupon_id', id)
@@ -118,7 +186,10 @@ export function CouponMatrixFilters({ productId, clinics, doctors, existingCoupo
 
   function addHyp() {
     if (hyps.length >= 4) return
-    setHyps((prev) => [...prev, { uid: hypUid(), type: 'PERCENT', value: '' }])
+    setHyps((prev) => [
+      ...prev,
+      { uid: hypUid(), type: 'PERCENT', value: '', tierSteps: '', minQty: '' },
+    ])
   }
 
   function removeHyp(uid: string) {
@@ -226,43 +297,102 @@ export function CouponMatrixFilters({ productId, clinics, doctors, existingCoupo
             Adicionar
           </Button>
         </div>
-        {hyps.map((h) => (
-          <div key={h.uid} className="flex items-center gap-2 rounded-md border p-2">
-            <Select
-              value={h.type}
-              onValueChange={(v) =>
-                patchHyp(h.uid, { type: (v as 'PERCENT' | 'FIXED') ?? 'PERCENT' })
-              }
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PERCENT">Percentual</SelectItem>
-                <SelectItem value="FIXED">Valor fixo</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              type="text"
-              placeholder={h.type === 'PERCENT' ? '30' : '200,00'}
-              value={h.value}
-              onChange={(e) => patchHyp(h.uid, { value: e.target.value })}
-              className="flex-1"
-            />
-            <span className="text-xs text-slate-500">
-              {h.type === 'PERCENT' ? '%' : 'R$ /unid.'}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => removeHyp(h.uid)}
-              aria-label="Remover"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
+        {hyps.map((h) => {
+          const isPercent = h.type === 'PERCENT' || h.type === 'MIN_QTY_PERCENT'
+          const isFixedish = h.type === 'FIXED' || h.type === 'FIRST_UNIT_DISCOUNT'
+          const isTierUpgrade = h.type === 'TIER_UPGRADE'
+          return (
+            <div key={h.uid} className="flex flex-wrap items-center gap-2 rounded-md border p-2">
+              <Select
+                value={h.type}
+                onValueChange={(v) => {
+                  const next = (isHypType(v ?? '') ? (v as HypType) : 'PERCENT') as HypType
+                  // Trocar de tipo limpa os campos extras dos tipos
+                  // antigos para evitar URLs inconsistentes (ex.: ficar
+                  // com tierSteps preenchido ao virar PERCENT).
+                  patchHyp(h.uid, {
+                    type: next,
+                    tierSteps: next === 'TIER_UPGRADE' ? h.tierSteps : '',
+                    minQty: next === 'MIN_QTY_PERCENT' ? h.minQty : '',
+                  })
+                }}
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HYP_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {HYP_LABEL[t]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {!isTierUpgrade && (
+                <>
+                  <Input
+                    type="text"
+                    placeholder={isPercent ? '10' : '200,00'}
+                    value={h.value}
+                    onChange={(e) => patchHyp(h.uid, { value: e.target.value })}
+                    className="w-28"
+                    aria-label={isPercent ? 'Percentual' : 'Valor fixo em reais'}
+                  />
+                  <span className="text-xs text-slate-500">{isPercent ? '%' : 'R$ /unid.'}</span>
+                </>
+              )}
+
+              {isTierUpgrade && (
+                <>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="10"
+                    step="1"
+                    placeholder="3"
+                    value={h.tierSteps}
+                    onChange={(e) => patchHyp(h.uid, { tierSteps: e.target.value })}
+                    className="w-20"
+                    aria-label="Tiers acima"
+                  />
+                  <span className="text-xs text-slate-500">tiers acima (1–10)</span>
+                </>
+              )}
+
+              {h.type === 'MIN_QTY_PERCENT' && (
+                <>
+                  <span className="text-xs text-slate-400">se qty ≥</span>
+                  <Input
+                    type="number"
+                    min="2"
+                    step="1"
+                    placeholder="3"
+                    value={h.minQty}
+                    onChange={(e) => patchHyp(h.uid, { minQty: e.target.value })}
+                    className="w-20"
+                    aria-label="Quantidade mínima"
+                  />
+                </>
+              )}
+
+              {isFixedish && h.type === 'FIRST_UNIT_DISCOUNT' && (
+                <span className="text-xs text-slate-400">na 1ª unidade</span>
+              )}
+
+              <div className="flex-1" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => removeHyp(h.uid)}
+                aria-label="Remover"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )
+        })}
       </div>
 
       {existingCoupons.length > 0 && (

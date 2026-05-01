@@ -27,20 +27,87 @@ const uuidLoose = z
   .string()
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'ID inválido')
 
+// ADR-002: 5 tipos de cupom. PERCENT/FIXED = legacy; os outros 3 ganharam
+// migração 079 + colunas adicionais (`min_quantity`, `tier_promotion_steps`).
+// COUPON_DISCOUNT_TYPES vive em `lib/coupons/preview.ts` para não violar
+// a regra "use server só exporta async functions" (verificado por
+// tests/unit/services/coupons-use-server.test.ts).
+import { COUPON_DISCOUNT_TYPES, type CatalogCouponDiscountType } from '@/lib/coupons/preview'
+
 const createCouponSchema = z
   .object({
     product_id: uuidLoose,
     clinic_id: uuidLoose.optional().nullable(),
     doctor_id: uuidLoose.optional().nullable(),
-    discount_type: z.enum(['PERCENT', 'FIXED']),
-    discount_value: z.number().positive(),
+    discount_type: z.enum(COUPON_DISCOUNT_TYPES),
+    /**
+     * - PERCENT, MIN_QTY_PERCENT: 0..100 (% por unidade)
+     * - FIXED, FIRST_UNIT_DISCOUNT: R$ por unidade (positivo)
+     * - TIER_UPGRADE: aceita 0 ou positivo (a regra é via tier_promotion_steps)
+     */
+    discount_value: z.number().min(0),
     max_discount_amount: z.number().positive().optional(),
+    /** ADR-002: gate uniforme. Default 1 (sem gate). MIN_QTY_PERCENT exige >= 2. */
+    min_quantity: z.number().int().min(1).max(1000).optional(),
+    /** ADR-002: número de tiers acima a promover. TIER_UPGRADE exige >= 1. */
+    tier_promotion_steps: z.number().int().min(0).max(10).optional(),
     valid_from: z.string().datetime().optional(),
     valid_until: z.string().datetime().nullable().optional(),
   })
   .refine((d) => d.clinic_id || d.doctor_id, {
     message: 'Informe a clínica ou o médico destinatário do cupom',
     path: ['clinic_id'],
+  })
+  .superRefine((d, ctx) => {
+    // Mesmas validações do CHECK constraint coupons_type_consistency
+    // (mig-079). Falhar antes do INSERT dá mensagem de UI mais clara
+    // do que esperar a violação do banco.
+    if (d.discount_type === 'TIER_UPGRADE') {
+      if (!d.tier_promotion_steps || d.tier_promotion_steps < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tier_promotion_steps'],
+          message: 'Upgrade de tier exige tier_promotion_steps >= 1',
+        })
+      }
+    }
+    if (d.discount_type === 'MIN_QTY_PERCENT') {
+      if (!d.min_quantity || d.min_quantity < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['min_quantity'],
+          message: '% condicional exige min_quantity >= 2',
+        })
+      }
+      if (d.discount_value <= 0 || d.discount_value > 100) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['discount_value'],
+          message: 'Percentual deve estar entre 0 e 100',
+        })
+      }
+    }
+    if (d.discount_type === 'FIRST_UNIT_DISCOUNT' && d.discount_value <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['discount_value'],
+        message: 'Desconto na 1ª unidade deve ser maior que zero',
+      })
+    }
+    if (d.discount_type === 'PERCENT' && (d.discount_value <= 0 || d.discount_value > 100)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['discount_value'],
+        message: 'Percentual deve estar entre 0 e 100',
+      })
+    }
+    if (d.discount_type === 'FIXED' && d.discount_value <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['discount_value'],
+        message: 'Valor fixo deve ser maior que zero',
+      })
+    }
   })
 
 export type CreateCouponInput = z.infer<typeof createCouponSchema>
@@ -51,9 +118,11 @@ export interface CouponRow {
   product_id: string
   clinic_id: string | null
   doctor_id: string | null
-  discount_type: 'PERCENT' | 'FIXED'
+  discount_type: CatalogCouponDiscountType
   discount_value: number
   max_discount_amount: number | null
+  min_quantity: number
+  tier_promotion_steps: number
   valid_from: string
   valid_until: string | null
   activated_at: string | null
@@ -111,6 +180,11 @@ export async function createCoupon(
         discount_type: parsed.data.discount_type,
         discount_value: parsed.data.discount_value,
         max_discount_amount: parsed.data.max_discount_amount ?? null,
+        // ADR-002: defaults preservam comportamento legacy de cupons
+        // PERCENT/FIXED. min_quantity=1 → sem gate; tier_promotion_steps=0 →
+        // sem upgrade.
+        min_quantity: parsed.data.min_quantity ?? 1,
+        tier_promotion_steps: parsed.data.tier_promotion_steps ?? 0,
         valid_from: parsed.data.valid_from ?? new Date().toISOString(),
         valid_until: parsed.data.valid_until ?? null,
         created_by_user_id: actor.id,
@@ -130,10 +204,24 @@ export async function createCoupon(
       .eq('id', parsed.data.product_id)
       .single()
 
-    const discountLabel =
-      parsed.data.discount_type === 'PERCENT'
-        ? `${parsed.data.discount_value}%`
-        : `R$${Number(parsed.data.discount_value).toFixed(2)}`
+    // ADR-002: rótulo curto para a notificação ao destinatário, cobrindo
+    // os 5 tipos. O rótulo completo (com qty mínima, tiers etc.) aparece
+    // na lista do painel admin/clínica via componente próprio.
+    const discountLabel = (() => {
+      const v = Number(parsed.data.discount_value)
+      switch (parsed.data.discount_type) {
+        case 'PERCENT':
+          return `${v}%`
+        case 'FIXED':
+          return `R$${v.toFixed(2)}`
+        case 'FIRST_UNIT_DISCOUNT':
+          return `R$${v.toFixed(2)} na 1ª unidade`
+        case 'TIER_UPGRADE':
+          return `+${parsed.data.tier_promotion_steps ?? 0} tier(s)`
+        case 'MIN_QTY_PERCENT':
+          return `${v}% (mín ${parsed.data.min_quantity ?? 2} unid.)`
+      }
+    })()
 
     if (clinic_id) {
       // Notifica membros da clínica
@@ -561,7 +649,8 @@ export async function getActiveCouponsByProductForBuyer(args: {
       {
         id: c.id as string,
         code: c.code as string,
-        discount_type: c.discount_type as 'PERCENT' | 'FIXED',
+        // ADR-002: discount_type pode ser qualquer um dos 5 valores.
+        discount_type: c.discount_type as CatalogCouponPreview['discount_type'],
         discount_value: Number(c.discount_value),
         max_discount_amount: c.max_discount_amount == null ? null : Number(c.max_discount_amount),
         valid_until: c.valid_until as string | null,

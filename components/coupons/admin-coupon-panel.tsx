@@ -24,6 +24,31 @@ type AdminCoupon = CouponRow & { product_name: string; recipient_name: string }
 type StatusFilter = 'all' | 'active' | 'pending' | 'expired' | 'inactive'
 type RecipientType = 'clinic' | 'doctor'
 
+// ADR-002 — 5 tipos. Mantemos `PERCENT` e `FIXED` como primeiros para
+// preservar a UX legacy; os 3 novos seguem com nomenclatura coerente
+// com o discount_type no banco (mig-079) e com o serializador da matriz
+// (`coupon-matrix-filters.tsx`).
+type DiscountType = 'PERCENT' | 'FIXED' | 'FIRST_UNIT_DISCOUNT' | 'TIER_UPGRADE' | 'MIN_QTY_PERCENT'
+
+const DISCOUNT_TYPE_LABEL: Record<DiscountType, string> = {
+  PERCENT: 'Percentual (%)',
+  FIXED: 'Fixo (R$)',
+  FIRST_UNIT_DISCOUNT: 'Fixo só na 1ª unidade (R$)',
+  TIER_UPGRADE: 'Upgrade de tier',
+  MIN_QTY_PERCENT: '% se atingir qty mínima',
+}
+
+const DISCOUNT_TYPE_HINT: Record<DiscountType, string> = {
+  PERCENT: 'Aplica em toda unidade do pedido.',
+  FIXED: 'Vale R$ fixos por unidade vendida.',
+  FIRST_UNIT_DISCOUNT:
+    'Aplica apenas quando o pedido tem 1 unidade. Em pedidos maiores, o cupom não casa (sem desconto).',
+  TIER_UPGRADE:
+    'Promove o cliente para o preço do tier N posições acima na escala. Saturação no tier mais barato disponível.',
+  MIN_QTY_PERCENT:
+    'Percentual aplicado por unidade, mas só vale se o pedido tiver pelo menos a quantidade mínima informada.',
+}
+
 const PAGE_SIZE = 20
 
 interface Props {
@@ -107,11 +132,29 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
     product_id: '',
     clinic_id: '',
     doctor_id: '',
-    discount_type: 'PERCENT' as 'PERCENT' | 'FIXED',
+    discount_type: 'PERCENT' as DiscountType,
     discount_value: '',
     max_discount_amount: '',
+    /** ADR-002: gate uniforme de quantidade. Default vazio = sem gate (1). */
+    min_quantity: '',
+    /** ADR-002: TIER_UPGRADE — quantos tiers acima promover (1..10). */
+    tier_promotion_steps: '',
     valid_until: '',
   })
+
+  function resetForm() {
+    setForm({
+      product_id: '',
+      clinic_id: '',
+      doctor_id: '',
+      discount_type: 'PERCENT',
+      discount_value: '',
+      max_discount_amount: '',
+      min_quantity: '',
+      tier_promotion_steps: '',
+      valid_until: '',
+    })
+  }
 
   // ── deactivate state ──────────────────────────────────────────────────────
   const [deactivating, setDeactivating] = useState<string | null>(null)
@@ -160,19 +203,62 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
     if (!form.product_id) return setFormError('Selecione um produto')
     if (recipientType === 'clinic' && !form.clinic_id) return setFormError('Selecione uma clínica')
     if (recipientType === 'doctor' && !form.doctor_id) return setFormError('Selecione um médico')
+
+    // ADR-002 — validações específicas por tipo (espelham as do
+    // services/coupons.ts e do CHECK no banco). Falhamos cedo na UI
+    // para mensagem clara.
+    const dt = form.discount_type
+    if (dt === 'TIER_UPGRADE') {
+      const steps = parseInt(form.tier_promotion_steps, 10)
+      if (!Number.isInteger(steps) || steps < 1 || steps > 10) {
+        return setFormError('Upgrade de tier exige número de tiers entre 1 e 10.')
+      }
+    } else if (dt === 'MIN_QTY_PERCENT') {
+      const minQ = parseInt(form.min_quantity, 10)
+      if (!Number.isInteger(minQ) || minQ < 2) {
+        return setFormError('% condicional exige quantidade mínima >= 2.')
+      }
+      const v = parseFloat(form.discount_value)
+      if (!Number.isFinite(v) || v <= 0 || v > 100) {
+        return setFormError('Percentual deve estar entre 0 e 100.')
+      }
+    } else if (dt === 'PERCENT') {
+      const v = parseFloat(form.discount_value)
+      if (!Number.isFinite(v) || v <= 0 || v > 100) {
+        return setFormError('Percentual deve estar entre 0 e 100.')
+      }
+    } else if (dt === 'FIXED' || dt === 'FIRST_UNIT_DISCOUNT') {
+      const v = parseFloat(form.discount_value)
+      if (!Number.isFinite(v) || v <= 0) {
+        return setFormError('Valor deve ser maior que zero.')
+      }
+    }
+
     setSubmitting(true)
     setFormError(null)
 
     try {
+      // TIER_UPGRADE não usa discount_value — passamos 0 (Zod permite).
+      const discountValue = dt === 'TIER_UPGRADE' ? 0 : parseFloat(form.discount_value || '0')
+
       const payload = {
         product_id: form.product_id,
         clinic_id: recipientType === 'clinic' ? form.clinic_id : null,
         doctor_id: recipientType === 'doctor' ? form.doctor_id : null,
         discount_type: form.discount_type,
-        discount_value: parseFloat(form.discount_value),
-        max_discount_amount: form.max_discount_amount
-          ? parseFloat(form.max_discount_amount)
-          : undefined,
+        discount_value: discountValue,
+        max_discount_amount:
+          dt === 'PERCENT' && form.max_discount_amount
+            ? parseFloat(form.max_discount_amount)
+            : undefined,
+        min_quantity:
+          dt === 'MIN_QTY_PERCENT' && form.min_quantity
+            ? parseInt(form.min_quantity, 10)
+            : undefined,
+        tier_promotion_steps:
+          dt === 'TIER_UPGRADE' && form.tier_promotion_steps
+            ? parseInt(form.tier_promotion_steps, 10)
+            : undefined,
         valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
       }
       const res = await fetch('/api/admin/coupons', {
@@ -185,15 +271,7 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
         setFormError(data.error ?? 'Erro ao criar cupom')
       } else {
         setShowForm(false)
-        setForm({
-          product_id: '',
-          clinic_id: '',
-          doctor_id: '',
-          discount_type: 'PERCENT',
-          discount_value: '',
-          max_discount_amount: '',
-          valid_until: '',
-        })
+        resetForm()
         router.refresh()
       }
     } catch {
@@ -322,59 +400,127 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
               )}
             </div>
 
-            {/* Tipo de desconto */}
-            <div>
-              <Label className="mb-1.5 block text-xs text-gray-700">
+            {/* Tipo de desconto — vira select para caber 5 opções */}
+            <div className="sm:col-span-2">
+              <Label className="mb-1.5 block text-xs text-gray-700" htmlFor="coupon_discount_type">
                 Tipo de desconto <span className="text-red-500">*</span>
               </Label>
-              <div className="flex overflow-hidden rounded-lg border border-gray-300">
-                {(['PERCENT', 'FIXED'] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() =>
-                      setForm((f) => ({ ...f, discount_type: t, max_discount_amount: '' }))
-                    }
-                    className={cn(
-                      'flex-1 py-2 text-sm font-medium transition-colors',
-                      form.discount_type === t
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    )}
-                  >
-                    {t === 'PERCENT' ? 'Percentual (%)' : 'Fixo (R$)'}
-                  </button>
+              <select
+                id="coupon_discount_type"
+                value={form.discount_type}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    discount_type: e.target.value as DiscountType,
+                    // Reset campos específicos ao trocar o tipo, evitando
+                    // payload inconsistente.
+                    discount_value: '',
+                    max_discount_amount: '',
+                    min_quantity: '',
+                    tier_promotion_steps: '',
+                  }))
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
+              >
+                {(Object.keys(DISCOUNT_TYPE_LABEL) as DiscountType[]).map((t) => (
+                  <option key={t} value={t}>
+                    {DISCOUNT_TYPE_LABEL[t]}
+                  </option>
                 ))}
-              </div>
+              </select>
+              <p className="mt-1 text-xs text-gray-500">{DISCOUNT_TYPE_HINT[form.discount_type]}</p>
             </div>
 
-            {/* Valor do desconto */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-700">
-                {form.discount_type === 'PERCENT'
-                  ? 'Percentual por unidade'
-                  : 'Valor fixo por unidade (R$)'}{' '}
-                <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">
-                  {form.discount_type === 'PERCENT' ? '%' : 'R$'}
-                </span>
+            {/* Valor do desconto — escondido para TIER_UPGRADE (que usa só steps) */}
+            {form.discount_type !== 'TIER_UPGRADE' && (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-gray-700">
+                  {form.discount_type === 'PERCENT' || form.discount_type === 'MIN_QTY_PERCENT'
+                    ? 'Percentual por unidade'
+                    : form.discount_type === 'FIRST_UNIT_DISCOUNT'
+                      ? 'Desconto na 1ª unidade (R$)'
+                      : 'Valor fixo por unidade (R$)'}{' '}
+                  <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">
+                    {form.discount_type === 'PERCENT' || form.discount_type === 'MIN_QTY_PERCENT'
+                      ? '%'
+                      : 'R$'}
+                  </span>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={
+                      form.discount_type === 'PERCENT' || form.discount_type === 'MIN_QTY_PERCENT'
+                        ? '100'
+                        : undefined
+                    }
+                    value={form.discount_value}
+                    onChange={(e) => setForm((f) => ({ ...f, discount_value: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 py-2 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
+                    placeholder={
+                      form.discount_type === 'PERCENT' || form.discount_type === 'MIN_QTY_PERCENT'
+                        ? '10'
+                        : '50.00'
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* TIER_UPGRADE: número de tiers a promover */}
+            {form.discount_type === 'TIER_UPGRADE' && (
+              <div>
+                <Label className="mb-1.5 block text-xs text-gray-700" htmlFor="tier_steps">
+                  Tiers a promover <span className="text-red-500">*</span>
+                </Label>
                 <input
+                  id="tier_steps"
                   required
                   type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={form.discount_type === 'PERCENT' ? '100' : undefined}
-                  value={form.discount_value}
-                  onChange={(e) => setForm((f) => ({ ...f, discount_value: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 py-2 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
-                  placeholder={form.discount_type === 'PERCENT' ? '10' : '50.00'}
+                  step="1"
+                  min="1"
+                  max="10"
+                  value={form.tier_promotion_steps}
+                  onChange={(e) => setForm((f) => ({ ...f, tier_promotion_steps: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
+                  placeholder="Ex: 2"
                 />
+                <p className="mt-1 text-xs text-gray-400">
+                  Quantidades acima do último tier saturam no preço mais barato disponível.
+                </p>
               </div>
-            </div>
+            )}
 
-            {/* Teto — só para PERCENT */}
+            {/* MIN_QTY_PERCENT: quantidade mínima */}
+            {form.discount_type === 'MIN_QTY_PERCENT' && (
+              <div>
+                <Label className="mb-1.5 block text-xs text-gray-700" htmlFor="min_quantity">
+                  Quantidade mínima do pedido <span className="text-red-500">*</span>
+                </Label>
+                <input
+                  id="min_quantity"
+                  required
+                  type="number"
+                  step="1"
+                  min="2"
+                  value={form.min_quantity}
+                  onChange={(e) => setForm((f) => ({ ...f, min_quantity: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
+                  placeholder="Ex: 3"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Pedidos abaixo dessa quantidade não recebem desconto.
+                </p>
+              </div>
+            )}
+
+            {/* Teto — só para PERCENT (legacy). MIN_QTY_PERCENT poderia
+                ter o mesmo teto, mas mantemos comportamento conservador
+                até o operador pedir. */}
             {form.discount_type === 'PERCENT' && (
               <div>
                 <Label className="mb-1.5 block text-xs text-gray-700">
@@ -516,10 +662,24 @@ export function AdminCouponPanel({ coupons, products, clinics, doctors }: Props)
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {paginated.map((c) => {
-                  const discountLabel =
-                    c.discount_type === 'PERCENT'
-                      ? `${Number(c.discount_value).toFixed(0)}% / un`
-                      : `${formatCurrency(Number(c.discount_value))} / un`
+                  // ADR-002 — rótulo cobre os 5 tipos. Mantemos curto
+                  // para caber em uma célula da tabela; o detalhe completo
+                  // (steps, qty mínima) sai como sublinha.
+                  const v = Number(c.discount_value)
+                  const discountLabel = (() => {
+                    switch (c.discount_type as DiscountType) {
+                      case 'PERCENT':
+                        return `${v.toFixed(0)}% / un`
+                      case 'FIXED':
+                        return `${formatCurrency(v)} / un`
+                      case 'FIRST_UNIT_DISCOUNT':
+                        return `${formatCurrency(v)} na 1ª`
+                      case 'TIER_UPGRADE':
+                        return `+${c.tier_promotion_steps ?? 0} tier(s)`
+                      case 'MIN_QTY_PERCENT':
+                        return `${v.toFixed(0)}% (mín ${c.min_quantity ?? 2}u)`
+                    }
+                  })()
                   const capLabel =
                     c.discount_type === 'PERCENT' && c.max_discount_amount
                       ? ` (teto ${formatCurrency(Number(c.max_discount_amount))})`

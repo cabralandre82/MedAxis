@@ -203,12 +203,22 @@ export async function resolveEffectiveFloor(
 
 // ── Hypothetical-coupon preview (PR-C3 of ADR-001) ──────────────────────
 //
-// Backed by `preview_unit_price` (mig-077). Use when the operator is
-// EVALUATING a coupon ('what if I gave clinic X 30% off?') BEFORE
-// creating it in the `coupons` table. The function accepts the
+// Backed by `preview_unit_price` (mig-077, estendido em mig-079). Use when
+// the operator is EVALUATING a coupon ('what if I gave clinic X 30% off?')
+// BEFORE creating it in the `coupons` table. The function accepts the
 // discount params directly instead of looking them up.
+//
+// ADR-002 (mig-079) added 3 novos discount_type:
+//   - FIRST_UNIT_DISCOUNT: discountValue = R$ off na 1ª unidade. Em qty>1 → 0.
+//   - TIER_UPGRADE: discountValue ignorado; usar `tierPromotionSteps` (1..10).
+//   - MIN_QTY_PERCENT: discountValue = %; gate via `minQuantity` (>= 2).
 
-export type HypotheticalDiscountType = 'PERCENT' | 'FIXED'
+export type HypotheticalDiscountType =
+  | 'PERCENT'
+  | 'FIXED'
+  | 'FIRST_UNIT_DISCOUNT'
+  | 'TIER_UPGRADE'
+  | 'MIN_QTY_PERCENT'
 
 export interface PreviewWithHypotheticalArgs {
   productId: string
@@ -218,10 +228,28 @@ export interface PreviewWithHypotheticalArgs {
   /** When undefined, simulates "no coupon" (baseline). */
   hypothetical?: {
     discountType: HypotheticalDiscountType
-    /** percentage (0..100) when PERCENT; R$/unit when FIXED. */
+    /**
+     * Semântica por tipo:
+     *  - PERCENT, MIN_QTY_PERCENT: percentual 0..100
+     *  - FIXED, FIRST_UNIT_DISCOUNT: R$ por unidade (FIRST_UNIT_DISCOUNT
+     *    aplica só quando `quantity = 1`)
+     *  - TIER_UPGRADE: ignorado (passar 0 por convenção)
+     */
     discountValue: number
     /** optional global cap in cents (mirrors coupons.max_discount_amount). */
     maxDiscountCents?: number | null
+    /**
+     * Quantidade mínima para o cupom valer. Default 1 (sem gate).
+     * Obrigatório > 1 para `MIN_QTY_PERCENT`. Para os demais tipos é
+     * opcional — operador pode usar para limitar PERCENT/FIXED a pedidos
+     * acima de N unidades.
+     */
+    minQuantity?: number
+    /**
+     * Quantos tiers acima o cliente é promovido (1..10). Obrigatório > 0
+     * para `TIER_UPGRADE`. Ignorado pelos outros tipos.
+     */
+    tierPromotionSteps?: number
   }
   at?: string | null
 }
@@ -244,14 +272,47 @@ export async function previewUnitPrice(
 
   const h = args.hypothetical
   if (h) {
-    if (h.discountType !== 'PERCENT' && h.discountType !== 'FIXED') {
+    const VALID_TYPES: HypotheticalDiscountType[] = [
+      'PERCENT',
+      'FIXED',
+      'FIRST_UNIT_DISCOUNT',
+      'TIER_UPGRADE',
+      'MIN_QTY_PERCENT',
+    ]
+    if (!VALID_TYPES.includes(h.discountType)) {
       return { error: { reason: 'rpc_unavailable', raw: 'invalid discountType' } }
     }
-    if (!Number.isFinite(h.discountValue) || h.discountValue <= 0) {
-      return { error: { reason: 'rpc_unavailable', raw: 'invalid discountValue' } }
+    // TIER_UPGRADE não usa discountValue (semântica é via tierPromotionSteps).
+    // Os demais tipos exigem valor > 0.
+    if (h.discountType !== 'TIER_UPGRADE') {
+      if (!Number.isFinite(h.discountValue) || h.discountValue <= 0) {
+        return { error: { reason: 'rpc_unavailable', raw: 'invalid discountValue' } }
+      }
     }
-    if (h.discountType === 'PERCENT' && h.discountValue > 100) {
+    if (
+      (h.discountType === 'PERCENT' || h.discountType === 'MIN_QTY_PERCENT') &&
+      h.discountValue > 100
+    ) {
       return { error: { reason: 'rpc_unavailable', raw: 'PERCENT > 100' } }
+    }
+    if (h.discountType === 'TIER_UPGRADE') {
+      const steps = h.tierPromotionSteps ?? 0
+      if (!Number.isInteger(steps) || steps < 1 || steps > 10) {
+        return {
+          error: {
+            reason: 'rpc_unavailable',
+            raw: 'TIER_UPGRADE: tierPromotionSteps must be 1..10',
+          },
+        }
+      }
+    }
+    if (h.discountType === 'MIN_QTY_PERCENT') {
+      const minQ = h.minQuantity ?? 1
+      if (!Number.isInteger(minQ) || minQ < 2) {
+        return {
+          error: { reason: 'rpc_unavailable', raw: 'MIN_QTY_PERCENT: minQuantity must be >= 2' },
+        }
+      }
     }
   }
 
@@ -264,6 +325,11 @@ export async function previewUnitPrice(
     p_disc_value: h?.discountValue ?? null,
     p_max_disc_cents: h?.maxDiscountCents ?? null,
   }
+  // Os 2 parâmetros novos da mig-079 só são enviados quando o caller os
+  // fornece — assim continuamos disparando o DEFAULT da função SQL e
+  // mantemos compatibilidade com qualquer futura assinatura.
+  if (h?.minQuantity != null) params.p_min_quantity = h.minQuantity
+  if (h?.tierPromotionSteps != null) params.p_tier_promotion_steps = h.tierPromotionSteps
   if (args.at) params.p_at = args.at
   return callPricingRpc<PricingBreakdown>('preview_unit_price', params)
 }
@@ -340,6 +406,10 @@ export type CouponVariant =
       discountType: HypotheticalDiscountType
       discountValue: number
       maxDiscountCents?: number | null
+      /** Para `MIN_QTY_PERCENT` (e opcionalmente PERCENT/FIXED). */
+      minQuantity?: number
+      /** Para `TIER_UPGRADE`. */
+      tierPromotionSteps?: number
     }
   | { kind: 'existing'; label: string; couponId: string }
 
@@ -395,6 +465,8 @@ export async function buildCouponImpactMatrix(args: CouponMatrixArgs): Promise<C
             discountType: variant.discountType,
             discountValue: variant.discountValue,
             maxDiscountCents: variant.maxDiscountCents ?? null,
+            minQuantity: variant.minQuantity,
+            tierPromotionSteps: variant.tierPromotionSteps,
           },
           at: args.at,
         })

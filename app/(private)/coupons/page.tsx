@@ -154,10 +154,26 @@ export default async function CouponsPage() {
           <ul className="divide-y divide-gray-100">
             {coupons.map((c) => {
               const { label, color, Icon } = couponStatus(c)
-              const discountLabel =
-                c.discount_type === 'PERCENT'
-                  ? `${Number(c.discount_value).toFixed(0)}% por unidade`
-                  : `${formatCurrency(Number(c.discount_value))} por unidade`
+              // ADR-002: 5 tipos de cupom. A clínica enxerga uma versão
+              // amigável para cada um — o cálculo concreto acontece no
+              // catálogo / checkout via compute_unit_price.
+              const v = Number(c.discount_value)
+              const discountLabel = (() => {
+                switch (c.discount_type) {
+                  case 'PERCENT':
+                    return `${v.toFixed(0)}% por unidade`
+                  case 'FIXED':
+                    return `${formatCurrency(v)} por unidade`
+                  case 'FIRST_UNIT_DISCOUNT':
+                    return `${formatCurrency(v)} na 1ª unidade do pedido`
+                  case 'TIER_UPGRADE':
+                    return `Promoção: +${c.tier_promotion_steps ?? 0} tier(s) na escala de preços`
+                  case 'MIN_QTY_PERCENT':
+                    return `${v.toFixed(0)}% se pedir ao menos ${c.min_quantity ?? 2} unidades`
+                  default:
+                    return `${v}`
+                }
+              })()
 
               return (
                 <li key={c.id} className="flex items-center justify-between gap-4 px-6 py-4">
