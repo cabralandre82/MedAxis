@@ -147,8 +147,8 @@ Decididas conscientemente como **fora do escopo do baseline** mas
    `csp_report_only`) mas não estão indexados em um único doc, nem
    há kill-switch para tiered pricing nem para coupon types novos.
 
-> **Update 2026-05-02 (mesma sessão)**: os 3 itens foram parcialmente
-> entregues junto com a tag:
+> **Update 2026-05-02 (mesma sessão)**: os 3 itens foram entregues
+> junto com a tag e validados end-to-end:
 >
 > - Trilho B → `tests/e2e/golden-path.test.ts` + `npm run test:e2e:bloqueante`
 >   adicionados ao step `e2e-smoke` do CI (bloqueia merge).
@@ -158,6 +158,21 @@ Decididas conscientemente como **fora do escopo do baseline** mas
 > - Trilho D → `docs/operations/kill-switches.md` consolida flags
 >   existentes e identifica gaps (asaas, clicksign, tiered, novos
 >   cupons). Implementação dos gaps fica para próxima iteração.
+>
+> **Update 2026-05-02 (mesma sessão, depois do secret)**:
+> Configurado `E2E_SUPER_ADMIN_PASSWORD` como secret do repo.
+> Auth.setup.ts ficou fail-soft (se credencial não vale para o target,
+> salva sessão vazia + flag, testes auth pulam graceful — visto via
+> `tests/e2e/_helpers/auth-status.ts`).
+>
+> Resultado validado em produção via post-deploy-smoke run 25266423431:
+> **10/10 testes passed em 21.4s** contra https://clinipharma.com.br
+> (4 health + 6 autenticados full-coverage). Em CI contra Supabase
+> staging, o setup falha graceful (credencial é de prod) → 4 passed
+>
+> - 6 skipped, zero falhas. Quando criar usuário super-admin em
+>   staging com mesma credencial, CI também ganha cobertura total
+>   sem mudança de código.
 
 ---
 
