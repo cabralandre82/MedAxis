@@ -147,8 +147,17 @@ Decididas conscientemente como **fora do escopo do baseline** mas
    `csp_report_only`) mas não estão indexados em um único doc, nem
    há kill-switch para tiered pricing nem para coupon types novos.
 
-Esses três itens estão na fila imediata; não são bloqueio para receber
-pedidos reais.
+> **Update 2026-05-02 (mesma sessão)**: os 3 itens foram parcialmente
+> entregues junto com a tag:
+>
+> - Trilho B → `tests/e2e/golden-path.test.ts` + `npm run test:e2e:bloqueante`
+>   adicionados ao step `e2e-smoke` do CI (bloqueia merge).
+> - Trilho C → `.github/workflows/post-deploy-smoke.yml` dispara após
+>   CI verde em main, roda golden-path contra prod, abre issue P1
+>   automática se falhar (runbook em `docs/runbooks/post-deploy-smoke-failed.md`).
+> - Trilho D → `docs/operations/kill-switches.md` consolida flags
+>   existentes e identifica gaps (asaas, clicksign, tiered, novos
+>   cupons). Implementação dos gaps fica para próxima iteração.
 
 ---
 

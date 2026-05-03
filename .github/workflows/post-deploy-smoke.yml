@@ -1,0 +1,173 @@
+name: Post-Deploy Smoke
+
+# ────────────────────────────────────────────────────────────────────────────
+# Trilho C do baseline v1.0.0-launch-ready.
+#
+# Dispara reativamente após o CI ficar verde em main (= momento em que o
+# Vercel já promoveu o novo deploy de produção). Roda o golden-path inteiro
+# contra https://clinipharma.com.br para detectar regressão funcional em
+# minutos, não em horas (que seria o tempo até o usuário avisar ou o Sentry
+# disparar).
+#
+# Camadas de monitoramento adjacentes:
+#   - synthetic-probe   (cron 5 min, cobre 4 endpoints, em-cluster)
+#   - external-probe    (cron 5 min, cobre 4 endpoints, externo)
+#   - post-deploy-smoke (este, reativo, cobre todo o golden-path)
+#
+# Falha → issue P1 + label `smoke-fail` + report Playwright anexado.
+# ────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_run:
+    # Quando o CI termina (verde ou vermelho) em main. Filtramos para
+    # success-only no `if` do job. Vercel auto-deploys também triggam por
+    # push a main, então o tempo entre CI-green e Vercel-promoted é da
+    # ordem de 60-120s — o sleep abaixo cobre essa janela.
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Override base URL (default: prod)'
+        required: false
+        default: 'https://clinipharma.com.br'
+      skip_wait:
+        description: 'Pular o sleep de 90s antes de rodar (use quando target já está estável)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: post-deploy-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Golden-path contra prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+
+    outputs:
+      target_url: ${{ steps.cfg.outputs.url }}
+      sha: ${{ steps.cfg.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Quando vem de workflow_run, o checkout default é o SHA do
+          # workflow que disparou — exatamente o commit que acabou
+          # de ser deployado. Quando vem de dispatch, é o HEAD do branch.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configurar variáveis
+        id: cfg
+        run: |
+          URL="${{ inputs.target_url }}"
+          if [ -z "$URL" ]; then
+            URL="https://clinipharma.com.br"
+          fi
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Target: $URL"
+          echo "Commit: $SHA"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium --with-deps
+
+      - name: Aguardar promoção do deploy no Vercel (~90s)
+        if: inputs.skip_wait != 'true'
+        run: |
+          echo "Aguardando 90s para o Vercel promover o novo deploy de ${{ steps.cfg.outputs.sha }}..."
+          sleep 90
+
+      - name: Rodar golden-path
+        env:
+          BASE_URL: ${{ steps.cfg.outputs.url }}
+          E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
+          E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
+          # Ainda que o teste seja read-only, evita que features de
+          # observabilidade do Playwright tentem escrever em paths
+          # protegidos.
+          CI: 'true'
+        run: npm run test:e2e:golden-path
+
+      - name: Upload report (sempre)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: post-deploy-smoke-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  alert:
+    name: Abrir incident P1 se smoke falhar
+    needs: smoke
+    if: always() && needs.smoke.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Criar issue P1
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const url = '${{ needs.smoke.outputs.target_url }}' || 'https://clinipharma.com.br'
+            const sha = '${{ needs.smoke.outputs.sha }}' || context.sha
+            const shortSha = sha.substring(0, 7)
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+
+            const body = [
+              `## Post-Deploy Smoke FAILED`,
+              ``,
+              `O golden-path quebrou contra **${url}** logo após o deploy do commit \`${shortSha}\`.`,
+              ``,
+              `### O que isso significa`,
+              ``,
+              `Uma feature listada no baseline \`v1.0.0-launch-ready\` parou de funcionar.`,
+              `Isso é regressão automática (P1), não comportamento esperado.`,
+              ``,
+              `### Ação imediata`,
+              ``,
+              `1. Abrir o report do Playwright: ${runUrl}`,
+              `2. Identificar o teste que falhou (\`tests/e2e/golden-path.test.ts\`).`,
+              `3. Decidir entre:`,
+              `   - **Hotfix** se a quebra é simples (~10 min).`,
+              `   - **Rollback** se a causa não é óbvia: \`vercel rollback\` para o deploy anterior, depois investigar.`,
+              ``,
+              `### Contexto`,
+              ``,
+              `- Commit deployado: \`${sha}\``,
+              `- Target: ${url}`,
+              `- Run: ${runUrl}`,
+              `- Baseline de referência: \`v1.0.0-launch-ready\``,
+              `- Runbook: \`docs/runbooks/post-deploy-smoke-failed.md\``,
+              ``,
+              `cc @cabralandre82`,
+            ].join('\n')
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `P1 — post-deploy smoke falhou (${shortSha})`,
+              labels: ['P1', 'incident', 'smoke-fail'],
+              body,
+            })

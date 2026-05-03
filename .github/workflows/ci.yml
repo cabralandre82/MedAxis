@@ -84,8 +84,13 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
-      - name: Run E2E smoke tests
-        run: npm run test:e2e:smoke
+      # Trilho B do baseline v1.0.0-launch-ready: golden-path roda
+      # junto com smoke num único batch. Cobre regressões funcionais
+      # observadas em incidentes pré-lançamento (galeria, sticky bar,
+      # coupon types, server-logs, pricing preview API) — ver
+      # tests/e2e/golden-path.test.ts.
+      - name: Run E2E smoke + golden-path tests
+        run: npm run test:e2e:bloqueante
         env:
           # Wave 5 — when no staging URL is configured we let Playwright
           # boot a local dev server against the staging Supabase project.
