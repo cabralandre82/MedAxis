@@ -18,7 +18,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test smoke --project=chromium",
     "test:e2e:golden-path": "playwright test golden-path --project=chromium",
-    "test:e2e:bloqueante": "playwright test --project=chromium --grep '^(Smoke|Golden Path)'",
+    "test:e2e:bloqueante": "playwright test --project=chromium --grep '(Smoke|Golden Path)'",
     "test:e2e:report": "playwright show-report",
     "test:mutation": "stryker run",
     "secrets:export-manifest": "node scripts/secrets/export-manifest.mjs",

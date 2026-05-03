@@ -96,6 +96,16 @@ jobs:
           echo "Aguardando 90s para o Vercel promover o novo deploy de ${{ steps.cfg.outputs.sha }}..."
           sleep 90
 
+      - name: Avisar se cobertura está reduzida (sem credencial autenticada)
+        env:
+          E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$E2E_SUPER_ADMIN_PASSWORD" ]; then
+            echo "::warning::E2E_SUPER_ADMIN_PASSWORD não está configurada como secret do repo. Apenas GP-1.x (health, sem auth) será executado. GP-2/3/4 vão pular gracefully. Para cobertura completa, configure o secret via 'gh secret set E2E_SUPER_ADMIN_PASSWORD'."
+          else
+            echo "✓ Credencial autenticada disponível — golden-path completo será executado."
+          fi
+
       - name: Rodar golden-path
         env:
           BASE_URL: ${{ steps.cfg.outputs.url }}
