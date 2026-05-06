@@ -97,8 +97,9 @@
 
 ### Infra
 
-- [x] Vercel `clinipharma` ativo, `b2b-med-platform` em quarentena
-      (deploys e crons neutralizados — ver `docs/infra/vercel-projects-topology.md`).
+- [x] Vercel `clinipharma` ativo, `b2b-med-platform` deletado em
+      2026-05-06 após 17 dias de quarentena sem regressão (ver
+      `docs/infra/vercel-projects-topology.md`).
 - [x] Supabase staging provisionado (mig 001..083) e validado com
       k6 smoke + health + realistic-workload.
 - [x] Cloudflare R2 offsite backup semanal + restore drill funcional.

@@ -179,8 +179,10 @@ os locais de origem.
   (também espelhado em `~/.config/agent/credentials.env`).
 - **Org / Team ID**: `team_fccKc8W6hyQmvCcZAGCqV1UK`
   (slug `cabralandre-3009`).
-- **Projetos visíveis**: `b2b-med-platform` (em quarentena), `clinipharma`
-  (ativo), `omni-runner-portal`, `project-running`.
+- **Projetos visíveis**: `clinipharma` (ativo), `instituto-nova-medida`,
+  `omni-runner-portal`, `project-running`. (`b2b-med-platform` foi
+  deletado em 2026-05-06 após 17 dias de quarentena — ver
+  `docs/infra/vercel-projects-topology.md`.)
 - **Projeto ATIVO deste repo**: `clinipharma` — serve `clinipharma.com.br`
   (main) e `staging.clinipharma.com.br` (branch staging). Para vincular
   o CLI local ao projeto certo:
@@ -193,10 +195,11 @@ os locais de origem.
   (`.vercel/project.json` é gitignored — cada agente roda esse comando
   uma vez por máquina.)
 
-- **⚠ Projeto em quarentena**: `b2b-med-platform` continua existindo na
-  conta Vercel, mas com Git desconectado (sem novos deploys automáticos)
-  e mantido como backup até **2026-05-03**. Não adicionar envs nele.
-  Histórico: [`docs/infra/vercel-projects-topology.md`](docs/infra/vercel-projects-topology.md).
+- **Histórico — projeto deletado**: `b2b-med-platform` foi mantido em
+  quarentena de 2026-04-19 a 2026-05-06 (17 dias) e então deletado via
+  Vercel API. Backup pre-delete em
+  `~/.config/agent/backups/b2b-med-platform_pre-delete_20260506.json`.
+  Histórico completo: [`docs/infra/vercel-projects-topology.md`](docs/infra/vercel-projects-topology.md).
 
 #### Por que `VERCEL_TOKEN` env var não basta sozinho
 

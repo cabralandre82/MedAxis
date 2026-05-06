@@ -3328,3 +3328,75 @@ Esperado: `has_commission=1` e `has_transfer=1` em todas as linhas. `has_consult
 - F5 — cron reconcile vs Asaas API (próximo item da S1). Compara estado Asaas vs estado interno e re-confirma orders cujo webhook falhou após 3 retries.
 - Runbook `docs/runbooks/asaas-webhook-ledger.md` — criar quando o primeiro alarme `webhook_ledger_total{outcome=error_*}` disparar (sem urgência de criar antes; alarme é imperativo, runbook é educativo).
 - Considerar telemetria adicional: emitir Sentry event quando `WebhookLedgerError(code='no_payment_row')` for lançado, anexando `orderId` e `asaasPaymentId` para investigação rápida. Não-bloqueador.
+
+---
+
+### Pre-Launch Onda S1 — Quarentena Vercel encerrada (b2b-med-platform DELETADO) — 2026-05-06 19:15 BRT
+
+**Status:** 🟢 concluído
+**Commits:** _este commit_
+**Migrations:** nenhuma
+**Env vars alteradas:** nenhuma (em `clinipharma`); 53 envs do projeto deletado deixaram de existir junto com ele
+**Testes:** N/A (operação de infra; sanity verificado via API antes/depois)
+
+**O que foi feito:**
+
+Deleção definitiva do projeto Vercel `b2b-med-platform`
+(`prj_AselTmZTlBpnArr0M7zP6GTmNJ16`) após 17 dias de quarentena. A
+quarentena foi instituída em 2026-04-19 quando o projeto ATIVO mudou
+para `clinipharma`; a janela de espera (planejada para encerrar em
+2026-05-03) foi prorrogada por 3 dias por priorização de outras ondas
+e fechada hoje após confirmação de que não houve regressão necessitando
+rollback.
+
+**Sequência executada:**
+
+1. **Auditoria pré-delete via Vercel API**:
+   - `gitRepo: null` (Git desconectado em 2026-04-19) ✅
+   - `productionDeployId: null` (sem deployment marcado como prod) ✅
+   - `latestDeployments[0].state: READY` (deployment cold de 2026-04-19) ✅
+   - `domains: ["b2b-med-platform.vercel.app"]` (apenas o default Vercel; **0 domínios custom**) ✅
+   - 53 envs no projeto, mas apenas 1 (`SENTRY_AUTH_TOKEN`) com key não duplicada no `clinipharma` ATIVO. Investigação via `vercel env pull` revelou que o valor estava **vazio** (`""`) — bug pré-existente do script de update que salvou string vazia em vez do token real. Nada a recuperar.
+
+2. **Snapshot de auditoria** salvo em `~/.config/agent/backups/b2b-med-platform_pre-delete_20260506.json` (chmod 600, 11250 bytes) — contém project metadata, lista de keys das 53 envs (sem values; project-level sensitive envs não são decrypted via API), domains, últimos 10 deployments. Trilha forense permanente.
+
+3. **DELETE via API**: `DELETE /v9/projects/prj_AselTmZTlBpnArr0M7zP6GTmNJ16` → HTTP 204. GET subsequente retorna 404 com `error.code=not_found`. Listagem de projetos da org agora mostra 4 (clinipharma, instituto-nova-medida, omni-runner-portal, project-running) — `b2b-med-platform` desaparecido.
+
+4. **Sanity check pós-delete**: `clinipharma` continua com `productionDeployId=dpl_H2zoGjuQdp6WkNQcPdSYSSqgF1W3` READY, domínio `clinipharma.com.br` resolvendo, 22 crons disparando exatamente uma vez por ciclo. Operação 100% transparente para usuários.
+
+**Por que agora (e não antes ou depois):**
+
+- F1 (commit anterior) tornou o webhook Asaas funcional em prod — qualquer reconfig acidental do projeto fantasma agora poderia despertar invocações duplicadas que sobrescreveriam ledger ainda em formação.
+- F5 (próximo item) vai mexer em cron infra; melhor com o palco limpo (zero risco de "outro vercel.json" criar duplo-fire).
+- A janela de 17 dias (planejada 14, real 17) é suficientemente larga para qualquer regressão de migração ter aparecido. Nenhuma apareceu.
+
+**Compatibilidade:**
+
+- 0 mudanças em `clinipharma` (projeto ativo).
+- 0 mudanças no banco (migrations, RLS, dados).
+- 0 mudanças em código.
+- Apenas docs + 1 backup file.
+
+**Follow-up gerado:**
+
+- **`SENTRY_AUTH_TOKEN` ausente em `clinipharma`** — desde 2026-04-19, builds de prod não fazem upload de source maps porque o token nunca foi recriado no projeto novo (o existente em `b2b-med-platform` estava vazio mesmo). Sentry continua capturando erros, mas com stack traces minificados em vez de source-map-resolved. Para resolver: humano gera novo token org-scoped no Sentry dashboard (`https://cabralandre-3009s-org.sentry.io/settings/auth-tokens/`) → `vercel env add SENTRY_AUTH_TOKEN production`. Não-bloqueador para launch — degradação aceitável de DX, não de correção.
+
+- **Doc `docs/infra/vercel-projects-topology.md`** atualizada com passo 10 do histórico (deleção) e seção "Reverter a inversão" reescrita refletindo que o custo de revert subiu de ~2min para ~30min (recriar projeto do zero).
+
+- **`AGENTS.md`** atualizado: lista de projetos visíveis e remoção da diretriz "não adicionar envs no quarentenado".
+
+- **`docs/launch-baseline-2026-05-02.md`** atualizada: checklist agora afirma deleção em vez de quarentena.
+
+- **`docs/runbooks/vercel-cron-quota.md`** atualizado: nome do projeto referenciado é `clinipharma` (com nota histórica sobre `b2b-med-platform`).
+
+**Encerramento de incidentes:**
+
+- Incidente "crons fantasmas duplo-firing" (2026-05-02) — antes mitigado por remoção de `CRON_SECRET` + deleção do warm deploy. Agora **fechado por construção**: o manifest `vercel.json` paralelo não existe mais.
+
+**Rollback:**
+
+Se algo dependia do projeto deletado e quebrou, recriar via API
+(`POST /v9/projects` + relink Git + restaurar 38 envs production
+do backup snapshot). Tempo estimado: ~30min. Não esperado nenhum
+caso desse tipo — nenhum domínio custom apontava para o projeto,
+nenhum deployment ativo respondia a tráfego.

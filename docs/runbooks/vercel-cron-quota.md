@@ -8,8 +8,9 @@
 
 ## Background
 
-The Clinipharma Vercel project (`b2b-med-platform`, team
-`cabralandre-3009's projects`) was originally on the **Hobby** plan.
+The Clinipharma Vercel project (`clinipharma`, team
+`cabralandre-3009's projects`; previously known as `b2b-med-platform`,
+deleted 2026-05-06) was originally on the **Hobby** plan.
 Hobby allows **at most one execution per day** for any cron job declared
 in `vercel.json`. Sub-daily schedules (`*/15`, `*/30`, hourly, etc.)
 caused the deployment **to be rejected up-front** by Vercel's API with:

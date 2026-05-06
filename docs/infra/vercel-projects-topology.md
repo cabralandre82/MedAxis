@@ -1,14 +1,12 @@
 # Topologia dos projetos Vercel
 
-> **Status:** Vivo. Última mudança: **2026-04-18** — troca provisória do
-> `ZENVIA_SMS_FROM` de `Clinipharma` para `cabralandre` após ticket Zenvia
-> confirmar que o plano **Starter + Channel 1** não permite sender
-> alfanumérico customizado (o `from` precisa ser o username da conta).
-> Primeiro smoke test real de SMS entregue após a troca — antes desse
-> passo, `from=Clinipharma` estava sendo rejeitado pelo Zenvia com
-> `MESSAGE_STATUS=REJECTED` / "The message was rejected by Zenvia".
-> Histórico completo abaixo, incluindo a rotação de `ZENVIA_API_TOKEN`,
-> o kill-switch de WhatsApp e o webhook de delivery-status.
+> **Status:** Vivo. Última mudança: **2026-05-06** — projeto Vercel
+> `b2b-med-platform` (em quarentena desde 2026-04-19) **DELETADO** após
+> 17 dias de janela de espera sem regressão. Quarentena planejada para
+> 2026-05-03; deleção atrasou 3 dias sem impacto. Backup pre-delete
+> salvo em `~/.config/agent/backups/b2b-med-platform_pre-delete_20260506.json`.
+> Histórico completo abaixo (incluindo o incidente de 2026-05-02 dos
+> crons fantasmas, motivo direto da decisão de deletar).
 > **Owner:** Plataforma + DPO.
 
 ## TL;DR (estado atual)
@@ -31,17 +29,12 @@ Existe **um único projeto Vercel ativo**: `clinipharma`. Ele serve:
                                  │ Supabase staging (ghjexiy…)             │
                                  └─────────────────────────────────────────┘
 
-   Em quarentena (sem Git, neutralizado, mantido como backup até 2026-05-03):
+   Histórico (deletado 2026-05-06):
                                  ┌─────────────────────────────────────────┐
                                  │ Vercel project: b2b-med-platform        │
-                                 │ Domain: b2b-med-platform.vercel.app     │
-                                 │ Git link: REMOVIDO                      │
-                                 │ Secrets Zenvia: REMOVIDOS (2026-04-18)  │
-                                 │ CRON_SECRET: REMOVIDO (2026-05-02)      │
-                                 │ Deployment warm: DELETADO (2026-05-02)  │
-                                 │ Crons: ainda agendados, mas todas as    │
-                                 │ invocações batem em 401 (auth gate sem  │
-                                 │ secret) → não tocam no DB.              │
+                                 │ Status: DELETED via API                 │
+                                 │ HTTP 204 / GET subsequente → 404        │
+                                 │ Backup pre-delete: ~/.config/agent/...  │
                                  └─────────────────────────────────────────┘
 ```
 
@@ -211,18 +204,45 @@ Zenvia"`. Causa diagnosticada via ticket Zenvia: o plano contratado
      `vercel.json` listando crons. As duas primeiras condições
      foram aplicadas; a terceira é resolvida pela quarentena
      expirar em 24h (deletar o projeto).
-
-## Por que `b2b-med-platform` ficou em quarentena (não deletado)
-
-- Histórico de deploys e logs preservados para forense em caso de regressão.
-- Reverter a inversão é trivial: re-linkar o repo, re-mover o subdomínio
-  de staging, atualizar `.vercel/project.json`. ~2 minutos.
-- **Crons ainda estão agendados** lá. Como o `clinipharma` agora também tem
-  Upstash, o `lib/cron/guarded.ts` faz lock distribuído via Redis e cada
-  job roda no máximo uma vez (independente de quantos projetos disparam).
-  Risco de double execution = ~0.
-- **Plano de remoção:** após 2 semanas de operação estável (= 2026-05-03),
-  deletar o projeto `b2b-med-platform`. Update este doc.
+10. **2026-05-06 (tarde, BRT):** **deleção definitiva do projeto
+    `b2b-med-platform`** após 17 dias de janela de espera (planejada
+    para 2026-05-03, atrasou 3 dias sem impacto). Sequência:
+    - **Auditoria pré-delete**: confirmado via API que o projeto não
+      tinha (a) Git connect (`gitRepo: null`), (b) production deploy
+      marcado (`productionDeployId: null`), (c) domínios custom (só
+      o default `b2b-med-platform.vercel.app`). 53 envs presentes
+      mas todas duplicatas das do `clinipharma` ATIVO **exceto uma**:
+      `SENTRY_AUTH_TOKEN` que existia só no quarentenado. Investigação
+      revelou que **o valor estava vazio** (`""` no `vercel env pull`)
+      — bug pré-existente do script de update que salvava string
+      vazia em vez do token real. Não havia o que recuperar; segue
+      como follow-up provisionar novo token no Sentry dashboard e
+      criar entrada no `clinipharma`.
+    - **Snapshot de auditoria** salvo em
+      `~/.config/agent/backups/b2b-med-platform_pre-delete_20260506.json`
+      (chmod 600) — contém project metadata, lista de keys das envs
+      (sem values), domains, últimos 10 deployments. Trilha forense
+      para qualquer investigação futura.
+    - **`DELETE /v9/projects/prj_AselTmZTlBpnArr0M7zP6GTmNJ16`** via
+      Vercel API. HTTP 204. GET subsequente retorna 404 com
+      `error.code=not_found`. Listagem da org agora mostra 4 projetos
+      (clinipharma, instituto-nova-medida, omni-runner-portal,
+      project-running) — `b2b-med-platform` desaparecido.
+    - **`clinipharma` (ativo) intocado** durante toda a operação.
+      `productionDeployId` = `dpl_H2zoGjuQdp6WkNQcPdSYSSqgF1W3` READY.
+      Domínio `clinipharma.com.br` continua resolvendo. Os 22 crons
+      continuam disparando exatamente uma vez por ciclo.
+    - **Lição encerrada**: a quarentena cumpriu seu propósito (janela
+      de espera para rollback de emergência) e foi liberada quando a
+      janela passou sem necessidade. O follow-up dos crons fantasmas
+      agora está fechado por completo — não existe mais um manifest
+      `vercel.json` paralelo que possa ressuscitar invocações duplas.
+    - **Follow-up gerado**: provisionar novo `SENTRY_AUTH_TOKEN` no
+      `clinipharma` quando humano puder gerar um token org-scoped no
+      Sentry dashboard. Sem isso, source maps não são uploaded em
+      builds de prod desde 2026-04-19 (quando o projeto migrou). Não
+      bloqueante — Sentry continua capturando erros, só que com
+      stack traces minificados em vez de source-map-resolved.
 
 ## Inversão executada — registro técnico
 
@@ -293,26 +313,40 @@ curl -sS -X POST "https://api.vercel.com/v13/deployments?teamId=$VERCEL_ORG_ID&f
 
 ## Reverter a inversão (caso de emergência)
 
-Se algo quebrar e precisar voltar ao estado pré-inversão:
+> **Custo subiu de ~2min para ~30min depois de 2026-05-06.** O projeto
+> `b2b-med-platform` foi deletado em 2026-05-06 (passo 10 do histórico).
+> Reverter agora exige **recriar o projeto do zero** (incluindo as 38
+> envs de production), porque os 17 dias da janela de espera passaram
+> sem regressão e a Vercel API não restaura projetos deletados.
+
+Se algo quebrar e precisar voltar ao estado "pré-inversão":
 
 ```bash
-# 1. Re-conectar Git ao b2b-med-platform
+# 1. Recriar o projeto Vercel
+curl -sS -X POST "https://api.vercel.com/v9/projects?teamId=$VERCEL_ORG_ID" \
+  -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"b2b-med-platform","framework":"nextjs"}'
+
+# 2. Re-conectar Git
 curl -sS -X POST "https://api.vercel.com/v13/projects/b2b-med-platform/link?teamId=$VERCEL_ORG_ID" \
   -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
   -d '{"type":"github","repo":"cabralandre82/clinipharma","productionBranch":"main"}'
 
-# 2. Mover staging subdomínio de volta
-curl -sS -X DELETE "https://api.vercel.com/v9/projects/clinipharma/domains/staging.clinipharma.com.br?teamId=$VERCEL_ORG_ID" \
-  -H "Authorization: Bearer $VERCEL_TOKEN"
-curl -sS -X POST "https://api.vercel.com/v10/projects/b2b-med-platform/domains?teamId=$VERCEL_ORG_ID" \
-  -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
-  -d '{"name":"staging.clinipharma.com.br","gitBranch":"staging"}'
+# 3. Recriar 38 envs production (lista completa em
+#    ~/.config/agent/backups/b2b-med-platform_pre-delete_20260506.json,
+#    chave envs_keys[]). VALUES não estão no backup — extrair do
+#    `clinipharma` (vercel env pull) e re-postar.
 
-# 3. Atualizar local .vercel/project.json para apontar de volta
-vercel link --yes --project b2b-med-platform --scope cabralandre-3009s-projects --token "$VERCEL_TOKEN"
+# 4. Mover staging subdomínio de volta (mesmo comando antigo)
+# 5. vercel link local
 ```
 
-Tempo total estimado: ~2min. Não toca nada em código nem DNS.
+Não foi tomado o caminho "manter o projeto e desabilitar via flag"
+porque a quarentena já era essa configuração: 17 dias com Git off
+e CRON_SECRET removido — única coisa que o projeto fazia era
+ocupar slot e potencialmente disparar crons fantasmas (incidente
+de 2026-05-02). Não havia caminho intermediário entre "vivo de
+verdade" e "deletado".
 
 ## Referências
 
