@@ -157,7 +157,14 @@ jobs:
             -- here so the WHEN(...) clause type-checks. Default NULL =
             -- "not banned", which is also what migration 060's backfill
             -- assumes.
-            banned_until timestamptz
+            banned_until timestamptz,
+            -- Migration 084 inserts a synthetic system user (UUID
+            -- 00000000-...) and uses these GoTrue-provisioned columns.
+            -- Real Supabase ships them; we mirror the shape so the
+            -- INSERT parses in the ephemeral pg used by the drift CI.
+            instance_id uuid,
+            aud text,
+            is_anonymous boolean DEFAULT false
           );
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
             LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
