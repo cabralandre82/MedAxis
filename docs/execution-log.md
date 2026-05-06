@@ -3252,3 +3252,79 @@ F1 (extrair `executeConfirmPaymentLedger` + webhook Asaas chamar) PRECISA deste 
 
 - F1 — extrair `executeConfirmPaymentLedger` + webhook Asaas chamar (próximo item da Onda S1).
 - Considerar adicionar `BEFORE INSERT` trigger em `order_status_history` que rejeita `changed_by_user_id IN (...known synthetic UUIDs...)` se a mig 084 for revertida no futuro — defesa em profundidade. Não-bloqueador.
+
+---
+
+### Pre-Launch Onda S1 — F1: webhook Asaas confirma ledger atomicamente — 2026-05-06 18:10 BRT
+
+**Status:** 🟢 concluído
+**Commits:** _este commit_ (refator extração `SYSTEM_USER_ID`) + _próximo commit_ (webhook chama `confirm_payment_atomic`)
+**Migrations aplicadas:** nenhuma (mig `084` aplicada na entrada anterior é pré-requisito desta)
+**Env vars alteradas:** nenhuma
+**Testes:** 2236 unit (+21 novos em `tests/unit/lib/payments/confirm-via-webhook.test.ts` cobrindo 20 cenários da função pura + 1 novo assert estático em `tests/unit/lib/jobs/inngest-jobs.test.ts` para a presença do step). Suite full verde. tsc + build verdes.
+
+**Bug latente fechado:**
+
+Antes desta wave, `lib/jobs/asaas-webhook.ts` apenas atualizava `payments.payment_status='CONFIRMED'` e chamava `releaseOrderForExecution`. **Não inseria** em `commissions`, `transfers` ou `consultant_commissions`. Ledger só era populado quando super-admin clicava "confirmar pagamento" manualmente. Os 4 pedidos confirmados em prod até 2026-05-06 foram TODOS via caminho manual (`confirmed_by_user_id` aponta para o operador real, ledger consistente). Quando o primeiro PIX/cartão real entrasse pelo gateway, order avançaria para `RELEASED_FOR_EXECUTION` SEM ledger — farmácia receberia pedido pago, mas plataforma não teria registro de comissão / repasse / consultor. Drift financeiro silencioso, descoberto só pelo cron `money-reconcile` (que olha `total_price` vs `pharmacy_cost*qty + platform_commission`, não vs ledger ausente).
+
+**Decisão arquitetural — webhook bypassa `payments.atomic_confirm`:**
+
+A flag `payments.atomic_confirm` existe para gerenciar a transição do **caminho manual** legacy → atomic. Para o webhook não há "caminho legacy" (ele nunca escreveu no ledger), então a flag não tem semântica aqui. Webhook chama `confirm_payment_atomic` SEMPRE, sem checar flag. Caminho manual (`services/payments.ts::confirmPayment`) continua respeitando a flag e ficou inalterado.
+
+**Entregáveis:**
+
+- `lib/constants/system-user.ts` (novo) — extrai `SYSTEM_USER_ID` para constante compartilhada (evita inline em múltiplos call-sites; import-safe a partir de qualquer layer).
+- `lib/orders/release-for-execution.ts` — passa a importar a constante (zero comportamento mudado, refator pure).
+- `lib/payments/confirm-via-webhook.ts` (novo) — função pura `confirmPaymentViaAsaasWebhook(input)` + helper `mapAsaasBillingTypeToPaymentMethod` + tipo de erro `WebhookLedgerError`. Executa: (a) busca payments do order ordenados DESC, (b) erra se 0 rows (orphan / checkout race — Inngest retenta), (c) skip se nenhum PENDING (manual já processou — idempotente), (d) chama `confirmPaymentAtomic` com `confirmedByUserId=SYSTEM_USER_ID`, `expectedLockVersion=payment.lock_version`, (e) `already_processed`/`stale_version` → skip silencioso (race vs manual), (f) outros erros RPC → throw (Inngest retenta).
+- `lib/inngest.ts` — `AsaasWebhookEvent.payment` ganha campo opcional `billingType?: string` (Asaas envia, tipo só não declarava antes).
+- `lib/jobs/asaas-webhook.ts` — adiciona `step.run('confirm-payment-ledger', ...)` ANTES do `release-for-execution`. Remove o `UPDATE payments_status='CONFIRMED'` defensivo (a RPC já faz). Garante: ledger sempre confirmado antes da farmácia ver o pedido.
+- `lib/metrics.ts` — 2 novas métricas: `WEBHOOK_LEDGER_TOTAL{outcome}` (counter) + `WEBHOOK_LEDGER_DURATION_MS` (histogram).
+- `docs/observability/metrics.md` — entrada das 2 métricas novas com legenda dos `outcome` possíveis.
+- `tests/unit/lib/payments/confirm-via-webhook.test.ts` (novo) — 20 testes cobrindo: happy path, idempotência (PENDING ausente), race vs manual (`already_processed`, `stale_version`), erro fatal (sem payment row, fetch failure, RPC `rpc_unavailable`), parametrização do `mapAsaasBillingTypeToPaymentMethod`, fall-through DESC do payment mais recente, fallback de `paymentMethod='ASAAS'` quando `billingType` ausente.
+
+**Idempotência tripla:**
+
+1. `POST_PAYMENT_STATES` early-exit no webhook job (10 status post-payment, incluindo `PAYMENT_CONFIRMED` em diante). Se manual já avançou order, função pura nunca é chamada.
+2. Função pura busca apenas `status='PENDING'` antes de chamar RPC. Se todos os payments já são CONFIRMED, retorna `skipped: 'all_payments_processed'`.
+3. SQL function `confirm_payment_atomic` tem `WHERE status='PENDING'` no UPDATE. Se race entre webhook e manual, perdedor recebe `already_processed` e função pura traduz para skip silencioso.
+
+**Risco residual e mitigação:**
+
+- **Risco**: bug latente em `confirm_payment_atomic` que só aparece no caminho webhook (nunca exercitado em prod).
+  - **Mitigação 1**: Inngest retenta 3× com backoff (~5min total).
+  - **Mitigação 2**: se falhar 3×, alarme via Sentry → operador confirma manualmente via super-admin (caminho preservado, intocado).
+  - **Mitigação 3**: F5 (cron reconcile vs Asaas API) é o "fail-safe last resort" — próximo item da S1.
+- **Risco**: Asaas envia webhook para order sem `payment` row local (checkout race / orphan externo).
+  - **Mitigação**: `WebhookLedgerError(code='no_payment_row')` lançado → Inngest retenta 3× → alarme. Operador investiga: ou cria manualmente o payment row, ou consulta o gateway pra entender. Estado anterior: order avançaria silenciosamente para `RELEASED_FOR_EXECUTION` sem ledger. Estado novo: order fica preso em `AWAITING_PAYMENT` e equipe é notificada. **Falha é visível em vez de silenciosa.**
+
+**Compatibilidade:**
+
+- 0 mudanças de schema / DDL.
+- 0 mudanças no caminho manual (`services/payments.ts::confirmPayment` intocado).
+- 4 pedidos legacy intocados (já estavam confirmados manualmente, ledger consistente).
+- Linhas existentes em `commissions` / `transfers` / `consultant_commissions` intocadas.
+
+**Rollback:**
+
+Reverter os 2 commits desta wave. Webhook volta a só atualizar `payment_status` e liberar order — ledger continua sendo populado só via caminho manual (estado pré-2026-05-06). Não-destrutivo.
+
+**Validação smoke quando primeiro PIX real chegar:**
+
+```sql
+-- Após primeiro PIX real ser confirmado pelo Asaas:
+SELECT o.id, o.code, o.order_status, p.status AS payment_status,
+       (SELECT count(*) FROM commissions WHERE order_id = o.id)            AS has_commission,
+       (SELECT count(*) FROM transfers   WHERE order_id = o.id)            AS has_transfer,
+       (SELECT count(*) FROM consultant_commissions WHERE order_id = o.id) AS has_consultant
+  FROM orders o JOIN payments p ON p.order_id = o.id
+ WHERE p.confirmed_by_user_id = '00000000-0000-0000-0000-000000000000'
+ ORDER BY p.confirmed_at DESC LIMIT 5;
+```
+
+Esperado: `has_commission=1` e `has_transfer=1` em todas as linhas. `has_consultant=1` apenas se o buyer (clinic OU doctor) tiver `consultant_id` setado.
+
+**Follow-ups criados:**
+
+- F5 — cron reconcile vs Asaas API (próximo item da S1). Compara estado Asaas vs estado interno e re-confirma orders cujo webhook falhou após 3 retries.
+- Runbook `docs/runbooks/asaas-webhook-ledger.md` — criar quando o primeiro alarme `webhook_ledger_total{outcome=error_*}` disparar (sem urgência de criar antes; alarme é imperativo, runbook é educativo).
+- Considerar telemetria adicional: emitir Sentry event quando `WebhookLedgerError(code='no_payment_row')` for lançado, anexando `orderId` e `asaasPaymentId` para investigação rápida. Não-bloqueador.

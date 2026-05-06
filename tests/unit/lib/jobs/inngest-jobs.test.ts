@@ -125,7 +125,22 @@ describe('lib/jobs/asaas-webhook', () => {
     // helper -> RELEASED_FOR_EXECUTION + status history + pharmacy fanout.
     expect(src).toContain("step.run('release-for-execution'")
     expect(src).toContain('releaseOrderForExecution')
-    expect(src).toContain('payment_status: ')
+  })
+
+  it('has confirm-payment-ledger step before release (Pre-Launch S1 / F1)', () => {
+    // The webhook MUST insert into commissions / transfers /
+    // consultant_commissions before releasing the order to the pharmacy.
+    // Pre-2026-05-06 the webhook only flipped payment_status without
+    // touching the financial ledger — bug latente que só não estourou
+    // porque todo pagamento até hoje foi confirmado manualmente.
+    expect(src).toContain("step.run('confirm-payment-ledger'")
+    expect(src).toContain('confirmPaymentViaAsaasWebhook')
+    // Confirm-payment-ledger must precede release-for-execution so the
+    // pharmacy never sees an order without its commissions row.
+    const confirmIdx = src.indexOf("step.run('confirm-payment-ledger'")
+    const releaseIdx = src.indexOf("step.run('release-for-execution'")
+    expect(confirmIdx).toBeGreaterThan(-1)
+    expect(releaseIdx).toBeGreaterThan(confirmIdx)
   })
 
   it('has notify-clinic step with SMS, WhatsApp, email, and push', () => {

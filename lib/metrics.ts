@@ -252,6 +252,14 @@ export const Metrics = {
   ATOMIC_RPC_TOTAL: 'atomic_rpc_total',
   ATOMIC_RPC_DURATION_MS: 'atomic_rpc_duration_ms',
   ATOMIC_RPC_FALLBACK_TOTAL: 'atomic_rpc_fallback_total',
+  // Pre-Launch Onda S1 — F1: webhook Asaas chama confirm_payment_atomic.
+  // Counter labelled by outcome (`confirmed` / `skipped_no_pending` /
+  // `skipped_already_processed` / `skipped_stale_version` /
+  // `error_no_payment` / `error_rpc_failed`). Steady-state baseline:
+  // ~1 `confirmed` per real PIX/cartão pago. Any `error_*` warrants
+  // investigation — see docs/runbooks/asaas-webhook-ledger.md.
+  WEBHOOK_LEDGER_TOTAL: 'webhook_ledger_total',
+  WEBHOOK_LEDGER_DURATION_MS: 'webhook_ledger_duration_ms',
   ORDERS_CREATED_TOTAL: 'orders_created_total',
   AUDIT_CHAIN_BREAK_TOTAL: 'audit_chain_break_total',
   AUDIT_CHAIN_VERIFY_TOTAL: 'audit_chain_verify_total',

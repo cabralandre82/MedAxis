@@ -5,6 +5,8 @@ import { sendEmail } from '@/lib/email'
 import { sendSms, SMS, sendWhatsApp, WA } from '@/lib/zenvia'
 import { sendPushToUser } from '@/lib/push'
 import { releaseOrderForExecution } from '@/lib/orders/release-for-execution'
+import { confirmPaymentViaAsaasWebhook } from '@/lib/payments/confirm-via-webhook'
+import { logger } from '@/lib/logger'
 
 type ClinicData = {
   trade_name: string
@@ -71,19 +73,41 @@ export const asaasWebhookJob = inngest.createFunction(
       return { skipped: true, reason: 'already_confirmed' }
     }
 
+    // Pre-Launch S1 / F1 — confirm the financial ledger BEFORE releasing
+    // the order to the pharmacy. This calls `confirm_payment_atomic`
+    // (the same SECURITY DEFINER RPC the manual super-admin path uses)
+    // so commissions, transfers and consultant_commissions land in a
+    // single transaction. Idempotent: if no PENDING payment exists for
+    // the order (because the manual path beat us, or because the order
+    // is already past confirmation), the helper returns a skip and we
+    // fall through to the release step. If the helper throws, Inngest
+    // retries 3× with backoff — a real PIX/cartão never silently
+    // bypasses the ledger.
+    const ledgerResult = await step.run('confirm-payment-ledger', async () => {
+      return await confirmPaymentViaAsaasWebhook({
+        orderId,
+        asaasEvent: event.data.event,
+        asaasPaymentId: event.data.payment.id,
+        billingType: event.data.payment.billingType,
+      })
+    })
+
+    if (ledgerResult.action === 'confirmed') {
+      logger.info('[asaas-webhook] ledger confirmed, releasing for execution', {
+        orderId,
+        paymentId: ledgerResult.paymentId,
+      })
+    }
+
     // Advance directly to RELEASED_FOR_EXECUTION so the pharmacy queue
     // picks the order up. The shared helper writes the status history
     // row and notifies pharmacy admins (in-app + push + email).
+    // NOTE: the `payment_status` column is already set to 'CONFIRMED'
+    // by `confirm_payment_atomic` when the ledger step ran. When the
+    // ledger step skipped (manual path beat us), the column was already
+    // CONFIRMED before we got here. Either way, no defensive update is
+    // needed — the helper below is idempotent against the order_status.
     await step.run('release-for-execution', async () => {
-      const admin = createAdminClient()
-      await admin
-        .from('orders')
-        .update({
-          payment_status: 'CONFIRMED',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', orderId)
-
       await releaseOrderForExecution({
         orderId,
         reason: `Pagamento confirmado via Asaas (evento: ${event.data.event})`,

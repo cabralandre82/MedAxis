@@ -51,6 +51,14 @@ export type AsaasWebhookEvent = {
       status: string
       value: number
       netValue: number
+      /**
+       * Asaas billing type — present on most events but optional because
+       * legacy / synthetic deliveries may omit it. Mapped to internal
+       * `payment_method` via `lib/payments/confirm-via-webhook.ts` when
+       * the ledger atomic RPC is invoked. Known values per Asaas docs:
+       * 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'BOLETO' | 'TRANSFER' | 'UNDEFINED'.
+       */
+      billingType?: string
     }
   }
 }
