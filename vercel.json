@@ -92,6 +92,10 @@
     {
       "path": "/api/cron/pricing-health-check",
       "schedule": "35 7 * * *"
+    },
+    {
+      "path": "/api/cron/asaas-reconcile",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

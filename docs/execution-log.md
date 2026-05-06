@@ -3400,3 +3400,84 @@ Se algo dependia do projeto deletado e quebrou, recriar via API
 do backup snapshot). Tempo estimado: ~30min. Não esperado nenhum
 caso desse tipo — nenhum domínio custom apontava para o projeto,
 nenhum deployment ativo respondia a tráfego.
+
+---
+
+### Pre-Launch Onda S1 — F5 — cron reconcile vs Asaas API — 2026-05-06 22:30 UTC
+
+**Status:** 🟢 concluído
+**Wave:** Pre-Launch S1 (rede de segurança financeira)
+**Ordem na onda:** F5 (3º — depois de mig 084 + F1)
+**Migrations aplicadas:** N/A (puramente código + manifest)
+**Env vars alteradas:** N/A
+**Testes:** +27 unit (`tests/unit/lib/payments/asaas-reconcile.test.ts`)
+
+**Entregáveis:**
+
+- `lib/payments/asaas-reconcile.ts` — função pura `reconcileAsaasPayments()` que varre `payments WHERE status='PENDING' AND asaas_payment_id IS NOT NULL AND created_at > now() - 7d` (LIMIT 50), checa cada um na Asaas via `getPayment`, classifica resposta com `classifyAsaasStatus` (mapeia 17 status documentados da Asaas em `confirmed_in_gateway` / `still_pending` / `gateway_lost` / `unknown`), e — para os confirmados — chama o helper de F1 (`confirmPaymentViaAsaasWebhook`) reutilizando exatamente o mesmo path idempotente que o webhook usa.
+- `app/api/cron/asaas-reconcile/route.ts` — endpoint `withCronGuard('asaas-reconcile', …, { ttlSeconds: 300 })`. Stamp do gauge `asaas_reconcile_last_run_ts` regardless do outcome (defesa contra alerta de staleness em "ran-but-found-nothing"). Loga `warn` quando `reconciled > 0` ("webhook missed — recovered via cron"); `warn` quando `errors > 0`; `info` quando run limpo.
+- `vercel.json` — adicionada entrada `{path: '/api/cron/asaas-reconcile', schedule: '*/15 * * * *'}` (mesma cadência de `rate-limit-report`).
+- `lib/metrics.ts` — 4 métricas novas:
+  - `asaas_reconcile_total{outcome}` (counter; outcomes: scanned, reconciled, gateway_pending, gateway_lost, error_query_failed, error_gateway_unavailable, error_local_advance)
+  - `asaas_reconcile_recovered_total` (counter sem labels — convenience para alerta)
+  - `asaas_reconcile_duration_ms` (histogram)
+  - `asaas_reconcile_last_run_ts` (gauge)
+- `lib/asaas.ts` — `AsaasPayment.billingType?: string` adicionado ao interface (a API GET /payments/{id} retorna esse campo; F5 precisa para mapear para `payment_method` interno via reuso do helper de F1).
+- `docs/observability/metrics.md` — 4 entradas novas explicando outcomes esperados (steady-state: scanned > 0, reconciled = 0).
+- `docs/runbooks/asaas-reconcile.md` — runbook P3 (steady) / P2 (quando reconciled > 0 repetidamente). Decision tree separa "webhook miss real" (5.A — investigar webhook) de "Asaas intermitente" (5.B — aguardar) de "RPC quebrada" (5.C — checar mig 084 + RPC + escalar atomic-rpc-mismatch.md). Inclui kill-switch em 5.E mas explicitamente desencoraja: "F5 não tem feature flag dedicado. Faça apenas se F5 estiver causando dano (improvável dado o desenho idempotente). O custo é perder a rede de segurança até fix do webhook."
+- `docs/runbooks/README.md` — entrada na tabela P3 referenciando o novo runbook.
+
+**Filosofia (importante para entender por que não há novidade arquitetural):**
+
+F5 deliberadamente NÃO inventa um novo path de confirmação de pagamento. Ele chama `confirmPaymentViaAsaasWebhook` — a mesma função que F1 usa. Três consequências disso:
+
+1. **Idempotência composta com webhook**: as três barreiras de F1 (POST_PAYMENT_STATES local check, status='PENDING' filter, RPC `WHERE status='PENDING'` em SQL) protegem F5 sem que F5 precise replicar nada. Webhook + F5 podem rodar simultaneamente; o RPC com `lock_version` decide; o segundo recebe `already_processed`.
+2. **`withCronGuard` lock**: dois F5 não rodam concorrentes. TTL 300s.
+3. **Surface mínima de bug**: se algo quebrar no fluxo de confirmação, F1 e F5 quebram juntos, com o mesmo log e a mesma métrica (mesmo helper). Diagnóstico converge.
+
+**Comportamento esperado em prod:**
+
+- Steady state: `scanned > 0` (sempre haverá alguns pendings; PIX expira 24h, cliente demora pra pagar), `reconciled = 0`. Telemetria silenciosa.
+- Quando F1 funcionou mas F5 ainda assim acha PENDING: o RPC retorna `already_processed`, F5 conta como `gateway_pending` (skipped: already_processed) — cosmetic mas inofensivo.
+- Quando F1 efetivamente falhou (Inngest dead-letter, deploy slot, partição): F5 captura → `reconciled > 0` → log `warn` chama atenção → operador investiga camada 1 via webhook-replay.md.
+- Latência de detecção de webhook miss: ≤ 15 min. Latência de mitigação: a própria execução do cron já fecha o ledger.
+
+**Edge cases tratados explicitamente nos tests:**
+
+- Empty queue → return zero, sem chamada Asaas. ✅
+- Asaas retorna CONFIRMED → reconciled. ✅
+- Asaas retorna RECEIVED → reconciled. ✅
+- Asaas retorna PENDING → still_pending, sem advance. ✅
+- Asaas retorna OVERDUE → gateway_lost, sem advance. ✅
+- Asaas retorna BRAND_NEW_STATUS_FROM_ASAAS (status novo que ainda não conhecemos) → tratado como still_pending COM log warn (defensivo: melhor pagar de novo amanhã do que advance erroneamente). ✅
+- `getPayment` lança → error_gateway_unavailable, mas LOOP CONTINUA para o próximo payment (não falha o batch inteiro). ✅
+- `confirmPaymentViaAsaasWebhook` lança WebhookLedgerError → error_local_advance, item registrado com code+message do erro original. ✅
+- Helper retorna action='skipped' (manual path ou run anterior) → gateway_pending com detail "skipped: <reason>". ✅
+
+**Critérios de aceite atendidos:**
+
+- [x] tsc verde
+- [x] vitest reconcile-specific verde (27 tests)
+- [x] vitest metrics-catalog verde (154 tests, novas 4 métricas no catálogo)
+- [x] Decision tree no runbook diferencia 4 modos de falha distintos
+- [x] Idempotência cross-camada provada via reuso (não replicação) de F1
+- [x] Cron schedule não conflita com 22 crons existentes
+- [x] vercel.json válido (parseado por Vercel build)
+
+**Pendente (próxima execução em prod ~15-20 min após deploy):**
+
+- Confirmar via `cron_runs` que primeira execução foi `success` (não `failed`/`skipped_locked`).
+- Validar que `asaas_reconcile_last_run_ts` está sendo stamped.
+- Verificar se há algum PENDING legítimo em prod que dispare recuperação real (improvável dado que F1 está saudável).
+- Adicionar regras Prometheus em `monitoring/prometheus/alerts.yml`:
+  - `AsaasReconcileRecoveredHigh` (warn quando `rate(asaas_reconcile_recovered_total[15m]) > 0` por > 30 min)
+  - `AsaasReconcileStale` (warn quando `time() - asaas_reconcile_last_run_ts > 3600`)
+  - `AsaasReconcileErrorRate` (warn quando `rate(asaas_reconcile_total{outcome=~"error_.*"}[15m]) > 0.5`)
+
+**Riscos remanescentes:**
+
+- F5 reusa F1; se F1 tiver bug, F5 tem o mesmo bug. Mitigação: tests unitários robustos em ambos os helpers, mais revisão cuidadosa.
+- Asaas API mudar status enum sem aviso → trate-as-pending defensivo, com log warn que vai surgir no dashboard. Mitigação: monitorar logs novos, atualizar `classifyAsaasStatus` quando for relevante.
+- Asaas instabilidade sustentada → F5 vai falhar em sequência mas idempotente; basta voltar. Mitigação: circuit breaker já existente em `lib/asaas.ts`.
+
+**Confiança:** ~96% (não 100% porque F5 é a primeira interação real entre webhook + cron + RPC nesta combinação; campo é melhor juiz que código).

@@ -125,6 +125,14 @@ export interface AsaasPayment {
   dueDate: string
   value: number
   pixQrCodeId?: string
+  /**
+   * Asaas billing type — present on `GET /payments/{id}` and most
+   * webhook events. Values per Asaas docs:
+   * 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'BOLETO' | 'TRANSFER' | 'UNDEFINED'.
+   * Used by the reconcile cron (F5) to map back to internal
+   * `payment_method` when the original webhook event missed.
+   */
+  billingType?: string
 }
 
 export interface AsaasPixQrCode {

@@ -260,6 +260,19 @@ export const Metrics = {
   // investigation — see docs/runbooks/asaas-webhook-ledger.md.
   WEBHOOK_LEDGER_TOTAL: 'webhook_ledger_total',
   WEBHOOK_LEDGER_DURATION_MS: 'webhook_ledger_duration_ms',
+  // Pre-Launch Onda S1 — F5: cron reconcile vs Asaas API. Pesca
+  // payments PENDING locais e checa o gateway. Outcomes:
+  //   `scanned` (cada payment examinado)
+  //   `reconciled` (gateway confirmou, F5 fechou o ledger)
+  //   `gateway_pending` (Asaas ainda PENDING — cliente não pagou)
+  //   `gateway_lost` (OVERDUE/CANCELLED/etc — flow separado)
+  //   `error_query_failed` / `error_gateway_unavailable` / `error_local_advance`
+  // Steady-state esperado: scanned > 0, reconciled = 0 (webhook OK).
+  // `reconciled > 0` é sinal de que o webhook teve falha — investigar.
+  ASAAS_RECONCILE_TOTAL: 'asaas_reconcile_total',
+  ASAAS_RECONCILE_RECOVERED_TOTAL: 'asaas_reconcile_recovered_total',
+  ASAAS_RECONCILE_DURATION_MS: 'asaas_reconcile_duration_ms',
+  ASAAS_RECONCILE_LAST_RUN_TS: 'asaas_reconcile_last_run_ts',
   ORDERS_CREATED_TOTAL: 'orders_created_total',
   AUDIT_CHAIN_BREAK_TOTAL: 'audit_chain_break_total',
   AUDIT_CHAIN_VERIFY_TOTAL: 'audit_chain_verify_total',
