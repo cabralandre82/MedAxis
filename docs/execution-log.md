@@ -3193,3 +3193,62 @@ Existem dois projetos Vercel configurados (`clinipharma` ATIVO + `b2b-med-platfo
 
 - 2026-05-03: deletar projeto `b2b-med-platform` da Vercel após confirmação de que nenhum incidente forçou rollback (= a quarentena cumpriu seu propósito de janela de espera).
 - Considerar adicionar regra ao `withCronGuard`: rejeitar acquire se `last_release_at > now() - p_min_interval_seconds`. Não-bloqueador — só relevante se voltarmos a ter dois projetos rodando crons simultâneos. Provavelmente nunca.
+
+---
+
+### Pre-Launch Onda S1 — Mig 084: SYSTEM_USER_ID — 2026-05-06 17:53 BRT
+
+**Status:** 🟢 concluído
+**Commits:** _este commit_
+**Migrations aplicadas (prod):** `084_system_user.sql` @ 2026-05-06 20:53 UTC via psql session pooler (us-east-1, port 5432, single transaction)
+**Env vars alteradas:** nenhuma
+**Testes:** smoke embedded na própria migração (validações end-state: `auth.users` existe, `profiles` existe e `is_active=false`, `user_roles` count=0). Todas passaram. Validação adicional pós-deploy via 3 SELECTs confirmou estado esperado.
+
+**Sintoma latente identificado:**
+
+Audit pré-F1 (revisão de `lib/orders/release-for-execution.ts:11`) revelou que handlers automáticos usam o UUID `00000000-0000-0000-0000-000000000000` como `actor_user_id` / `changed_by_user_id` quando não há sessão (caso típico: webhook Asaas confirmando pagamento). Tabela `order_status_history.changed_by_user_id` tem FK `NOT NULL` para `profiles.id`. Verificado em prod 2026-05-06 (`SELECT EXISTS auth.users WHERE id='00000000-...'` → `false`) — **o usuário não existia**.
+
+Bug não foi exercitado porque os 4 pedidos confirmados em prod até 2026-05-06 foram TODOS via caminho manual (super-admin clicando "confirmar"), que passa `actorUserId: user.id`. Webhook Asaas nunca confirmou pedido real (todos os 4 pedidos eram testes do operador). Quando o primeiro PIX/cartão real entrar pelo gateway, o `INSERT INTO order_status_history` falharia com FK violation, Inngest retentaria 3× e abandonaria o job — pedido ficaria em status `PENDING_PAYMENT` mesmo após pagamento confirmado pelo Asaas.
+
+**Entregáveis:**
+
+- `supabase/migrations/084_system_user.sql` — INSERT idempotente em `auth.users` com email `system@clinipharma.com.br`, `encrypted_password = bcrypt(uuid)` qualificado como `extensions.crypt(...)/extensions.gen_salt('bf')` (pgcrypto vive no schema `extensions` no Supabase moderno, não `public`). Trigger `handle_new_user` cria profile automaticamente; UPDATE subsequente força `is_active=false`/`full_name='Sistema'`. **Sem atribuição de role** (decisão consciente — caminhos automáticos chamam `createAdminClient()` que bypassa RLS via service_role; manter user sem role reduz superfície se um dia alguém logar como ele). Smoke embedded valida 3 invariantes end-state e aborta a transação se algo divergir.
+
+**Issue durante apply:**
+
+Primeira tentativa falhou com `function gen_salt(unknown) does not exist` — `SET search_path = public, pg_temp` no header da migração não inclui `extensions`. Transação rolou de volta automaticamente (psql `-1 -v ON_ERROR_STOP=1`), estado de prod inalterado. Correção: qualificar explicitamente `extensions.crypt(...)` e `extensions.gen_salt('bf')`. Reaplicada com sucesso.
+
+**Decisão de segurança:**
+
+- `is_active=false` → não aparece em listagens de usuários, não pode ser selecionado em selects de admin.
+- Sem role atribuída → mesmo se alguém descobrir como autenticar como ele, `requireRole(...)` bloqueia toda tela administrativa, e RLS `profiles_select_own` exige `id = auth.uid()` OR `is_platform_admin()` — system user não é platform admin.
+- Senha = bcrypt de UUID v4 random nunca comunicado a ninguém. Email único cuja caixa não existe — "esqueci minha senha" não pode ser exercitado.
+- O ÚNICO consumidor é o caminho `createAdminClient()` que bypassa Auth completamente.
+
+**Validação pós-aplicação:**
+
+```
+auth.users     | id=00000000-..., email=system@clinipharma.com.br, role=authenticated, email_confirmed=t, meta.full_name=Sistema, meta.provider=system
+profiles       | full_name=Sistema, is_active=f, registration_status=APPROVED
+user_roles     | count=0 (esperado)
+schema_migrations | versions presentes: 082, 083, 084
+```
+
+**Compatibilidade:**
+
+- Zero mudanças de schema (DML puro).
+- Zero mudanças em triggers, funções, policies.
+- Linhas legadas (4 pedidos confirmados manualmente) intocadas — `confirmed_by_user_id` continua apontando para o user real `94cd5709-...` (operador).
+
+**Rollback:**
+
+Como `profiles.id` é FK `ON DELETE CASCADE` para `auth.users.id`, pré-F1 basta `DELETE FROM auth.users WHERE id='00000000-...'`. Pós-F1 (depois que webhook real referenciar o user em `order_status_history`/`commissions`/etc) o DELETE vai falhar com FK violation — esperado e correto: actor de auditoria não pode ser apagado retroativamente. Mig é idempotente; reaplicar produz exatamente o mesmo estado.
+
+**Pré-requisito de F1:**
+
+F1 (extrair `executeConfirmPaymentLedger` + webhook Asaas chamar) PRECISA deste user existindo antes de qualquer caminho automático ser ligado. Por isso esta mig veio primeiro, sozinha, em PR atômico — qualquer falha aqui é reversível sem afetar pedidos legados.
+
+**Follow-ups criados:**
+
+- F1 — extrair `executeConfirmPaymentLedger` + webhook Asaas chamar (próximo item da Onda S1).
+- Considerar adicionar `BEFORE INSERT` trigger em `order_status_history` que rejeita `changed_by_user_id IN (...known synthetic UUIDs...)` se a mig 084 for revertida no futuro — defesa em profundidade. Não-bloqueador.
