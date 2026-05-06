@@ -7,8 +7,7 @@ import { sendPushToUser } from '@/lib/push'
 import { orderStatusUpdatedEmail } from '@/lib/email/templates'
 import { logger } from '@/lib/logger'
 import { statusLabel } from '@/lib/orders/status-machine'
-
-const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000'
+import { SYSTEM_USER_ID } from '@/lib/constants/system-user'
 
 interface ReleaseInput {
   orderId: string
