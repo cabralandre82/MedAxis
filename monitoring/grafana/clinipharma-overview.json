@@ -1,0 +1,426 @@
+{
+  "__comment": "Clinipharma — Pre-launch overview dashboard (Pre-Launch Onda S1 / T6). Entrypoint canônico para o operador solo: 4 painéis cobrindo as 4 áreas críticas — financial integrity, RLS canary, Asaas reconcile, error rate. Diferente dos 3 dashboards Wave 11 (que assumem scrape com histogram buckets), este usa as séries _p95/_p99 que `lib/observability/grafana-push.ts` emite diretamente — porque nossa lib custom de métricas calcula quantis localmente e exporta como séries fixas, não buckets. Datasource via $DS_PROM. Compatível com Grafana 10+.",
+  "title": "Clinipharma · Pre-launch overview",
+  "uid": "clinipharma-pre-launch-overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "tags": ["clinipharma", "pre-launch", "overview", "wave-s1"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROM",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      },
+      {
+        "name": "env",
+        "type": "custom",
+        "label": "Environment",
+        "query": "production,preview,development",
+        "current": { "text": "production", "value": "production" },
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "1. Financial Integrity",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Money drift total (alerta se > 0)",
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Linhas com `*_cents ≠ round(numeric * 100)` detectadas pelo cron money-reconcile. Em condições normais = 0. Qualquer valor > 0 dispara o runbook docs/runbooks/money-drift.md (P2). Não confundir com `money_drift_total` por counter — este é o gauge atual.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(money_drift_total{service=\"clinipharma\", env=\"$env\"}) OR on() vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "confirm_payment_atomic ok rate (5m)",
+      "gridPos": { "x": 6, "y": 1, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Razão de chamadas confirm_payment_atomic com outcome=ok sobre o total. Esperado 100% em steady state. Queda abaixo de 99% por 5min consecutivos sinaliza problema na RPC ou nos webhooks Asaas.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 0.99, "color": "yellow" },
+              { "value": 0.999, "color": "green" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(atomic_rpc_total{name=\"confirm_payment_atomic\", outcome=\"ok\", service=\"clinipharma\", env=\"$env\"}[5m])) / clamp_min(sum(rate(atomic_rpc_total{name=\"confirm_payment_atomic\", service=\"clinipharma\", env=\"$env\"}[5m])), 1e-9)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Asaas webhook miss (1h)",
+      "gridPos": { "x": 12, "y": 1, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Pagamentos que o cron F5 (asaas-reconcile) recuperou — webhook NÃO entregou esses no fluxo F1. Em steady-state = 0. Qualquer valor > 0 sinaliza investigação no webhook. Runbook: docs/runbooks/asaas-reconcile.md.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "yellow" },
+              { "value": 5, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(asaas_reconcile_recovered_total{service=\"clinipharma\", env=\"$env\"}[1h])) OR on() vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Audit chain break (24h)",
+      "gridPos": { "x": 18, "y": 1, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Linhas detectadas com hash chain quebrada pelo cron verify-audit-chain (P0 — runbook docs/runbooks/audit-chain-tampered.md). Steady-state = 0; qualquer valor é incidente regulatório (LGPD).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(audit_chain_break_total{service=\"clinipharma\", env=\"$env\"}[24h])) OR on() vector(0)"
+        }
+      ]
+    },
+
+    {
+      "id": 10,
+      "type": "row",
+      "title": "2. RLS Canary (tenant isolation)",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Violations (cumulative — alerta se > 0)",
+      "gridPos": { "x": 0, "y": 7, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Canário diário de cross-tenant via SQL (cron rls-canary). Qualquer valor > 0 é P0 — runbook docs/runbooks/rls-violation.md. Complementado pelo E2E warn-only `tests/e2e/cross-tenant-rls.test.ts`.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rls_canary_violations_total{service=\"clinipharma\", env=\"$env\"}) OR on() vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Last successful run (age)",
+      "gridPos": { "x": 6, "y": 7, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Tempo desde a última execução bem-sucedida do canário SQL. Cron diário (04:30 UTC) — qualquer staleness > 25 h sinaliza cron parado. Alerta: `RlsCanaryStale` warning > 25h.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 86400, "color": "yellow" },
+              { "value": 90000, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max(rls_canary_last_success_ts{service=\"clinipharma\", env=\"$env\"})"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Tables checked per run",
+      "gridPos": { "x": 12, "y": 7, "w": 12, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Quantas tabelas o canário verificou em cada run. Drift súbito (queda) sinaliza que o canário deixou de cobrir tabelas — possível bug ou config wedged.",
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "tables checked",
+          "expr": "max(rls_canary_tables_checked{service=\"clinipharma\", env=\"$env\"})"
+        }
+      ]
+    },
+
+    {
+      "id": 20,
+      "type": "row",
+      "title": "3. Asaas Reconcile (camada 2 do fluxo de pagamento)",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Outcomes by rate (5m)",
+      "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Cron F5 a cada 15 min. Cada execução incrementa contadores por outcome. Esperado: linha `scanned` > 0; linhas `reconciled`, `error_*` ≈ 0. Spikes em `reconciled` indicam webhook miss (camada 1 falhando); spikes em `error_*` indicam Asaas instável ou bug em RPC.",
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{outcome}}",
+          "expr": "sum by (outcome) (rate(asaas_reconcile_total{service=\"clinipharma\", env=\"$env\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Cron duration p95 (ms)",
+      "gridPos": { "x": 12, "y": 13, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Duração p95 do cron asaas-reconcile (já calculado pela lib custom — exportado direto). Alvo: < 30 s para 50 payments/run. p95 > 60 s sustentado indica Asaas lento ou query pesada.",
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "p95",
+          "expr": "max(asaas_reconcile_duration_ms_p95{service=\"clinipharma\", env=\"$env\"})"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "p99",
+          "expr": "max(asaas_reconcile_duration_ms_p99{service=\"clinipharma\", env=\"$env\"})"
+        }
+      ]
+    },
+
+    {
+      "id": 30,
+      "type": "row",
+      "title": "4. Error Rate (signals globais)",
+      "gridPos": { "x": 0, "y": 21, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "HTTP 5xx by route (1m)",
+      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Top 10 rotas por taxa de respostas 5xx. Spike em qualquer rota individual sinaliza incidente local; spike global é incidente plataforma. Para latência ver dashboard `Clinipharma · Platform health`.",
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{path}}",
+          "expr": "topk(10, sum by (path) (rate(http_request_total{status=~\"5..\", service=\"clinipharma\", env=\"$env\"}[1m])))"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Cron failures by job (5m)",
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Taxa de execuções de cron com `outcome=error`. Esperado ≈ 0. Qualquer linha persistente acima de 0 = abrir runbook do cron específico (docs/runbooks/cron-job-failing.md).",
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{job_name}}",
+          "expr": "sum by (job_name) (rate(cron_run_total{outcome=\"error\", service=\"clinipharma\", env=\"$env\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Push pipeline health (this dashboard's lifeline)",
+      "gridPos": { "x": 0, "y": 30, "w": 12, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Status do próprio cron grafana-push. Se a linha success cair pra 0 sustentado, esta dashboard começa a mentir — runbook docs/runbooks/grafana-push.md. `skipped_no_env` em produção também é sinal de erro.",
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{outcome}}",
+          "expr": "sum by (outcome) (rate(grafana_push_total{service=\"clinipharma\", env=\"$env\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "type": "stat",
+      "title": "Push staleness (s)",
+      "gridPos": { "x": 12, "y": 30, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Tempo desde última push do cron grafana-push. Esperado: < 90s (cron a cada 60s). > 5 min = `GrafanaPushStale` warning.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 90, "color": "yellow" },
+              { "value": 300, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max(grafana_push_last_run_ts{service=\"clinipharma\", env=\"$env\"})"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "type": "stat",
+      "title": "Timeseries enviadas (último push)",
+      "gridPos": { "x": 18, "y": 30, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "$DS_PROM" },
+      "description": "Quantas séries o cron acabou de empurrar. Esperado: 100-500 (registry interno). Queda repentina sinaliza isolate frio ou bug no snapshot. 0 = registry vazio.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 50, "color": "yellow" },
+              { "value": 100, "color": "green" }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(grafana_push_timeseries_count{service=\"clinipharma\", env=\"$env\"})"
+        }
+      ]
+    }
+  ]
+}
