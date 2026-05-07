@@ -4,6 +4,66 @@
 
 ---
 
+### Pre-Launch Onda S2 — T4: Clicksign webhook watchdog — 2026-05-07 14:50 BRT
+
+**Status:** 🟢 código mergeado + cron registrado em `vercel.json` (entra em produção no próximo deploy)
+**Wave:** Pre-Launch S2 (correções estruturais com flags) — item 1/5 da Onda 2
+**Pre-mortem ref:** Blind spot 7 (falha silenciosa de webhook externo após rotação acidental de secret)
+**Migrations criadas:** N/A (T4 é puramente runtime + observability)
+**Env vars alteradas:** nenhuma
+
+**Contexto**
+
+O handler `app/api/contracts/webhook/route.ts` já era HMAC-verified (Wave 5) e usava `lib/security/hmac::verifyHmacSha256`, mas tinha um caminho dev-bypass — `if (!secret) return true` — que funcionava silenciosamente em prod se `CLICKSIGN_WEBHOOK_SECRET` caísse da env. Mais grave: **HMAC fail retornava 401 ANTES de gravar em `webhook_events`**, então a tabela só via deliveries que passavam HMAC. Sem instrumentação no handler, qualquer rotação acidental de secret faria todos os deliveries virarem 401 silenciosos e a plataforma não veria nada — um contrato em `SENT`/`VIEWED` ficaria parado indefinidamente.
+
+T4 fecha esse buraco em 3 camadas, todas read-only/aditivas:
+
+1. **Counter no handler** `clicksign_webhook_total{outcome}` com 8 outcomes possíveis: `hmac_verified`, `hmac_dev_bypass`, `hmac_failed`, `parse_error`, `processed`, `processed_skipped`, `duplicate`, `error`. Comportamento do handler **inalterado** — a refator interna trocou `Promise<boolean>` por `Promise<HmacResult>` para diferenciar `verified` × `dev_bypass`. Em prod, `hmac_dev_bypass = 0` é invariante; qualquer valor > 0 = config drift (P2). `hmac_failed > 5/h` sustentado = ataque ou portal Clicksign desconfigurado (P2).
+
+2. **Cron `clicksign-webhook-watch`** (15-min cadence) → 5 gauges: `_received_count_24h`, `_received_count_7d`, `_last_received_age_seconds` (sentinel `-1` para nunca-recebeu vs `0` para acabou-de-chegar), `_pending_contracts_aged` (status `SENT`/`VIEWED` com `created_at < now() - 6h`), `_pending_contracts_total`. **NÃO acessa Clicksign API** — apenas lê `webhook_events` e `contracts` do nosso DB. Read-only; risco de regressão = 0.
+
+3. **Sinal contra-baseline `silent_with_pending`** — o cron emite `outcome=silent_with_pending` (warn no log + counter `clicksign_watch_total{outcome}`) **somente** quando `received_count_24h == 0 AND pending_contracts_aged > 0`. Em pre-launch sem contratos, o outcome é `silent_no_pending` (info, não warn) — evita falso positivo enquanto não há volume.
+
+**Decisão técnica — por que ignoramos `received_count_7d` no alerta**
+
+7d daria janela longa demais para Clicksign retentar (eles desistem em ~24h por configuração padrão). Janela 24h é o sweet spot: longa suficiente para não dar flap em horário de baixo movimento, curta suficiente para detectar quebra. O 7d existe só para baseline manual em runbook.
+
+**Decisão técnica — por que sentinel `-1` em vez de `null`**
+
+Prometheus remote_write não aceita NaN/null em gauge — qualquer ausência de sample fica silenciosa. Para distinguir "nunca houve delivery" (estado inicial) de "acabou de receber" (saudável) usamos `-1` explicitamente. O alerta `ClicksignWebhookSilent` filtra `> 21600 (6h)` — `-1` não dispara. Documentado no runbook.
+
+**Entregáveis**
+
+- `lib/contracts/clicksign-watch.ts` (~250 linhas) — função pura `snapshotClicksignWatch(opts?)` retorna `ClicksignWatchSnapshot` estruturado. Aceita `adminClient` injetável para testes; nunca joga exceção (try/catch envolto em outcome `error` com `detail`). Helper `runClicksignWatch()` adiciona log severity (warn no `silent_with_pending`, error no `error`, info nos outros).
+- `app/api/cron/clicksign-webhook-watch/route.ts` (~75 linhas) — `withCronGuard('clicksign-webhook-watch', ..., { ttlSeconds: 300 })` chama `runClicksignWatch` e empurra os 6 gauges + 1 counter. Mesmo pattern de `asaas-reconcile`.
+- `app/api/contracts/webhook/route.ts` — instrumentação aditiva. 7 chamadas `incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, { outcome })`. **Refactor único de comportamento:** `isValidHmac` agora retorna `'verified' | 'dev_bypass' | 'failed'` em vez de `boolean`. Não muda fluxo HTTP — `failed` continua retornando 401, `verified` e `dev_bypass` continuam prosseguindo. JSON parsing também movido para try/catch explícito (antes `JSON.parse(rawBody)` em throw síncrono virava 500 silencioso).
+- `lib/metrics.ts` — 7 metrics novas no objeto `Metrics`.
+- `vercel.json` — entry `*/15 * * * *` para `clicksign-webhook-watch`. Total agora 25 crons (limite Pro: 40+).
+- `tests/unit/lib/contracts/clicksign-watch.test.ts` — 8 tests cobrindo: outcome `ok`, `silent_with_pending` (incl. log warn assertion), `silent_no_pending`, fallback de last-received quando vazio nos últimos 7d mas houve histórico, sentinel null quando nunca, error path em `webhook_events.select` e em `contracts.aged.lte`.
+- `docs/observability/metrics.md` — 7 entradas novas com descrições, alvos e referências aos alertas que vão consumir.
+- `docs/runbooks/clicksign-webhook-silent.md` — runbook P3/P2 (~200 linhas): sintomas (incluindo distinguir `silent_with_pending` de `silent_no_pending`), impacto (alto ao cliente: contrato bloqueia onboarding), containment com SQL de override manual último-recurso, diagnóstico em 4 passos (Vercel env, portal Clicksign, Vercel logs, manual re-delivery), 4 cenários de mitigação (env caída, mismatch, webhook removido, contratos travados não-resolvidos), verificação pós-mitigação com 4 PromQL queries.
+- `docs/runbooks/README.md` — entrada nova na seção P3.
+
+**Validação**
+
+- `npx tsc --noEmit` ✓
+- `npx vitest run` ✓ 150 files / 2347 tests verde
+  - 8 tests novos em `clicksign-watch.test.ts`
+  - 167 tests em `metrics-catalog.test.ts` (era 160, +7 — confirma que as 7 metrics novas estão em `Metrics` const e válidas em cross-reference com `docs/observability/metrics.md` e `monitoring/grafana/*.json` futuros).
+- `npm run build` ✓ rota `/api/cron/clicksign-webhook-watch` presente em `.next/server/app/api/cron/`.
+
+**Confidence (estudo seção 9)**
+
+99 %. Mudança é puramente aditiva — nem cron nem instrumentação muda comportamento existente. O único refactor (`Promise<boolean>` → `Promise<HmacResult>` em `isValidHmac`) é interno à função. Tests cobrem todos os caminhos de saída do snapshot incluindo paths de erro. **Risco residual** está fora deste commit: precisamos de 1 delivery Clicksign real em prod para validar end-to-end (qualquer cadastro novo fará isso naturalmente quando alguém assinar contrato).
+
+**Plano de rollback (estudo seção 7)**
+
+Remover entry de `vercel.json` (cron desliga em ≤ 15 min). Counter no handler é puramente aditivo — não há rollback necessário, mas se quisermos remover é git revert do commit. Tempo total: 2 min.
+
+**Próximo bloco da Onda 2**: T2 (crypto envelope v2 com keyId), F2 (`void_order_financials`), F3 (`PAYMENT_PARTIALLY_REFUNDED` handler), F1 cutover global (operacional, depende primeiro pedido real).
+
+---
+
 ### Pre-Launch Onda S1 — Mig 085 aplicada + F1.b forensic + T8 OCR anti-injection — 2026-05-07 14:30 BRT
 
 **Status:** 🟢 Onda 1 do plano de hardening pre-launch fechada

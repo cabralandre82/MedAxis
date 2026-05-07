@@ -48,12 +48,13 @@
 
 ### 🟡 P3 — Degradação silenciosa (backlog)
 
-| Runbook                | Sintoma disparador                                                                                    |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `ticket-sla-breach.md` | Tickets de suporte sem resposta > SLA                                                                 |
-| `vercel-cron-quota.md` | Deploys silenciosamente rejeitados por `cron_jobs_limits_reached` (Hobby plan ↔ sub-daily schedules)  |
-| `asaas-reconcile.md`   | Cron F5 recuperou pagamentos confirmados que o webhook não pegou (`reconciled > 0`)                   |
-| `grafana-push.md`      | Cron T6 falhando ao publicar métricas no Grafana Cloud (auth, rate-limit, network) — cegueira parcial |
+| Runbook                       | Sintoma disparador                                                                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ticket-sla-breach.md`        | Tickets de suporte sem resposta > SLA                                                                                                                        |
+| `vercel-cron-quota.md`        | Deploys silenciosamente rejeitados por `cron_jobs_limits_reached` (Hobby plan ↔ sub-daily schedules)                                                         |
+| `asaas-reconcile.md`          | Cron F5 recuperou pagamentos confirmados que o webhook não pegou (`reconciled > 0`)                                                                          |
+| `grafana-push.md`             | Cron T6 falhando ao publicar métricas no Grafana Cloud (auth, rate-limit, network) — cegueira parcial                                                        |
+| `clicksign-webhook-silent.md` | Cron T4 detectou canal de webhook Clicksign silente com contratos esperando há > 6h (`silent_with_pending` outcome OU `ClicksignWebhookSilent` Grafana rule) |
 
 ---
 

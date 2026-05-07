@@ -98,6 +98,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/clicksign-webhook-watch",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/grafana-push",
       "schedule": "* * * * *"
     }

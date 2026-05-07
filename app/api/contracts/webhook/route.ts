@@ -8,6 +8,7 @@ import {
 } from '@/lib/webhooks/dedup'
 import { logger } from '@/lib/logger'
 import { verifyHmacSha256 } from '@/lib/security/hmac'
+import { incCounter, Metrics } from '@/lib/metrics'
 
 /**
  * Clicksign webhook handler.
@@ -18,25 +19,59 @@ import { verifyHmacSha256 } from '@/lib/security/hmac'
  *
  * Wave 5: HMAC compare delegated to lib/security/hmac which uses
  * `timingSafeEqual` over hex-decoded bytes and enforces hex format.
+ *
+ * Pre-Launch Onda S2 / T4: instrumentado com `clicksign_webhook_total{outcome}`
+ * (não muda comportamento). Cada caminho de saída incrementa o counter para
+ * o `outcome` correspondente. Em produção esperamos `outcome=hmac_verified`
+ * dominar; valores não-zero em `hmac_dev_bypass` sinalizam que
+ * `CLICKSIGN_WEBHOOK_SECRET` caiu da env (P2). Valores não-zero em
+ * `hmac_failed` sustentado sinalizam ataque ou config drift no portal
+ * Clicksign (P2). Ver `docs/runbooks/clicksign-webhook-silent.md`.
  */
-async function isValidHmac(req: NextRequest, rawBody: string): Promise<boolean> {
+type HmacResult = 'verified' | 'dev_bypass' | 'failed'
+async function isValidHmac(req: NextRequest, rawBody: string): Promise<HmacResult> {
   const secret = process.env.CLICKSIGN_WEBHOOK_SECRET
-  if (!secret) return true // no secret configured — skip check in dev
-  return verifyHmacSha256(rawBody, req.headers.get('content-hmac'), secret)
+  if (!secret) return 'dev_bypass' // no secret configured — skip check in dev
+  return verifyHmacSha256(rawBody, req.headers.get('content-hmac'), secret) ? 'verified' : 'failed'
 }
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
 
-  if (!(await isValidHmac(req, rawBody))) {
+  const hmacResult = await isValidHmac(req, rawBody)
+  if (hmacResult === 'failed') {
+    incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, { outcome: 'hmac_failed' })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  // hmac_verified vs hmac_dev_bypass — counter incrementa por caminho
+  // separado para que o operador veja `dev_bypass > 0` em prod como
+  // sinal de config drift (CLICKSIGN_WEBHOOK_SECRET removido).
+  incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, {
+    outcome: hmacResult === 'verified' ? 'hmac_verified' : 'hmac_dev_bypass',
+  })
 
-  const body = JSON.parse(rawBody)
+  let body: {
+    event?: { name?: string }
+    document?: { key?: string; downloads?: { signed_file_url?: string } }
+  }
+  try {
+    body = JSON.parse(rawBody)
+  } catch (err) {
+    incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, { outcome: 'parse_error' })
+    logger.warn('[clicksign-webhook] body is not valid JSON', {
+      bodyLen: rawBody.length,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return NextResponse.json({ error: 'Bad request' }, { status: 400 })
+  }
+
   const eventType: string = body.event?.name ?? ''
   const documentKey: string = body.document?.key ?? ''
 
-  if (!documentKey) return NextResponse.json({ ok: true, skipped: true })
+  if (!documentKey) {
+    incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, { outcome: 'processed_skipped' })
+    return NextResponse.json({ ok: true, skipped: true })
+  }
 
   const claim = await claimWebhookEvent({
     source: 'clicksign',
@@ -46,6 +81,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (claim.status === 'duplicate') {
+    incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, { outcome: 'duplicate' })
     logger.info('clicksign duplicate delivery', {
       module: 'webhooks/clicksign',
       eventId: claim.eventId,
@@ -68,6 +104,7 @@ export async function POST(req: NextRequest) {
     if (eventId) {
       await completeWebhookEvent(eventId, { status: 'processed', httpStatus: 200 })
     }
+    incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, { outcome: 'processed_skipped' })
     return NextResponse.json({ ok: true, skipped: 'contract not found' })
   }
 
@@ -122,5 +159,6 @@ export async function POST(req: NextRequest) {
     await completeWebhookEvent(eventId, { status: 'processed', httpStatus: 200 })
   }
 
+  incCounter(Metrics.CLICKSIGN_WEBHOOK_TOTAL, { outcome: 'processed' })
   return NextResponse.json({ ok: true, event: eventType })
 }

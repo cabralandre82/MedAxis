@@ -273,6 +273,25 @@ export const Metrics = {
   ASAAS_RECONCILE_RECOVERED_TOTAL: 'asaas_reconcile_recovered_total',
   ASAAS_RECONCILE_DURATION_MS: 'asaas_reconcile_duration_ms',
   ASAAS_RECONCILE_LAST_RUN_TS: 'asaas_reconcile_last_run_ts',
+  // Pre-Launch Onda S2 / T4 — Clicksign webhook health.
+  // Counter no handler (`app/api/contracts/webhook/route.ts`) labelled
+  // por outcome ∈ {hmac_verified, hmac_dev_bypass, hmac_failed,
+  // parse_error, processed, processed_skipped, duplicate, error}.
+  // Steady-state em prod: hmac_verified domina; hmac_dev_bypass = 0
+  // (qualquer valor > 0 = `CLICKSIGN_WEBHOOK_SECRET` caiu — P2);
+  // hmac_failed > 5/h sustentado = ataque ou config drift (P2).
+  CLICKSIGN_WEBHOOK_TOTAL: 'clicksign_webhook_total',
+  // Gauges populados pelo cron `clicksign-webhook-watch` (15-min
+  // cadence). `_count_24h` é volume; `_last_received_age_seconds` é
+  // staleness; `_pending_contracts_aged` é o sinal contra-baseline
+  // que confirma se o silêncio é normal (zero contratos esperando)
+  // ou patológico (contratos esperando há > 6h e webhook silente).
+  CLICKSIGN_WEBHOOK_RECEIVED_COUNT_24H: 'clicksign_webhook_received_count_24h',
+  CLICKSIGN_WEBHOOK_RECEIVED_COUNT_7D: 'clicksign_webhook_received_count_7d',
+  CLICKSIGN_WEBHOOK_LAST_RECEIVED_AGE_SECONDS: 'clicksign_webhook_last_received_age_seconds',
+  CLICKSIGN_PENDING_CONTRACTS_AGED: 'clicksign_pending_contracts_aged',
+  CLICKSIGN_PENDING_CONTRACTS_TOTAL: 'clicksign_pending_contracts_total',
+  CLICKSIGN_WATCH_LAST_RUN_TS: 'clicksign_watch_last_run_ts',
   // Pre-Launch Onda S1 / T8 — OCR extraction outcome distribution.
   // Counter labelled by outcome ∈ {high, medium, low,
   // prompt_injection_suspected, invalid_response, error}. Permite ao
