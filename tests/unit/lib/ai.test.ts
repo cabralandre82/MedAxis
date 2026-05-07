@@ -13,6 +13,17 @@ vi.mock('@/lib/circuit-breaker', () => ({
   CircuitOpenError: class CircuitOpenError extends Error {},
 }))
 
+// Mock metrics so we can assert on incCounter without spinning the
+// real registry. T8 introduced ocr_extraction_total — we want strong
+// evidence we keep emitting it on every code path.
+const mockIncCounter = vi.fn()
+vi.mock('@/lib/metrics', () => ({
+  incCounter: (...args: unknown[]) => mockIncCounter(...args),
+  Metrics: {
+    OCR_EXTRACTION_TOTAL: 'ocr_extraction_total',
+  },
+}))
+
 // Mock OpenAI SDK
 const mockCreate = vi.fn()
 vi.mock('openai', () => ({
@@ -197,12 +208,19 @@ describe('extractDocumentData', () => {
     expect(result!.razao_social).toBe('Farmácia Exemplo Ltda')
     expect(result!.raw_confidence).toBe('high')
     expect(result!.tipo_documento).toBe('Alvará Sanitário')
+    // T8 baseline metric
+    expect(mockIncCounter).toHaveBeenCalledWith('ocr_extraction_total', {
+      outcome: 'high',
+    })
   })
 
   it('TC-AI-10: retorna null se OpenAI Vision falhar', async () => {
     mockCreate.mockRejectedValueOnce(new Error('Vision API error'))
     const result = await extractDocumentData('https://storage.example.com/doc.pdf')
     expect(result).toBeNull()
+    expect(mockIncCounter).toHaveBeenCalledWith('ocr_extraction_total', {
+      outcome: 'error',
+    })
   })
 
   it('TC-AI-08d: não dispara escalação se shouldEscalate é string "true"', async () => {
@@ -237,5 +255,72 @@ describe('extractDocumentData', () => {
     const result = await extractDocumentData('https://storage.example.com/blurry.jpg')
     expect(result!.raw_confidence).toBe('low')
     expect(result!.cnpj).toBeNull()
+    expect(mockIncCounter).toHaveBeenCalledWith('ocr_extraction_total', {
+      outcome: 'low',
+    })
+  })
+
+  // T8 — OCR prompt-injection defense
+  it('TC-AI-T8a: força raw_confidence=low quando flagged=prompt_injection_suspected', async () => {
+    // Mesmo que o modelo "viole" a instrução IMUTÁVEL e devolva
+    // confidence=high junto com o flag, a camada de TS força low.
+    mockCreate.mockResolvedValueOnce(
+      makeOpenAIResponse(
+        JSON.stringify({
+          cnpj: '99.999.999/9999-99',
+          razao_social: 'PAYLOAD INJETADO',
+          raw_confidence: 'high',
+          flagged: 'prompt_injection_suspected',
+        })
+      )
+    )
+
+    const result = await extractDocumentData('https://storage.example.com/attack.jpg')
+    expect(result).not.toBeNull()
+    expect(result!.flagged).toBe('prompt_injection_suspected')
+    // INV: confidence sempre 'low' quando flagged
+    expect(result!.raw_confidence).toBe('low')
+    expect(mockIncCounter).toHaveBeenCalledWith('ocr_extraction_total', {
+      outcome: 'prompt_injection_suspected',
+    })
+    // E não emite outcome=high nesse caminho
+    expect(mockIncCounter).not.toHaveBeenCalledWith('ocr_extraction_total', {
+      outcome: 'high',
+    })
+  })
+
+  it('TC-AI-T8b: rejeita raw_confidence fora do enum', async () => {
+    mockCreate.mockResolvedValueOnce(
+      makeOpenAIResponse(
+        JSON.stringify({
+          cnpj: '12.345.678/0001-90',
+          razao_social: 'Algo',
+          raw_confidence: 'super_high', // inválido
+        })
+      )
+    )
+
+    const result = await extractDocumentData('https://storage.example.com/doc.pdf')
+    expect(result).toBeNull()
+    expect(mockIncCounter).toHaveBeenCalledWith('ocr_extraction_total', {
+      outcome: 'invalid_response',
+    })
+  })
+
+  it('TC-AI-T8c: prompt do sistema contém o bloco IMUTÁVEL', async () => {
+    // Smoke test estático — garante que ninguém remove o bloco de defesa
+    // sem trocar essa expectativa explicitamente. Inspeciona o argumento
+    // passado para chat.completions.create.
+    mockCreate.mockResolvedValueOnce(makeOpenAIResponse(JSON.stringify({ raw_confidence: 'high' })))
+
+    await extractDocumentData('https://storage.example.com/doc.pdf')
+    const callArgs = mockCreate.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>
+    }
+    const systemMsg = callArgs.messages.find((m) => m.role === 'system')
+    expect(systemMsg).toBeDefined()
+    expect(systemMsg!.content).toContain('INSTRUÇÃO IMUTÁVEL')
+    expect(systemMsg!.content).toContain('prompt_injection_suspected')
+    expect(systemMsg!.content).toContain('INPUT NÃO-CONFIÁVEL')
   })
 })

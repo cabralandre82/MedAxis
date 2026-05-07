@@ -273,6 +273,16 @@ export const Metrics = {
   ASAAS_RECONCILE_RECOVERED_TOTAL: 'asaas_reconcile_recovered_total',
   ASAAS_RECONCILE_DURATION_MS: 'asaas_reconcile_duration_ms',
   ASAAS_RECONCILE_LAST_RUN_TS: 'asaas_reconcile_last_run_ts',
+  // Pre-Launch Onda S1 / T8 — OCR extraction outcome distribution.
+  // Counter labelled by outcome ∈ {high, medium, low,
+  // prompt_injection_suspected, invalid_response, error}. Permite ao
+  // operador detectar (a) queda em 'high' após mudanças de prompt
+  // (regressão de qualidade), (b) spike em 'prompt_injection_suspected'
+  // (ataque ativo no onboarding), (c) spike em 'invalid_response' (modelo
+  // mudou shape de saída — alerta para revisar o prompt antes que falhas
+  // silenciosas se acumulem). Ver `lib/ai.ts::extractDocumentData` e
+  // `docs/observability/metrics.md`.
+  OCR_EXTRACTION_TOTAL: 'ocr_extraction_total',
   // Pre-Launch Onda S1 / T6 — Grafana Cloud remote_write push.
   // `_total` é counter por outcome ('success'|'error'|'skipped_no_env'|'skipped_empty').
   // `_timeseries_count` é gauge do total de séries enviadas no último push.

@@ -2,6 +2,82 @@
 
 **Propósito:** rastreio granular de cada wave executada pelo agente. Cada entrada registra: timestamp, wave, entregáveis, commits, migrations aplicadas, testes rodados, links de deploy.
 
+---
+
+### Pre-Launch Onda S1 — Mig 085 aplicada + F1.b forensic + T8 OCR anti-injection — 2026-05-07 14:30 BRT
+
+**Status:** 🟢 Onda 1 do plano de hardening pre-launch fechada
+**Wave:** Pre-Launch S1 (defesa em profundidade — última 2 itens)
+**Pre-mortem ref:** Blind spot 6 (LLM prompt injection no OCR de onboarding)
+
+**Mig 085 — track SENTRY_AUTH_TOKEN rotation (aplicada em prod)**
+
+A migration estava commitada desde 2026-05-07 11:50 mas não tinha sido aplicada porque dependia de `SUPABASE_DB_PASSWORD`. Aplicada hoje via session pooler (single-transaction + ON_ERROR_STOP). Primeira tentativa abortou com `invalid provider sentry-portal` — a função PL/pgSQL `secret_rotation_record` (mig 056) e a CHECK constraint `secret_rotations_provider_check` da tabela não conheciam o provider `sentry-portal`. Como a transação fez rollback completo (last_migration ainda 084 após o erro), foi possível estender a mig 085 in-place adicionando 2 etapas prereq antes do que já existia: (a) DROP+ADD da CHECK constraint pra incluir `sentry-portal`, (b) CREATE OR REPLACE da função `secret_rotation_record` com `sentry-portal` na lista de providers válidos. Body da função preservado bit-a-bit (advisory lock, hash chain, search path). Justificativa para edit in-place: a mig nunca foi aplicada em ambiente algum, então editar é equivalente a substituir uma operação que nunca aconteceu — não há divergência entre ambientes.
+
+Re-aplicada com sucesso: smoke output `Migration 085 smoke OK — inventory=21, overdue=0, chain_breaks=0`. Validação pós-deploy: 21 secrets no inventory (era 20), `SENTRY_AUTH_TOKEN` Tier B com genesis seq=21, hash chain íntegra, RPC `secret_rotation_overdue` retorna 0 entradas overdue mesmo com threshold 100 anos (smoke contract). `SENTRY_AUTH_TOKEN` agora é monitorado pelo cron `rotate-secrets`; primeiro warning esperado em ~2026-08-05 (genesis + 90d).
+
+Commit: `2432c32 fix(mig 085): incluir prereq fix CHECK constraint + secret_rotation_record`.
+
+**F1.b — query forense de pedidos sem ledger**
+
+Item #6 da Onda 1 do estudo `/tmp/plan_detail.md` Seção 5. O plano previa criar mig de backfill **se houvesse pedidos CONFIRMED sem `commissions`/`transfers`** — o que poderia acontecer se a flag manual `payments.atomic_confirm` estivesse OFF entre o primeiro pedido pago via webhook e o cutover de F1.
+
+Query rodada em prod via psql session pooler:
+
+```sql
+SELECT o.id, o.payment_status, o.order_status,
+       EXISTS(SELECT 1 FROM commissions c WHERE c.order_id = o.id) AS has_commission,
+       EXISTS(SELECT 1 FROM transfers t  WHERE t.order_id = o.id) AS has_transfer
+FROM orders o WHERE o.payment_status = 'CONFIRMED';
+```
+
+Resultado: **4 pedidos CONFIRMED, todos com commission + transfer**. `has_commission=t, has_transfer=t` em 100 % das linhas. **Zero pedidos para backfill.** Decisão: F1.b fechado sem mig de backfill — provavelmente porque os 4 CONFIRMED foram TODOS via caminho manual super-admin (que sempre passou por `confirm_payment_atomic`); webhook Asaas nunca confirmou pedido real ainda em prod.
+
+**T8 — OCR prompt-injection defense**
+
+Item #5 da Onda 1. Modificações em `lib/ai.ts::extractDocumentData` (rota: `app/api/admin/registrations/[id]/ocr/route.ts`):
+
+1. **`OCR_SYSTEM_PROMPT`** ganha bloco `INSTRUÇÃO IMUTÁVEL` no início, instruindo o modelo a tratar texto da imagem como input não-confiável e responder com payload canônico `{flagged: 'prompt_injection_suspected', raw_confidence: 'low', ...todos campos null}` se detectar instruções endereçadas a ele dentro do documento.
+2. **Type `ExtractedDocumentData`** ganha campo opcional `flagged?: 'prompt_injection_suspected'`.
+3. **Validação de enum** (espelha `classifyTicket`/`analyzeSentiment`): rejeita resposta com `raw_confidence` fora de `{'high','medium','low'}`. Sem isso a distribuição em Grafana fica poluída por valores arbitrários quando o modelo varia o vocabulário.
+4. **Defesa em camadas**: mesmo que o modelo "viole" o protocolo (ex: devolver `confidence='high'` junto com `flagged='prompt_injection_suspected'` por compliance parcial), o caminho TypeScript força `raw_confidence='low'` no retorno — garante que `overallConfidence` em `/api/admin/registrations/[id]/ocr` NUNCA seja `high` para documento suspeito.
+5. **Métrica nova `ocr_extraction_total{outcome}`** (counter): outcome ∈ {`high`, `medium`, `low`, `prompt_injection_suspected`, `invalid_response`, `error`}. Permite ao operador detectar (a) queda em `high` após mudanças de prompt — regressão de qualidade prevista pelo estudo (corte > 10 % requer revisão), (b) spike em `prompt_injection_suspected` — ataque ativo no onboarding (P2), (c) spike em `invalid_response` — modelo mudou shape de saída.
+6. Tests (3 novos em `tests/unit/lib/ai.test.ts`, total agora 17):
+   - `TC-AI-T8a`: força `raw_confidence='low'` quando flagged, e emite `outcome='prompt_injection_suspected'` (não `high`).
+   - `TC-AI-T8b`: rejeita resposta com `raw_confidence` fora do enum, emite `outcome='invalid_response'`.
+   - `TC-AI-T8c`: smoke estático — inspeciona o argumento passado para `chat.completions.create` e exige presença de `INSTRUÇÃO IMUTÁVEL`, `prompt_injection_suspected` e `INPUT NÃO-CONFIÁVEL` no system prompt. Garante que ninguém remove a defesa silenciosamente.
+
+**Confidence**: **97 %** conforme estudo. Não atinge 99 % porque comportamento de LLM é não-determinístico — a defesa é texto, não código. Mitigação: monitorar `ocr_extraction_total{outcome=high}` em Grafana após primeiro real OCR rodar; se cair > 10 % vs baseline pré-mudança, ajustar prompt.
+
+**Validação consolidada**:
+
+- `npx tsc --noEmit`: ✓
+- `npx vitest run`: ✓ 149 files / 2332 tests verde (incluindo 17 ai.test.ts e 160 metrics-catalog.test.ts — `ocr_extraction_total` registrada e validada cross-reference em `Metrics`).
+- Estado prod pós-mig 085 confirmado via 6 queries SQL.
+
+**Commits**:
+
+- `2432c32` — fix(mig 085): incluir prereq fix CHECK constraint + secret_rotation_record
+- (próximo) — feat(ocr): T8 prompt-injection defense + ocr_extraction_total metric
+- (próximo) — chore(execution-log): documentar fechamento Onda 1
+
+**Onda 1 do plano pre-launch — STATUS FINAL**:
+
+| #   | Item                                 | Status | Commit                                          |
+| --- | ------------------------------------ | ------ | ----------------------------------------------- |
+| 1   | T6 — Grafana Cloud Prometheus        | ✅     | `8a22bac` (dashboard JSON) + sequência anterior |
+| 2   | F5 — cron reconcile vs Asaas         | ✅     | sequência anterior                              |
+| 3   | T1 — E2E cross-tenant warn-only      | ✅     | sequência anterior                              |
+| 4   | A5 — doc trigger-order + test        | ✅     | sequência anterior                              |
+| 5   | T8 — OCR prompt injection            | ✅     | _este commit_                                   |
+| 6   | F1.b — forensic query (não backfill) | ✅     | zero pedidos a backfill                         |
+
+**Gate Onda 1 → Onda 2**: 7 dias rodando sem alerta novo no Sentry. Métricas Grafana visíveis (já confirmado: 96 séries no Explore). Cross-tenant test passa em staging (T1 warn-only — sem violations reais).
+
+**Próximo bloco (Onda 2)**: T4 (Clicksign HMAC alert), T2 (crypto envelope v2), F2 (`void_order_financials`), F3 (`PAYMENT_PARTIALLY_REFUNDED`), F1 (já feito antecipado). Iniciar após gate de 7 dias estáveis.
+
+---
+
 **Referências:** `docs/implementation-plan.md`, `docs/audit-fine-tooth-comb-2026-04.md`
 
 ---
