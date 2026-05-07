@@ -3481,3 +3481,68 @@ F5 deliberadamente NÃO inventa um novo path de confirmação de pagamento. Ele 
 - Asaas instabilidade sustentada → F5 vai falhar em sequência mas idempotente; basta voltar. Mitigação: circuit breaker já existente em `lib/asaas.ts`.
 
 **Confiança:** ~96% (não 100% porque F5 é a primeira interação real entre webhook + cron + RPC nesta combinação; campo é melhor juiz que código).
+
+---
+
+### Pre-Launch Onda S1 — T1: E2E cross-tenant warn-only — 2026-05-06 21:30 BRT
+
+**Status:** 🟢 concluído
+**Wave:** Pre-Launch S1 (rede de segurança RLS na camada HTTP)
+**Pre-mortem ref:** Blind spot 5 (RLS leak detectado tarde / via canal não-canônico)
+**Migrations aplicadas:** N/A (puramente teste E2E + helper + doc)
+**Env vars alteradas:** N/A imediatamente; doc explica como ligar `E2E_RLS_HARD_FAIL=true` quando virar comercial.
+**Testes:** +12 testes E2E (cross-tenant-rls), +1 sentinel = 13 testes parsing OK em `--list`.
+
+**Entregáveis:**
+
+- `tests/e2e/_helpers/rls-findings.ts` — helper canônico para registrar findings RLS. Define `RlsFinding`, `recordFinding(testInfo, finding, { forceHard? })`, `annotateRlsMode(testInfo)`, `isHardFail()`. Default warn-only via `console.warn` + `test.info().annotations`. Hard-fail global via `E2E_RLS_HARD_FAIL=true`. Hard-fail por chamada via `forceHard: true` (usado em vazamentos confirmados independentemente do flag global).
+- `tests/e2e/cross-tenant-rls.test.ts` — 3 partes:
+  - **Parte A (anon baseline)** — 6 testes: GET sem cookies em `/api/coupons/mine`, `/api/sessions`, `/api/profile/notification-preferences`, `/api/admin/coupons`, `/api/admin/legal-hold/list`, `/api/orders/[uuid]/prescription-state`. Esperado 401/403; 200 com array vazio = warn; 200 com itens = hard fail; 5xx = warn.
+  - **Parte B (UUID forjado)** — 4 testes: super-admin GET com UUID inexistente em `/api/orders/[uuid]/prescription-state`, `/api/products/[uuid]/recommendations`, `/api/orders/[malformed]/prescription-state`, `/api/registration/[uuid]`. Esperado 404 ou empty; 200 com payload = hard (path-traversal real).
+  - **Parte C (cross-session real)** — 1 teste com `test.skip(!HAS_BOTH, ...)`: loga clinic-A, captura ID de pedido, abre contexto LIMPO, loga clinic-B, tenta `GET /api/orders/<id-de-A>/prescription-state` → esperado 401/403/404. 200 = hard. Pula gracefully sem `E2E_CLINIC_A_*`/`E2E_CLINIC_B_*` em CI; quando virar comercial, basta provisionar 2 contas test.
+- `docs/security/rls-warn-only-e2e.md` — doc operacional: por que existe, como funciona, modo warn vs hard, quando ligar hard, como rodar (local + staging + cross-session), como ler findings (HTML report + grep `[rls-finding/...]`), como responder (warn = anota; hard = pare deploys), como manter (adicionar endpoint à Parte A/B, decisão warn/hard).
+
+**Filosofia:**
+
+T1 é **complemento explícito** ao canário SQL diário em `/api/cron/rls-canary` (mig 055). Onde o canário SQL prova "RLS no banco bloqueia query direta", T1 prova "stack completo (edge → middleware → handler → admin client → response) não vaza dados". Os dois cobrem regressões diferentes:
+
+- Canário SQL pega: policy mudou para `USING (true)`, JWT claims não chegam ao Postgres, RLS desligado por engano.
+- T1 pega: rota usa `createAdminClient()` (BYPASSRLS) e esquece de validar membership; rota faz `.single()` sem checar se row existe; cookie/CSRF guard remove proteção; sessão ausente devolve 200 com payload.
+
+Custo de execução: ~10s para Parte A + B (sem dependência externa); +20s para Parte C quando ativa. Roda no mesmo job E2E existente (chromium project) sem novo workflow.
+
+**Política warn-only por default — racional:**
+
+Plataforma em fase pré-launch (viva mas sem tráfego comercial real). Hard-fail traz custo de falsos positivos (rota recém-criada com fixture incompleta, endpoint legitimamente devolvendo `[]` para anônimo via RLS) que pode bloquear deploys de features não-relacionadas a segurança. Warn-only mantém visibilidade (HTML report + grep) sem bloquear.
+
+Quando o tráfego comercial subir (≥ 5 clinics ativas), exportar `E2E_RLS_HARD_FAIL=true` no workflow CI vira o gate. Trade-off documentado em `docs/security/rls-warn-only-e2e.md`.
+
+Findings categorizados como `forceHard: true` (vazamento **confirmado**: 200 com itens em request anon, cross-tenant data leak, path-traversal com payload concreto) já quebram CI mesmo em warn-only — não há tolerância para leak comprovado.
+
+**Edge cases tratados:**
+
+- `tests/e2e/.auth/no-auth.flag` ausente (login falhou em CI) → Parte B pula via `test.skip(!HAS_AUTH, ...)`. Cobertura cai para Parte A (que roda sem auth) — degradação graciosa.
+- Resposta 200 com array vazio em endpoint anon-acessível → warn (RLS protegeu) mas anota para revisão humana. Não confunde com leak.
+- Status 4xx inesperado (ex: 429) → warn informativo, não fail. Permite test rodar mesmo sob rate-limit transiente.
+- Body que não é JSON parseável → `.catch(() => null)` em todos os parses, finding gerado mesmo assim.
+- Helper retorna anotação visível tanto em warn (annotation amarela) quanto em hard (Error com mesma descrição) — paridade de payload para forense.
+
+**Como detectar regressão depois:**
+
+```bash
+gh run view <run-id> --log | grep '\[rls-finding'
+```
+
+Cada finding tem ID estável (`anon-coupons-mine-200-empty`, `forged-prescription-state-5xx`). Diff entre runs sucessivos detecta novo padrão.
+
+**Critérios de aceite atendidos:**
+
+- [x] `tsc --noEmit` verde (5s).
+- [x] `eslint tests/e2e/cross-tenant-rls.test.ts tests/e2e/_helpers/rls-findings.ts` verde (zero warnings após dropar diretiva eslint-disable não-utilizada).
+- [x] `playwright test --list` parseia 13 testes corretamente.
+- [x] Parte A roda sem auth (storageState limpo); Parte B exige super-admin (skip se ausente); Parte C exige 2 clinics (skip se ausente).
+- [x] Modo warn-only é o default; hard-fail apenas via env var explícita ou em casos específicos `forceHard: true` (leak comprovado).
+- [x] Doc `docs/security/rls-warn-only-e2e.md` com seção "Quando ligar hard-fail" e contato com `docs/runbooks/rls-violation-triage.md` (já existente, skill `rls-violation-triage`).
+- [x] Helper exportável e reutilizável: `recordFinding` pode ser chamado de outras suítes E2E no futuro (auth.test.ts, smoke-security-attack.test.ts) para consolidar findings RLS num só relatório.
+
+**Confiança:** ~97% (não 100% porque ainda não rodamos contra prod com auth real para validar Parte B; modo `--list` confirma parsing mas não execução. Próxima run de CI E2E vai ser o teste de fato).
