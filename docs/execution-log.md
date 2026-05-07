@@ -3745,3 +3745,89 @@ PGPASSWORD='...' psql -h aws-0-us-east-1.pooler.supabase.com -p 5432 \
 **Não-bloqueante para launch.** Sentry source maps já vão começar a funcionar no próximo deploy (env já está em prod). A mig 085 só completa o ciclo de tracking de rotação.
 
 **Confiança:** ~95% (não 100% porque ainda não validei artifacts no Sentry via release pós-deploy — vai acontecer no próximo push).
+
+**Update pós-deploy 2026-05-07 12:05 BRT:** validado!
+Release `36cf7c0` pós-push: 5 artifact bundles (287 + 509 + 503 + 287 + 509 files), build log mostra "Uploaded files to Sentry" + "Source Map Upload Report". Próximos erros em prod terão stack traces mapeados (`lib/payments/asaas-reconcile.ts:142` em vez de `aBc12.js:1:12345`).
+
+---
+
+### Pre-Launch Onda S1 — T6: Grafana Cloud Prometheus remote_write — 2026-05-07 12:50 BRT
+
+**Status:** 🟢 código mergeado + envs em prod (push aguarda primeiro deploy)
+**Wave:** Pre-Launch S1 (último blind spot do pre-mortem fechado)
+**Pre-mortem ref:** Blind spot 4 — "observabilidade limitada a Vercel logs + Sentry errors, sem trends/burn-rate"
+**Migrations criadas:** N/A (T6 é puramente runtime)
+**Env vars adicionadas em prod (Vercel clinipharma):**
+
+- `GRAFANA_REMOTE_WRITE_URL` em Production + Preview (encrypted)
+- `GRAFANA_REMOTE_WRITE_USERNAME` em Production + Preview (encrypted)
+- `GRAFANA_REMOTE_WRITE_TOKEN` em Production + Preview (encrypted) — Tier B Cloud Access Policy `set:metrics:write`, scope `stack-1626197-alloy-clinipharma-vercel-cron`, region `prod-sa-east-1`
+
+**Contexto:**
+
+O pre-mortem identificou que a plataforma tinha **3 camadas de observabilidade** parcialmente cobertas (Sentry para erros, Vercel logs para debugging, `/api/health/deep` para snapshot pontual) mas **nenhuma camada para trends/burn-rate em time-series**. Métricas Prometheus eram emitidas por `lib/metrics.ts` mas nunca escapavam do isolate Vercel — toda análise temporal era manual ou via Sentry breadcrumbs (que só aparecem após erro).
+
+T6 fecha esse blind spot conectando Grafana Cloud Hosted Prometheus (free tier, sa-east-1, retention 13 meses, ingestion 10K séries) ao registry interno via push (não scrape — Vercel serverless não dá endpoint estável).
+
+**Decisão crítica — push em vez de scrape:**
+
+Cada `/api/metrics` em Vercel hit um isolate diferente cujo registry está em estado diferente (counters resetam ao reciclar). Scrape externo veria "0, 12, 5, 0, 8" alternando aleatoriamente. Push pelo cron resolve: o cron lê o snapshot do **mesmo isolate** que ele rodou, com timestamp; Grafana agrega por janela e vê mosaicos coerentes ao longo do tempo. Counters viram "rate por minuto" no Grafana — exatamente o que queremos para alertas de burn-rate.
+
+Trade-off: cron a cada minuto = ~43k invocations/mês adicional. Pro tier 1M GB-h cobre fácil (cada invocation curta < 500ms ≈ 0.7 GB-h/dia).
+
+**Decisão técnica — `prometheus-remote-write` (npm):**
+
+Prometheus remote_write exige protobuf serialization + snappy compression (não aceita JSON nem texto). Auditei a lib:
+
+- 36K downloads/semana, MIT, last published Apr 2025
+- 2 deps puramente JS (`protobufjs` Google, `snappyjs`) — sem build nativo, **funciona em Vercel serverless** out-of-the-box
+- Testado contra Grafana Cloud explicitamente
+- Peer dep `node-fetch@2` que o Node 20 substitui via `fetch: globalThis.fetch` no opt — implementado.
+
+Reimplementar protobuf+snappy seria orgulho técnico em troca de zero benefício e mais surface de bug — recusei.
+
+**Entregáveis:**
+
+- `lib/observability/grafana-push.ts` (~250 linhas) — função pura `pushMetricsToGrafana()` que retorna `{ outcome: 'success'|'error'|'skipped_no_env'|'skipped_empty', timeseriesCount, durationMs, httpStatus?, errorMessage? }`. **Nunca joga exception** — outcome estruturado para o cron decidir log severity. Inclui `snapshotToTimeseries(now)` exportada para testabilidade.
+- `app/api/cron/grafana-push/route.ts` (~95 linhas) — `withCronGuard('grafana-push', ..., { ttlSeconds: 60 })` com 4 metrics de instrumentação: `GRAFANA_PUSH_TOTAL/TIMESERIES_COUNT/DURATION_MS/LAST_RUN_TS`. Log severity: `info` (success/skipped) ou `warn` (error).
+- `lib/metrics.ts` — 4 metrics novas no objeto `Metrics` (counter `grafana_push_total{outcome}`, gauge `grafana_push_timeseries_count`, histogram `grafana_push_duration_ms{outcome}`, gauge `grafana_push_last_run_ts`).
+- `vercel.json` — cron entry `* * * * *` (cada minuto) — total agora 24 crons (limite Pro: 40+).
+- `tests/unit/lib/observability/grafana-push.test.ts` — 20 testes cobrindo: env validation (skipped_no_env quando qualquer env falta), snapshot conversion (counters, gauges, histograms expandindo em 5 séries, base labels merge, sanitização de keys, value truncation 200 chars, fallback region), push lifecycle (success 200/204, errors 401/429, exception/network throw, non-Error rejection, basic auth header verificado, duration > 0).
+- `docs/observability/metrics.md` — 4 entradas novas com descrições, alvos SLO, e referências aos alertas que vão consumir.
+- `docs/observability/grafana.md` — overview novo de 230 linhas: arquitetura push, labels canônicas, cardinality budget (estimativa atual ~280 séries, margem 30× antes de upgrade), 4 painéis canônicos com queries PromQL, 7 alerting rules sugeridas com severity + runbook URL.
+- `docs/runbooks/grafana-push.md` — runbook P3 (steady) / P2 (1h+ degradação): sintomas (incluindo distinguir `error` de `skipped_*`), impacto (zero ao cliente, parcial ao operador), containment, diagnóstico (logs, env check, smoke test direto), mitigação (token rotation 5.A, lock release 5.B, dashboard query audit 5.C), verificação pós-mitigação com 3 PromQL queries específicas.
+- `docs/runbooks/README.md` — entrada nova na seção P3.
+- `package.json` — `prometheus-remote-write@^0.5.1` adicionada. Audit: 8 low-severity vulns são **pré-existentes** (Firebase Admin tree: `@tootallnate/once` → `http-proxy-agent` → `teeny-request` → `@google-cloud/storage` → `firebase-admin`). Não tocadas — `--force` quebraria firebase.
+
+**Validação:**
+
+- `npx tsc --noEmit` ✓ verde
+- `npx vitest run` ✓ 149 files / 2327 tests verde (incluindo os 20 novos)
+- `npm run build` ✓ Build Next.js completo (route `/api/cron/grafana-push` presente em `.next/server/app/api/cron/grafana-push/`)
+- Token validado via API Grafana (HTTP 200 endpoint `/api/v1/labels`)
+- Vercel envs confirmadas: 6 entries `GRAFANA_REMOTE_WRITE_*` encrypted (3 production + 3 preview)
+
+**Decisões deliberadas (com rationale):**
+
+| Decisão                                                     | Por quê                                                                                      |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Cadência `* * * * *`**                                    | Padrão Prometheus; granularidade fina pra alertas burn-rate; orçamento Vercel cobre          |
+| **Sem retry interno**                                       | `withCronGuard` já tem lock distribuído + métricas; perder 1 ponto não é catastrófico        |
+| **Sem buffer/persist em DB**                                | Cada cron lê snapshot fresco; persistir cria 2× complexidade pra zero benefício neste volume |
+| **Labels base fixas (`service`, `env`, `region`)**          | Permite multi-isolate aggregation no Grafana sem mistura entre envs                          |
+| **Skip silent quando env vars ausentes**                    | Permite preview sem token; cron retorna `noop` em vez de error noisy                         |
+| **Histograms expandem em 5 séries (count/sum/p50/p95/p99)** | NÃO exporto raw samples — `metricsText()` já não exporta; cardinality controlada             |
+| **NÃO usar Inngest**                                        | Cron simples idempotente; Inngest seria over-engineering                                     |
+| **`fetch: globalThis.fetch as never`**                      | Node 20 nativo evita node-fetch@2 peer dep entrando no bundle serverless                     |
+| **`SILENT_CONSOLE` passada para a lib**                     | A lib loga `console.info(...)` por default; em cadência 1/min isso polui Vercel logs         |
+
+**Próximos passos:**
+
+1. Push deste commit → Vercel deploya → primeiro cron roda em ~1 min e o `outcome=success` aparece em métricas internas.
+2. Criar dashboard "Clinipharma" no Grafana Cloud importando os 4 painéis sugeridos em `docs/observability/grafana.md` §5. **Manual** — não há automação para isso (Grafana provisioning via API requer mais setup que vale agora).
+3. Criar alerting rules — também manual (§6 do doc).
+4. Após 24h de runtime estável, considerar:
+   - Aplicar mig 086 que adiciona `GRAFANA_REMOTE_WRITE_TOKEN` ao manifest de rotação Tier B (segue padrão mig 085).
+   - Avaliar se cadência `*/2 * * * *` é adequada (corta invocations pela metade se tráfego permanecer baixo).
+
+**Confiança:** ~96% (4% de risco residual — primeira push real ainda não rodou; lib `prometheus-remote-write` testada e validada via 20 unit tests com mocks, mas integração end-to-end com sa-east-1 endpoint só vai ser exercitada após deploy).

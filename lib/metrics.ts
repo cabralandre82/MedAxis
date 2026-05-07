@@ -273,6 +273,15 @@ export const Metrics = {
   ASAAS_RECONCILE_RECOVERED_TOTAL: 'asaas_reconcile_recovered_total',
   ASAAS_RECONCILE_DURATION_MS: 'asaas_reconcile_duration_ms',
   ASAAS_RECONCILE_LAST_RUN_TS: 'asaas_reconcile_last_run_ts',
+  // Pre-Launch Onda S1 / T6 — Grafana Cloud remote_write push.
+  // `_total` é counter por outcome ('success'|'error'|'skipped_no_env'|'skipped_empty').
+  // `_timeseries_count` é gauge do total de séries enviadas no último push.
+  // `_duration_ms` é histograma do tempo de push end-to-end.
+  // `_last_run_ts` permite alerta de staleness independente de outcome.
+  GRAFANA_PUSH_TOTAL: 'grafana_push_total',
+  GRAFANA_PUSH_TIMESERIES_COUNT: 'grafana_push_timeseries_count',
+  GRAFANA_PUSH_DURATION_MS: 'grafana_push_duration_ms',
+  GRAFANA_PUSH_LAST_RUN_TS: 'grafana_push_last_run_ts',
   ORDERS_CREATED_TOTAL: 'orders_created_total',
   AUDIT_CHAIN_BREAK_TOTAL: 'audit_chain_break_total',
   AUDIT_CHAIN_VERIFY_TOTAL: 'audit_chain_verify_total',

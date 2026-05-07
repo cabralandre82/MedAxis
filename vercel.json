@@ -96,6 +96,10 @@
     {
       "path": "/api/cron/asaas-reconcile",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/grafana-push",
+      "schedule": "* * * * *"
     }
   ]
 }
