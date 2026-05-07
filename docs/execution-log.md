@@ -3587,3 +3587,87 @@ Provável causa: o `webServer` do CI usa `npm run dev` no Next.js com SUPABASE_U
 - 6 findings warn-only registrados no log com prefixo `[rls-finding/...]` — fácil de grep.
 
 **Critério atendido:** suite ativa em CI, findings visíveis sem bloquear deploy, hard-fail disponível via env var quando virar comercial.
+
+---
+
+### Pre-Launch Onda S1 — T1.5: investigação dos findings warn-only — 2026-05-07 08:35 BRT
+
+**Status:** 🟢 concluído (falso positivo confirmado, helper ajustado)
+**Wave:** Pre-Launch S1 (afinar T1)
+**Migrations aplicadas:** N/A
+**Env vars alteradas:** N/A
+**Testes:** mesmos 13 do T1 (sem novos)
+
+**Contexto:**
+
+A primeira run de CI do T1 (`47ca92b`) registrou 6 findings warn-only do tipo `anon-*-200-empty-payload` na Parte A. Como warn-only não quebra build, CI ficou verde, mas o sinal precisava ser distinguido entre falso positivo e bug real.
+
+**Investigação:**
+
+Como staging.clinipharma.com.br ainda não tem DNS configurado, fui direto contra produção via `curl` anon (read-only, dentro do rate-limit normal):
+
+```bash
+for ep in coupons/mine sessions profile/notification-preferences ...; do
+  curl -sS -o body.txt -w 'HTTP %{http_code}\n' "https://clinipharma.com.br/api/$ep"
+done
+```
+
+Resultado consistente nas 6 rotas:
+
+```
+HTTP 307 | bytes 15
+location: /login?next=%2Fapi%2Fcoupons%2Fmine
+```
+
+**Diagnóstico final:**
+
+Comportamento de prod é **correto e defensivo**: middleware do Next.js redireciona requests anon para `/login?next=...` com HTTP 307. O CI dev server reproduz o mesmo comportamento.
+
+O falso positivo veio do helper de teste:
+
+1. Playwright `request.get(...)` segue redirects por default.
+2. `307 → /login?next=...` → seguido para `/login` → 200 com HTML do login.
+3. Helper viu status 200 + body sem JSON parseável → classificou como `200-empty-payload` (warn).
+
+Não é vazamento — é falha de configuração do test, não do produto.
+
+**Fix aplicado (commit pendente):**
+
+1. **Disable redirect-follow nas requisições da Parte A**: agora todas usam `{ maxRedirects: 0 }`. Isso permite ver o 307 original.
+2. **Aceitar 307+`location:/login` como OK** em `assertNoAnonLeak`: novo branch detecta esse padrão e retorna sem registrar finding.
+3. **Tratar 200 text/html como falso positivo conhecido**: novo branch detecta `content-type: text/html` em respostas 200 e registra warn com hint claro `"use maxRedirects: 0"` para o desenvolvedor que adicionar novo teste.
+4. **Enriquecer findings com `bodyTrunc` e `contentType`**: findings genuínos no futuro vão chegar com 200 chars do body para diagnóstico imediato sem reproduzir a run.
+5. **Mesmo tratamento na Parte B** (forged UUID): aceita 307→login (sessão expirada) e 200 text/html (redirect seguido) sem fail.
+6. **Doc atualizado** (`docs/security/rls-warn-only-e2e.md`):
+   - Tabela de classificações Parte A agora inclui linhas para 307/308 e 200 text/html.
+   - Seção "Adicionando endpoint à Parte A" enfatiza `maxRedirects: 0` como CRÍTICO.
+
+**Validação local:**
+
+```
+npx tsc --noEmit              → ✓
+npx eslint <files>            → ✓ (zero warnings)
+npx playwright test --list    → ✓ 13 testes
+```
+
+**Lição aprendida (importante):**
+
+T1 detectou findings na primeira execução real porque o helper foi
+**propositalmente conservador**: status 200 sem JSON parseável =
+warn. Isso é o desenho correto — sintoma anômalo deve aparecer no
+log mesmo que seja falso positivo. A investigação custou ~15 min e
+agora o helper conhece o padrão `307→/login` do middleware do
+Clinipharma.
+
+Em retrospecto, a Parte C (cross-session real) já desabilitava
+redirect implicitamente (Playwright login flow segue, mas requests
+de teste depois são API). Faltava a mesma disciplina na Parte A,
+que faz request "raw". O fix não é tornar o helper menos sensível
+— é tornar o request **explícito sobre intenção**: queremos ver o
+status original, não o redirect.
+
+**Confiança na correção:** ~99% (validado contra prod com curl;
+helper agora distingue 4 padrões de resposta defensiva).
+
+**Próxima execução em CI** (commit pendente) vai mostrar os 6
+findings DESAPARECIDOS — confirmação final do fix.

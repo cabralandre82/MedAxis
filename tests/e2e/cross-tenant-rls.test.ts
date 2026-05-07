@@ -48,58 +48,74 @@ const MALFORMED_ID = 'not-a-uuid'
 /* ─────────────────────────────────────────────────────────────────────
  * Parte A — anon baseline (sem cookies de sessão)
  *
- * Endpoints que exigem auth devem retornar 401 quando ninguém está
- * logado. Se retornarem 200 com payload, é vazamento.
+ * Endpoints que exigem auth devem rejeitar anônimo com:
+ *   - 401/403 (resposta do próprio handler)            → OK
+ *   - 307 + location:/login (middleware redireciona)   → OK
+ *
+ * 200 com payload concreto = vazamento (forceHard).
+ *
+ * IMPORTANTE: chamadas usam `maxRedirects: 0` para ver o status original.
+ * Sem isso, o Playwright segue o 307 do middleware até `/login` e
+ * recebe 200 com HTML — gera falso positivo `200-empty-payload`.
+ * Validado contra prod 2026-05-07: middleware emite 307 location:/login
+ * para todas as 6 rotas anon; helper precisa enxergar isso como OK.
  * ───────────────────────────────────────────────────────────────────── */
 test.describe('RLS warn-only — Parte A: anonymous baseline', () => {
   // Limpa storageState herdado do projeto chromium (que injeta o
   // super-admin.json). Aqui simulamos request sem credencial.
   test.use({ storageState: { cookies: [], origins: [] } })
 
-  test('A1: GET /api/coupons/mine sem cookies → 401 ou empty', async ({ request }, testInfo) => {
-    annotateRlsMode(testInfo)
-    const res = await request.get('/api/coupons/mine')
-    await assertNoAnonLeak(res, 'anon-coupons-mine', testInfo, 'coupons')
-  })
+  // Opções padrão dos requests: NÃO seguir redirects (queremos ver 307
+  // do middleware como sinal positivo, não chegar HTML do login com 200).
+  const NO_REDIRECT = { maxRedirects: 0 } as const
 
-  test('A2: GET /api/sessions sem cookies → 401', async ({ request }, testInfo) => {
-    annotateRlsMode(testInfo)
-    const res = await request.get('/api/sessions')
-    await assertNoAnonLeak(res, 'anon-sessions', testInfo)
-  })
-
-  test('A3: GET /api/profile/notification-preferences sem cookies → 401', async ({
+  test('A1: GET /api/coupons/mine sem cookies → 401 ou 307→/login', async ({
     request,
   }, testInfo) => {
     annotateRlsMode(testInfo)
-    const res = await request.get('/api/profile/notification-preferences')
+    const res = await request.get('/api/coupons/mine', NO_REDIRECT)
+    await assertNoAnonLeak(res, 'anon-coupons-mine', testInfo, 'coupons')
+  })
+
+  test('A2: GET /api/sessions sem cookies → 401 ou 307→/login', async ({ request }, testInfo) => {
+    annotateRlsMode(testInfo)
+    const res = await request.get('/api/sessions', NO_REDIRECT)
+    await assertNoAnonLeak(res, 'anon-sessions', testInfo)
+  })
+
+  test('A3: GET /api/profile/notification-preferences sem cookies → 401 ou 307→/login', async ({
+    request,
+  }, testInfo) => {
+    annotateRlsMode(testInfo)
+    const res = await request.get('/api/profile/notification-preferences', NO_REDIRECT)
     await assertNoAnonLeak(res, 'anon-notification-prefs', testInfo)
   })
 
-  test('A4: GET /api/admin/coupons sem cookies → 401/403', async ({ request }, testInfo) => {
+  test('A4: GET /api/admin/coupons sem cookies → 401/403 ou 307→/login', async ({
+    request,
+  }, testInfo) => {
     annotateRlsMode(testInfo)
-    const res = await request.get('/api/admin/coupons')
-    // Endpoints /api/admin/* devem rejeitar de cara.
+    const res = await request.get('/api/admin/coupons', NO_REDIRECT)
     await assertNoAnonLeak(res, 'anon-admin-coupons', testInfo, 'coupons', {
       allowed: [401, 403, 404, 405],
     })
   })
 
-  test('A5: GET /api/admin/legal-hold/list sem cookies → 401/403', async ({
+  test('A5: GET /api/admin/legal-hold/list sem cookies → 401/403 ou 307→/login', async ({
     request,
   }, testInfo) => {
     annotateRlsMode(testInfo)
-    const res = await request.get('/api/admin/legal-hold/list')
+    const res = await request.get('/api/admin/legal-hold/list', NO_REDIRECT)
     await assertNoAnonLeak(res, 'anon-legal-hold-list', testInfo, undefined, {
       allowed: [401, 403, 404, 405],
     })
   })
 
-  test('A6: GET /api/orders/[random-uuid]/prescription-state sem cookies → 401/403', async ({
+  test('A6: GET /api/orders/[random-uuid]/prescription-state sem cookies → 401/403 ou 307→/login', async ({
     request,
   }, testInfo) => {
     annotateRlsMode(testInfo)
-    const res = await request.get(`/api/orders/${RANDOM_UUID}/prescription-state`)
+    const res = await request.get(`/api/orders/${RANDOM_UUID}/prescription-state`, NO_REDIRECT)
     await assertNoAnonLeak(res, 'anon-prescription-state', testInfo, undefined, {
       allowed: [401, 403, 404],
     })
@@ -122,7 +138,7 @@ test.describe('RLS warn-only — Parte B: UUID forjado (super-admin)', () => {
   }, testInfo) => {
     annotateRlsMode(testInfo)
     const res = await request.get(`/api/orders/${RANDOM_UUID}/prescription-state`)
-    assertForgedUuidIs404(res, 'forged-prescription-state', testInfo)
+    await assertForgedUuidIs404(res, 'forged-prescription-state', testInfo)
   })
 
   test('B2: GET /api/products/[random-uuid]/recommendations → 200 ok:false / 404, nunca 5xx', async ({
@@ -298,8 +314,20 @@ test.describe('RLS warn-only — Parte C: cross-session clinic A → clinic B', 
 
 /**
  * Helper compartilhado das checagens da Parte A. Uma resposta é
- * "limpa" se for 401/403/204/empty-list. Se for 200 com payload
- * substancial, registra finding (hard se for clearly data leakage).
+ * "limpa" se for:
+ *   - 401/403 (handler explicitamente rejeita anônimo)
+ *   - 307 + `location: /login...` (middleware redireciona — convenção
+ *     do Next.js middleware do Clinipharma; validado contra prod 2026-05-07)
+ *   - 204/empty
+ *
+ * Findings:
+ *   - 200 com array de itens → hard (vazamento real).
+ *   - 200 com payload concreto (>1 key) → hard (vazamento provável).
+ *   - 200 com array vazio → warn (RLS protegeu, mas status code estranho).
+ *   - 200 com body vazio/null/HTML → warn (provavelmente HTML de redirect
+ *     seguido — chamador deveria ter passado `maxRedirects: 0`).
+ *   - 5xx → warn (handler não trata sessão ausente como 4xx).
+ *   - 307 sem location:/login → warn (redirect inesperado).
  */
 async function assertNoAnonLeak(
   res: import('@playwright/test').APIResponse,
@@ -315,16 +343,52 @@ async function assertNoAnonLeak(
     return
   }
 
+  // 307/308 + location:/login = middleware redirecionou para auth.
+  // Comportamento defensivo correto para rotas que requerem sessão.
+  if (res.status() === 307 || res.status() === 308) {
+    const location = res.headers()['location'] ?? ''
+    if (/^\/login(?:\?|$)/.test(location) || /\/login(?:\?|$)/.test(location)) {
+      // OK — middleware fez seu trabalho.
+      return
+    }
+    // Redirect para algo que não é /login: anota mas não fail.
+    recordFinding(testInfo, {
+      id: `${id}-redirect-non-login`,
+      description: `${res.status()} redirect em request anônimo, mas location não aponta para /login`,
+      status: res.status(),
+      details: { location: location.slice(0, 200) },
+    })
+    return
+  }
+
   if (res.status() >= 500) {
+    const bodyText = await safeBodyTrunc(res)
     recordFinding(testInfo, {
       id: `${id}-5xx`,
       description: `5xx em request anônimo — endpoint não trata sessão ausente como erro do cliente`,
       status: res.status(),
+      details: { bodyTrunc: bodyText },
     })
     return
   }
 
   if (res.status() === 200) {
+    const contentType = (res.headers()['content-type'] ?? '').toLowerCase()
+    const isHtml = contentType.includes('text/html')
+
+    // 200 com HTML é quase sempre redirect seguido (login page renderizada).
+    // Não é vazamento — é falha de configuração do test (deveria usar
+    // maxRedirects: 0). Anota como warn com hint de fix.
+    if (isHtml) {
+      recordFinding(testInfo, {
+        id: `${id}-200-html`,
+        description: `200 text/html em request anônimo — provavelmente o request seguiu redirect 307→/login. Use maxRedirects: 0 para ver o 307 original.`,
+        status: res.status(),
+        details: { contentType },
+      })
+      return
+    }
+
     const body = (await res.json().catch(() => null)) as Record<string, unknown> | null
     const arr =
       arrayKey && body && Array.isArray(body[arrayKey]) ? (body[arrayKey] as unknown[]) : null
@@ -332,8 +396,6 @@ async function assertNoAnonLeak(
 
     if (arrLen !== null) {
       if (arrLen === 0) {
-        // 200 com array vazio — comportamento defensável (RLS bloqueando
-        // mas endpoint não força auth). Anota como warn.
         recordFinding(testInfo, {
           id: `${id}-200-empty`,
           description: `200 com [] em request anônimo — esperado 401, mas RLS protegeu`,
@@ -341,7 +403,6 @@ async function assertNoAnonLeak(
         })
         return
       }
-      // 200 com itens = leak grave.
       recordFinding(
         testInfo,
         {
@@ -355,7 +416,6 @@ async function assertNoAnonLeak(
       return
     }
 
-    // Body sem o array esperado mas com payload concreto.
     if (body && Object.keys(body).length > 1) {
       recordFinding(
         testInfo,
@@ -370,10 +430,12 @@ async function assertNoAnonLeak(
       return
     }
 
+    const bodyText = await safeBodyTrunc(res)
     recordFinding(testInfo, {
       id: `${id}-200-empty-payload`,
-      description: `200 com payload vazio em request anônimo — esperado 401`,
+      description: `200 com payload vazio em request anônimo — esperado 401 ou 307→/login`,
       status: res.status(),
+      details: { contentType, bodyTrunc: bodyText },
     })
     return
   }
@@ -386,28 +448,51 @@ async function assertNoAnonLeak(
   })
 }
 
+/** Lê body como texto e trunca em 200 chars. Falha silenciosa devolve ''. */
+async function safeBodyTrunc(res: import('@playwright/test').APIResponse): Promise<string> {
+  try {
+    const txt = await res.text()
+    return txt.slice(0, 200)
+  } catch {
+    return ''
+  }
+}
+
 /**
  * Para super-admin com UUID inexistente, esperamos 404. 200 com row
  * = bug (rota usa .single() sem checar) — finding HARD por ser
  * fundação de RLS path-traversal.
  */
-function assertForgedUuidIs404(
+async function assertForgedUuidIs404(
   res: import('@playwright/test').APIResponse,
   id: string,
   testInfo: import('@playwright/test').TestInfo
-): void {
+): Promise<void> {
   if (res.status() === 404) return
 
   if (res.status() >= 500) {
+    const bodyText = await safeBodyTrunc(res)
     recordFinding(testInfo, {
       id: `${id}-5xx`,
       description: `5xx em UUID inexistente — endpoint deveria devolver 404`,
       status: res.status(),
+      details: { bodyTrunc: bodyText },
     })
     return
   }
 
   if (res.status() === 200) {
+    const contentType = (res.headers()['content-type'] ?? '').toLowerCase()
+    // 200 text/html = sessão expirada, redirect→login, etc. Não path-traversal.
+    if (contentType.includes('text/html')) {
+      recordFinding(testInfo, {
+        id: `${id}-200-html`,
+        description: `200 text/html em UUID inexistente — provavelmente sessão expirou e middleware redirecionou`,
+        status: res.status(),
+        details: { contentType },
+      })
+      return
+    }
     recordFinding(
       testInfo,
       {
@@ -420,8 +505,18 @@ function assertForgedUuidIs404(
     return
   }
 
+  // 307→login = sessão expirou no meio da run. Anota mas não fail.
+  if (res.status() === 307 || res.status() === 308) {
+    recordFinding(testInfo, {
+      id: `${id}-redirect`,
+      description: `${res.status()} redirect em UUID inexistente — sessão super-admin pode ter expirado`,
+      status: res.status(),
+    })
+    return
+  }
+
   // 401/403 também aceitáveis (alguns endpoints checam membership antes
-  // do lookup). Anotamos pra visibilidade mas sem fail.
+  // do lookup). Não anotamos para evitar ruído.
   if ([401, 403].includes(res.status())) {
     return
   }

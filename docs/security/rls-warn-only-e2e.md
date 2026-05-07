@@ -40,17 +40,28 @@ A suíte tem **três grupos** de teste:
 Endpoints autenticados (`/api/coupons/mine`, `/api/sessions`,
 `/api/profile/notification-preferences`, `/api/admin/coupons`,
 `/api/admin/legal-hold/list`, `/api/orders/<uuid>/prescription-state`)
-chamados **sem cookies de sessão**. Esperado: 401/403.
+chamados **sem cookies de sessão**. Esperado: 401/403 OU 307→/login
+(middleware redireciona).
+
+**Importante**: requests usam `maxRedirects: 0` para enxergar o status
+original. Sem isso, Playwright segue o 307 do middleware até `/login`
+e recebe 200 com HTML — gera falso positivo `200-empty-payload`.
+Validado contra prod 2026-05-07: middleware emite 307 com
+`location: /login?next=...` para todas as 6 rotas anon.
 
 Comportamentos e classificação:
 
-| Status  | Body                   | Classificação                                          |
-| ------- | ---------------------- | ------------------------------------------------------ |
-| 401/403 | qualquer               | OK                                                     |
-| 200     | `{ <key>: [] }`        | warn (RLS protegeu, mas endpoint não força auth)       |
-| 200     | `{ <key>: [item, …] }` | **hard fail** — vazamento real                         |
-| 200     | payload concreto       | **hard fail** — vazamento real                         |
-| 5xx     | qualquer               | warn (endpoint deveria tratar sessão ausente como 4xx) |
+| Status  | Body / Header               | Classificação                                                           |
+| ------- | --------------------------- | ----------------------------------------------------------------------- |
+| 401/403 | qualquer                    | OK                                                                      |
+| 307/308 | `location: /login...`       | OK — middleware fez seu trabalho                                        |
+| 307/308 | `location` não-`/login`     | warn (redirect inesperado)                                              |
+| 200     | `text/html`                 | warn (request seguiu redirect — passe `maxRedirects: 0`)                |
+| 200     | `{ <key>: [] }`             | warn (RLS protegeu, mas endpoint não força auth)                        |
+| 200     | `{ <key>: [item, …] }`      | **hard fail** — vazamento real                                          |
+| 200     | payload concreto (>1 key)   | **hard fail** — vazamento real                                          |
+| 200     | body vazio/null/1-key, JSON | warn (status code estranho — `bodyTrunc` registrado nos detalhes)       |
+| 5xx     | qualquer                    | warn (endpoint deveria tratar sessão ausente como 4xx; `bodyTrunc` log) |
 
 ### Parte B — UUID forjado (super-admin)
 
@@ -222,12 +233,16 @@ gh run view <run-id> --log | grep '\[rls-finding'
 Se um novo endpoint `/api/foo` deve exigir auth:
 
 ```typescript
-test('A7: GET /api/foo sem cookies → 401', async ({ request }, testInfo) => {
+test('A7: GET /api/foo sem cookies → 401 ou 307→/login', async ({ request }, testInfo) => {
   annotateRlsMode(testInfo)
-  const res = await request.get('/api/foo')
+  const res = await request.get('/api/foo', { maxRedirects: 0 })
   await assertNoAnonLeak(res, 'anon-foo', testInfo, /* arrayKey */ 'items')
 })
 ```
+
+**Crítico**: passar `{ maxRedirects: 0 }`. O middleware do Next.js
+emite 307 com `location: /login?next=...` para rotas privadas anon —
+seguir o redirect chega no HTML do login (200) e gera falso positivo.
 
 `arrayKey` é o nome do array no payload normal (ex: `coupons`, `items`).
 Quando passado, o helper usa para contar entries → distinguir empty vs leak.
@@ -240,7 +255,7 @@ Para uma rota nova `/api/widgets/[id]`:
 test('B5: GET /api/widgets/[random-uuid] → 404 ou empty', async ({ request }, testInfo) => {
   annotateRlsMode(testInfo)
   const res = await request.get(`/api/widgets/${RANDOM_UUID}`)
-  assertForgedUuidIs404(res, 'forged-widgets', testInfo)
+  await assertForgedUuidIs404(res, 'forged-widgets', testInfo)
 })
 ```
 
