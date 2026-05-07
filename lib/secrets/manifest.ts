@@ -34,6 +34,7 @@ export type SecretProvider =
   | 'inngest-portal'
   | 'nuvem-fiscal-portal'
   | 'openai-portal'
+  | 'sentry-portal'
   | 'manual'
 
 /**
@@ -179,6 +180,13 @@ export const SECRET_MANIFEST: readonly SecretDescriptor[] = [
     tier: 'B',
     provider: 'cloudflare-api',
     description: 'Cloudflare Turnstile widget secret. Rotation via Cloudflare dashboard or API.',
+  },
+  {
+    name: 'SENTRY_AUTH_TOKEN',
+    tier: 'B',
+    provider: 'sentry-portal',
+    description:
+      'Auth token usado pelo plugin Sentry no build do Next.js para upload de source maps e criação de releases. Rotação: gerar novo em sentry.io/settings/account/api/auth-tokens (escopo `project:releases` mínimo) ou Internal Integration (org-scoped, recomendado), atualizar Vercel env, redeploy, revogar antigo. Sem esse token, os deploys continuam funcionando mas erros em produção mostram código minificado em vez do mapeado.',
   },
 
   // ── Tier C — manual only, high blast radius ──────────────────────

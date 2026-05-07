@@ -43,6 +43,7 @@ const ALLOWED_PROVIDERS = new Set([
   'inngest-portal',
   'nuvem-fiscal-portal',
   'openai-portal',
+  'sentry-portal',
   'manual',
 ])
 
@@ -133,10 +134,10 @@ function extractGenesisSeedSet(): Set<string> {
 }
 
 describe('SECRET_MANIFEST shape', () => {
-  it('has 20 entries (3 Tier A + 12 Tier B + 5 Tier C)', () => {
-    expect(SECRET_MANIFEST_SIZE).toBe(20)
+  it('has 21 entries (3 Tier A + 13 Tier B + 5 Tier C)', () => {
+    expect(SECRET_MANIFEST_SIZE).toBe(21)
     expect(secretsByTier('A')).toHaveLength(3)
-    expect(secretsByTier('B')).toHaveLength(12)
+    expect(secretsByTier('B')).toHaveLength(13)
     expect(secretsByTier('C')).toHaveLength(5)
   })
 

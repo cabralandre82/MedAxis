@@ -3671,3 +3671,77 @@ helper agora distingue 4 padrões de resposta defensiva).
 
 **Próxima execução em CI** (commit pendente) vai mostrar os 6
 findings DESAPARECIDOS — confirmação final do fix.
+
+---
+
+### Pre-Launch Onda S1 — SENTRY_AUTH_TOKEN provisionado + mig 085 — 2026-05-07 11:50 BRT
+
+**Status:** 🟡 código mergeado, mig 085 pendente aplicação em prod
+**Wave:** Pre-Launch S1 (observabilidade Sentry recuperada)
+**Pre-mortem ref:** Blind spot 4 indireto (Sentry observability quebrada após exclusão do projeto Vercel quarentenado em 2026-05-06)
+**Migrations criadas:** `085_track_sentry_auth_token.sql` (pendente prod)
+**Env vars adicionadas em prod (Vercel clinipharma):**
+
+- `SENTRY_AUTH_TOKEN` em `Production` (encrypted) — adicionado via API Vercel v10 (CLI v53 está com bug em `vercel env add` para target=preview)
+- `SENTRY_AUTH_TOKEN` em `Preview` (encrypted) — idem
+
+**Contexto:**
+
+Em 2026-05-06 (item "Quarentena Vercel encerrada — b2b-med-platform DELETADO") deletei o projeto Vercel `b2b-med-platform` que estava em quarentena. Esse projeto continha o único `SENTRY_AUTH_TOKEN` configurado na nossa conta Vercel inteira; o `clinipharma` (ativo) **nunca** teve o token. Resultado: desde a deleção (ou potencialmente desde sempre) o build do Next.js no Vercel rodava com o Sentry plugin em modo **silent** (config defensiva em `next.config.ts`):
+
+```typescript
+silent: !process.env.SENTRY_AUTH_TOKEN,
+sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+```
+
+→ source maps NÃO eram enviados; releases recebiam events mas com stack traces minificados (códigos `aBc12.js:1:12345` em vez de `lib/payments/asaas-reconcile.ts:142`).
+
+Releases **continuavam** sendo criadas (Vercel-Sentry integration nativa via `latestRelease` → o Sentry recebia notificação a cada deploy git), o que dava falsa sensação de que estava tudo OK. Bug silencioso por design.
+
+**Investigação prévia:**
+
+- Token validado via API direta (`GET /api/0/organizations/cabralandre82s-org/projects/`) → HTTP 200 com 3 projetos visíveis (clinipharma, flutter, instituto-nova-medida).
+- Scopes adequados: `project:releases`, `event:write`, `org:read`, etc.
+- Token kind: `sntryu_*` = user auth token (vinculado à conta cabralandre82). Funciona pra source map upload, mas se a conta for revogada o build quebra. **Follow-up futuro**: migrar para Internal Integration org-scoped (`sntrys_*`) quando virar comercial.
+- Pre-token-add: release `4f58018c` (último deploy) tinha `count=0` artifacts via `GET .../releases/<sha>/files/`.
+
+**Entregáveis:**
+
+- `lib/secrets/manifest.ts` — adicionado provider novo `sentry-portal` ao type `SecretProvider`; nova entrada Tier B `SENTRY_AUTH_TOKEN` com descrição completa (provider, escopo mínimo `project:releases`, fluxo de rotação assistida, recomendação de migrar para Internal Integration). Total: 20 → **21 secrets** (3A + 13B + 5C).
+- `supabase/migrations/085_track_sentry_auth_token.sql` — `CREATE OR REPLACE FUNCTION public.secret_rotation_overdue` com manifesto expandido (idêntico ao pattern de mig 059); genesis seed condicional via `secret_rotation_record(...)` com `details` apontando follow-up; smoke test embedded valida (a) RPC retorna 0 overdue a 100y, (b) inventory ≥ 21, (c) overdue=0 a 90d, (d) hash chain íntegra.
+- `tests/unit/lib/secrets-manifest.test.ts` — `ALLOWED_PROVIDERS` ganha `sentry-portal`; assertion atualizada para 21/3/13/5.
+- `docs/security/secrets-manifest.json` — regenerado via `npm run secrets:export-manifest` (espelho automático do TS).
+
+**Validação:**
+
+- `npx tsc --noEmit` ✓ verde
+- `npx vitest run tests/unit/lib/secrets-manifest.test.ts` ✓ 15 testes verde
+- Token validado contra API Sentry com 3 projetos visíveis, scopes corretos
+- Vercel envs confirmadas via `npx vercel env ls`: 2 entradas SENTRY_AUTH_TOKEN (Production + Preview, encrypted)
+
+**Pendente (humano ou agente com creds Supabase):**
+
+1. **Aplicar mig 085 em prod** via psql session pooler (mesmo path da mig 084). Sem aplicação, o cron `rotate-secrets` continua não conhecendo o SENTRY_AUTH_TOKEN — só vai gerar overdue alert daqui a 90 dias usando a row genesis local. Não é crítico AGORA, mas é dívida.
+2. **Disparar deploy novo** (push de qualquer commit invalida cache do build Vercel e força o plugin Sentry a rodar com o token presente).
+3. **Validar artifacts** via `GET https://sentry.io/api/0/projects/cabralandre82s-org/clinipharma/releases/<new-sha>/files/?per_page=20` → deve mostrar `count > 0` (.js.map files).
+
+**Por que não apliquei a mig agora:**
+
+Não tenho `SUPABASE_DB_PASSWORD` em `~/.config/agent/credentials.env` (apenas Vercel + GitHub estão lá). Aplicar a 085 requer ou (a) provisionar essa credencial pra agente, ou (b) operador humano rodar `psql ${pooler_url} -f supabase/migrations/085_track_sentry_auth_token.sql`. O smoke test embedded protege contra erro silencioso — se algo divergir, transação aborta e nada é persistido.
+
+**Cliffsnotes do operador (pra quando aplicar):**
+
+```bash
+# 1. Conectar (substituir senha real)
+PGPASSWORD='...' psql -h aws-0-us-east-1.pooler.supabase.com -p 5432 \
+  -U postgres.jomdntqlgrupvhrqoyai -d postgres \
+  -f supabase/migrations/085_track_sentry_auth_token.sql
+
+# 2. Esperado: NOTICE "Migration 085 smoke OK — inventory=21, overdue=0, chain_breaks=0"
+
+# 3. Se NOTICE não aparecer ou se houver EXCEPTION: rollback automático.
+```
+
+**Não-bloqueante para launch.** Sentry source maps já vão começar a funcionar no próximo deploy (env já está em prod). A mig 085 só completa o ciclo de tracking de rotação.
+
+**Confiança:** ~95% (não 100% porque ainda não validei artifacts no Sentry via release pós-deploy — vai acontecer no próximo push).
