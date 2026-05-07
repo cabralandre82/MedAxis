@@ -9,11 +9,16 @@
 -- `secret_rotation_overdue()` (mig 056 + 059) não conhecia esse
 -- token — nunca iria alertar sobre rotação dele.
 --
--- Esse migration apenas estende a função `secret_rotation_overdue`
--- para incluir uma entrada nova no jsonb de manifest estático, e
--- semeia o genesis row em `secret_rotations` para que o inventário
--- comece a contar idade a partir do momento do deploy. O padrão é
--- idêntico ao de mig 059 (ZENVIA_WEBHOOK_SECRET).
+-- Esse migration:
+--   1. Estende a CHECK constraint `secret_rotations_provider_check` e
+--      a função `secret_rotation_record` (mig 056) para aceitar o
+--      novo provider canônico `sentry-portal`. Sem isso o genesis
+--      seed abaixo aborta com `invalid provider sentry-portal`.
+--   2. Estende a função `secret_rotation_overdue` (mig 059) para
+--      incluir uma entrada nova no jsonb de manifest estático.
+--   3. Semeia o genesis row em `secret_rotations` para que o
+--      inventário comece a contar idade a partir do momento do
+--      deploy. Idêntico ao padrão de mig 059 (ZENVIA_WEBHOOK_SECRET).
 --
 -- Tier B porque a rotação é assistida:
 --   1. Operador gera novo auth token em
@@ -30,10 +35,112 @@
 --
 -- Rollback
 -- --------
---   Append nova migration substituindo a função pela versão sem
---   a entrada SENTRY_AUTH_TOKEN. Não há lógica destrutiva aqui.
+--   Append nova migration restaurando a CHECK + função sem
+--   `sentry-portal` e a função `secret_rotation_overdue` sem a
+--   entrada. Não há lógica destrutiva aqui.
 
 SET search_path TO public, extensions, pg_temp;
+
+-- ─── prereq 1: estender CHECK constraint dos providers ─────────────
+-- A constraint original (mig 056) lista 12 providers. Para aceitar
+-- `sentry-portal` precisamos drop+recreate (Postgres não suporta
+-- ALTER CHECK in-place). DROP é seguro: nenhuma row existente
+-- referencia `sentry-portal` ainda.
+ALTER TABLE public.secret_rotations
+  DROP CONSTRAINT IF EXISTS secret_rotations_provider_check;
+ALTER TABLE public.secret_rotations
+  ADD CONSTRAINT secret_rotations_provider_check
+  CHECK (provider = ANY (ARRAY[
+    'vercel-env','supabase-mgmt','cloudflare-api','firebase-console',
+    'asaas-portal','clicksign-portal','resend-portal','zenvia-portal',
+    'inngest-portal','nuvem-fiscal-portal','openai-portal',
+    'sentry-portal','manual'
+  ]));
+
+-- ─── prereq 2: re-definir secret_rotation_record com sentry-portal ─
+-- Body idêntico ao de mig 056 exceto pela inclusão de `sentry-portal`
+-- na lista de providers válidos do guard PL/pgSQL. CREATE OR REPLACE
+-- preserva grants existentes.
+CREATE OR REPLACE FUNCTION public.secret_rotation_record(
+  p_secret_name    text,
+  p_tier           text,
+  p_provider       text,
+  p_trigger_reason text,
+  p_rotated_by     text,
+  p_success        boolean,
+  p_error_message  text,
+  p_details        jsonb
+)
+RETURNS public.secret_rotations
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_prev_hash text;
+  v_row_hash  text;
+  v_payload   text;
+  -- clock_timestamp() (not now()) so two record() calls within the
+  -- same transaction get strictly distinct timestamps. The chain
+  -- replay then matches insertion order.
+  v_now       timestamptz := clock_timestamp();
+  v_row       public.secret_rotations%ROWTYPE;
+BEGIN
+  IF p_tier NOT IN ('A','B','C') THEN
+    RAISE EXCEPTION 'secret_rotation_record: invalid tier %', p_tier
+      USING ERRCODE = '22023';
+  END IF;
+  IF p_provider NOT IN (
+    'vercel-env','supabase-mgmt','cloudflare-api','firebase-console',
+    'asaas-portal','clicksign-portal','resend-portal','zenvia-portal',
+    'inngest-portal','nuvem-fiscal-portal','openai-portal',
+    'sentry-portal','manual'
+  ) THEN
+    RAISE EXCEPTION 'secret_rotation_record: invalid provider %', p_provider
+      USING ERRCODE = '22023';
+  END IF;
+  IF p_trigger_reason NOT IN (
+    'cron-due','manual','incident-suspected-leak','incident-confirmed-leak',
+    'employee-offboarding','genesis','provider-forced','test'
+  ) THEN
+    RAISE EXCEPTION 'secret_rotation_record: invalid trigger_reason %', p_trigger_reason
+      USING ERRCODE = '22023';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('secret_rotations'));
+
+  SELECT row_hash INTO v_prev_hash
+    FROM public.secret_rotations
+   ORDER BY seq DESC
+   LIMIT 1;
+
+  v_payload := COALESCE(v_prev_hash, '') ||
+               '|' || v_now::text ||
+               '|' || p_secret_name ||
+               '|' || p_tier ||
+               '|' || p_provider ||
+               '|' || p_trigger_reason ||
+               '|' || p_rotated_by ||
+               '|' || (CASE WHEN p_success THEN 't' ELSE 'f' END) ||
+               '|' || COALESCE(p_error_message, '') ||
+               '|' || COALESCE(p_details::text, 'null');
+  v_row_hash := encode(extensions.digest(v_payload, 'sha256'), 'hex');
+
+  INSERT INTO public.secret_rotations
+    (rotated_at, secret_name, tier, provider, trigger_reason,
+     rotated_by, success, error_message, details, prev_hash, row_hash)
+  VALUES
+    (v_now, p_secret_name, p_tier, p_provider, p_trigger_reason,
+     p_rotated_by, p_success, p_error_message,
+     COALESCE(p_details, '{}'::jsonb), v_prev_hash, v_row_hash)
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END
+$$;
+
+REVOKE ALL ON FUNCTION public.secret_rotation_record(text,text,text,text,text,boolean,text,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.secret_rotation_record(text,text,text,text,text,boolean,text,jsonb) TO service_role;
 
 -- ─── overdue RPC — re-defined with 21-entry manifest ───────────────
 -- Body idêntico ao de 059 exceto por uma nova entrada Tier B para
